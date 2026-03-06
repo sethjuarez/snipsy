@@ -1,5 +1,6 @@
 import { useTheme } from "../hooks/useTheme";
 import { Minus, Square, X, Moon, Sun, Radio } from "lucide-react";
+import appIcon from "../assets/icon.png";
 
 interface TitleBarProps {
   projectName: string | null;
@@ -42,8 +43,9 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
         padding: "0 12px",
       }}
     >
-      {/* Left: App name + project (draggable) */}
+      {/* Left: App icon + name + project (draggable) */}
       <div data-tauri-drag-region className="flex items-center gap-2 shrink-0">
+        <img src={appIcon} alt="" className="w-4 h-4" draggable={false} />
         <span data-tauri-drag-region className="font-semibold text-[13px]" style={{ color: "var(--color-text)" }}>
           Snipsy
         </span>
