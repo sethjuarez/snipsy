@@ -1,4 +1,5 @@
 mod commands;
+mod delivery;
 mod demo;
 mod models;
 mod tray;
@@ -15,6 +16,7 @@ pub fn run() {
             demo::enter_demo_mode,
             demo::exit_demo_mode,
             demo::is_demo_mode,
+            delivery::deliver_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
