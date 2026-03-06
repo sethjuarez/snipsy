@@ -17,6 +17,7 @@
     "global-shortcut:default",
     "updater:default",
     "dialog:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "process:default"
   ]
 }

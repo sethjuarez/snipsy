@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, RefreshCw, ExternalLink, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { Download, RefreshCw, RotateCcw, ExternalLink, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { createBackendService } from "../services";
 
 type InstallState = "idle" | "installing" | "success" | "error";
@@ -28,6 +28,15 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
     }
   };
 
+  const handleRestart = async () => {
+    try {
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch {
+      setMessage("Please close and reopen Snipsy manually.");
+    }
+  };
+
   const handleRecheck = async () => {
     setChecking(true);
     try {
@@ -36,7 +45,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
       if (available) {
         onFixed();
       } else {
-        setMessage("FFmpeg still not detected on PATH. You may need to restart Snipsy after installing.");
+        setMessage("FFmpeg still not detected on PATH. Click 'Restart Snipsy' to pick up the new PATH.");
       }
     } catch {
       setMessage("Could not check FFmpeg status.");
@@ -134,6 +143,20 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           >
             <RefreshCw size={13} className={checking ? "animate-spin" : ""} /> Check Again
           </button>
+
+          {/* Restart button — shown after install attempt */}
+          {(installState === "success" || installState === "error") && (
+            <button
+              onClick={handleRestart}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "#fff",
+              }}
+            >
+              <RotateCcw size={13} /> Restart Snipsy
+            </button>
+          )}
 
           {/* Manual instructions */}
           <details className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
