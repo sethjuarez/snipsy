@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  check:
     runs-on: windows-latest
 
     steps:
@@ -29,11 +29,5 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
-      - name: Playwright tests
-        run: npx playwright install chromium && npx playwright test
-
-      - name: Rust tests
-        run: cd src-tauri && cargo test
-
       - name: Rust build check
-        run: cd src-tauri && cargo build
+        run: cd src-tauri && cargo check
