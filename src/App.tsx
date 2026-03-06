@@ -4,7 +4,9 @@ import Welcome from "./components/Welcome";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList from "./components/VideoList";
-import type { TextSnippet } from "./types";
+import VideoSnippetList from "./components/VideoSnippetList";
+import VideoSnippetForm from "./components/VideoSnippetForm";
+import type { TextSnippet, VideoSnippet } from "./types";
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
@@ -12,6 +14,8 @@ function App() {
   const closeProject = useProjectStore((s) => s.closeProject);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
+  const videoSnippets = useProjectStore((s) => s.videoSnippets);
+  const setVideoSnippets = useProjectStore((s) => s.setVideoSnippets);
   const demoMode = useProjectStore((s) => s.demoMode);
   const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
@@ -20,6 +24,10 @@ function App() {
   const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(
     undefined,
   );
+  const [showVideoForm, setShowVideoForm] = useState(false);
+  const [editingVideoSnippet, setEditingVideoSnippet] = useState<
+    VideoSnippet | undefined
+  >(undefined);
 
   if (!projectName) {
     return <Welcome />;
@@ -52,6 +60,35 @@ function App() {
   const handleCancel = () => {
     setShowForm(false);
     setEditingSnippet(undefined);
+  };
+
+  const handleVideoEdit = (snippet: VideoSnippet) => {
+    setEditingVideoSnippet(snippet);
+    setShowVideoForm(true);
+  };
+
+  const handleVideoDelete = (id: string) => {
+    if (window.confirm("Delete this video snippet?")) {
+      setVideoSnippets(videoSnippets.filter((s) => s.id !== id));
+    }
+  };
+
+  const handleVideoSave = (snippet: VideoSnippet) => {
+    const existing = videoSnippets.findIndex((s) => s.id === snippet.id);
+    if (existing >= 0) {
+      const updated = [...videoSnippets];
+      updated[existing] = snippet;
+      setVideoSnippets(updated);
+    } else {
+      setVideoSnippets([...videoSnippets, snippet]);
+    }
+    setShowVideoForm(false);
+    setEditingVideoSnippet(undefined);
+  };
+
+  const handleVideoCancel = () => {
+    setShowVideoForm(false);
+    setEditingVideoSnippet(undefined);
   };
 
   return (
@@ -133,6 +170,42 @@ function App() {
             <VideoList projectPath={projectPath} />
           </section>
         )}
+
+        <section className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">
+              Video Snippets
+            </h2>
+            {!showVideoForm && (
+              <button
+                onClick={() => {
+                  setEditingVideoSnippet(undefined);
+                  setShowVideoForm(true);
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded font-medium hover:bg-purple-700 text-sm"
+                data-testid="add-video-snippet"
+              >
+                + Add Video Snippet
+              </button>
+            )}
+          </div>
+
+          {showVideoForm ? (
+            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
+              <VideoSnippetForm
+                snippet={editingVideoSnippet}
+                onSave={handleVideoSave}
+                onCancel={handleVideoCancel}
+              />
+            </div>
+          ) : (
+            <VideoSnippetList
+              snippets={videoSnippets}
+              onEdit={handleVideoEdit}
+              onDelete={handleVideoDelete}
+            />
+          )}
+        </section>
       </main>
     </div>
   );
