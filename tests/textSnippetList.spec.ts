@@ -5,6 +5,7 @@ test.describe("Text Snippet List", () => {
     await page.goto("/");
     // In browser-only mode, MockBackendService is used.
     // Open a mock project to get fixture data.
+    await page.getByRole("button", { name: "Open Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     // Click the submit button (not the mode toggle)
     await page.locator('button:text-is("Open")').click();
@@ -29,7 +30,9 @@ test.describe("Text Snippet List", () => {
   });
 
   test("shows empty state when no snippets", async ({ page }) => {
-    // Create a new empty project by navigating fresh
+    // Clear localStorage to prevent auto-open from previous tests
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
     await page.goto("/");
     await page.getByRole("button", { name: "New Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/new");

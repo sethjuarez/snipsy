@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Script CRUD", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
     await expect(page.getByTestId("sidebar")).toBeVisible();

@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("FFmpeg Detection", () => {
   test("shows FFmpeg warning when not available", async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
     await expect(page.getByTestId("sidebar")).toBeVisible();
@@ -19,6 +20,7 @@ test.describe("FFmpeg Detection", () => {
 
   test("clicking FFmpeg warning opens helper dialog", async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
     await expect(page.getByTestId("sidebar")).toBeVisible();
@@ -35,6 +37,7 @@ test.describe("FFmpeg Detection", () => {
 
   test("FFmpeg helper dialog can be closed", async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
     await expect(page.getByTestId("sidebar")).toBeVisible();

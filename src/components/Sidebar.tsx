@@ -1,4 +1,4 @@
-import { FileText, Film, Video, ScrollText, type LucideIcon } from "lucide-react";
+import { Home, FileText, Film, Video, ScrollText, type LucideIcon } from "lucide-react";
 
 export type AppView = "text-snippets" | "videos" | "video-snippets" | "scripts";
 
@@ -18,10 +18,11 @@ const NAV_ITEMS: NavItem[] = [
 interface SidebarProps {
   activeView: AppView;
   onViewChange: (view: AppView) => void;
+  onGoHome?: () => void;
   collapsed?: boolean;
 }
 
-function Sidebar({ activeView, onViewChange, collapsed = false }: SidebarProps) {
+function Sidebar({ activeView, onViewChange, onGoHome, collapsed = false }: SidebarProps) {
   return (
     <nav
       className="no-select flex flex-col shrink-0 overflow-hidden"
@@ -53,6 +54,22 @@ function Sidebar({ activeView, onViewChange, collapsed = false }: SidebarProps) 
           );
         })}
       </div>
+
+      {/* Home / close project button at bottom */}
+      {onGoHome && (
+        <div className="p-1.5" style={{ borderTop: "1px solid var(--color-border)" }}>
+          <button
+            onClick={onGoHome}
+            className="flex items-center gap-2 px-3 py-1.5 rounded text-[12px] font-medium w-full text-left"
+            style={{ color: "var(--color-text-secondary)" }}
+            data-testid="nav-home"
+            title="Home"
+          >
+            <Home size={15} />
+            {!collapsed && <span>Home</span>}
+          </button>
+        </div>
+      )}
     </nav>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProjectStore } from "./stores/projectStore";
 import { Plus, AlertTriangle, X as XIcon } from "lucide-react";
 import Welcome from "./components/Welcome";
@@ -31,6 +31,8 @@ function App() {
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
   const playVideo = useProjectStore((s) => s.playVideo);
   const ffmpegAvailable = useProjectStore((s) => s.ffmpegAvailable);
+  const closeProject = useProjectStore((s) => s.closeProject);
+  const autoOpenLastProject = useProjectStore((s) => s.autoOpenLastProject);
 
   const [activeView, setActiveView] = useState<AppView>("text-snippets");
   const [showForm, setShowForm] = useState(false);
@@ -41,6 +43,11 @@ function App() {
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
   const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
   const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
+
+  // Auto-open last project on startup
+  useEffect(() => {
+    autoOpenLastProject();
+  }, [autoOpenLastProject]);
 
   // -- Text snippet handlers --
   const handleEdit = (snippet: TextSnippet) => {
@@ -139,7 +146,7 @@ function App() {
       <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} onViewChange={setActiveView} />
+        <Sidebar activeView={activeView} onViewChange={setActiveView} onGoHome={closeProject} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">

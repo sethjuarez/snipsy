@@ -9,6 +9,39 @@ import { createBackendService, type BackendService } from "../services";
 
 const backend: BackendService = createBackendService();
 
+const STORAGE_KEY_LAST = "snipsy:lastProject";
+const STORAGE_KEY_RECENT = "snipsy:recentProjects";
+const MAX_RECENT = 10;
+
+export interface RecentProject {
+  path: string;
+  name: string;
+  lastOpened: string; // ISO 8601
+}
+
+function loadRecentProjects(): RecentProject[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY_RECENT) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentProject(path: string, name: string) {
+  const recent = loadRecentProjects().filter((r) => r.path !== path);
+  recent.unshift({ path, name, lastOpened: new Date().toISOString() });
+  localStorage.setItem(STORAGE_KEY_RECENT, JSON.stringify(recent.slice(0, MAX_RECENT)));
+  localStorage.setItem(STORAGE_KEY_LAST, path);
+}
+
+function removeRecentProject(path: string) {
+  const recent = loadRecentProjects().filter((r) => r.path !== path);
+  localStorage.setItem(STORAGE_KEY_RECENT, JSON.stringify(recent));
+  if (localStorage.getItem(STORAGE_KEY_LAST) === path) {
+    localStorage.removeItem(STORAGE_KEY_LAST);
+  }
+}
+
 interface ProjectState {
   projectPath: string | null;
   projectName: string | null;
@@ -18,6 +51,7 @@ interface ProjectState {
   scripts: Script[];
   demoMode: boolean;
   ffmpegAvailable: boolean | null;
+  recentProjects: RecentProject[];
 
   createProject: (
     path: string,
@@ -26,6 +60,9 @@ interface ProjectState {
   ) => Promise<void>;
   openProject: (path: string) => Promise<void>;
   closeProject: () => void;
+  autoOpenLastProject: () => Promise<boolean>;
+  loadRecentProjects: () => void;
+  removeRecentProject: (path: string) => void;
 
   setTextSnippets: (snippets: TextSnippet[]) => Promise<void>;
   setVideoSnippets: (snippets: VideoSnippet[]) => Promise<void>;
@@ -63,11 +100,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   scripts: [],
   demoMode: false,
   ffmpegAvailable: null,
+  recentProjects: loadRecentProjects(),
 
   createProject: async (path, name, description) => {
     const data = await backend.createProject(path, name, description);
     applyProjectData(set, path, data);
     set({ scripts: [] });
+    saveRecentProject(path, name);
+    set({ recentProjects: loadRecentProjects() });
   },
 
   openProject: async (path) => {
@@ -77,6 +117,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ scripts });
     const ffmpegAvailable = await backend.checkFfmpeg();
     set({ ffmpegAvailable });
+    saveRecentProject(path, data.project.name);
+    set({ recentProjects: loadRecentProjects() });
   },
 
   closeProject: () => {
@@ -89,6 +131,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       scripts: [],
       demoMode: false,
     });
+  },
+
+  autoOpenLastProject: async () => {
+    const lastPath = localStorage.getItem(STORAGE_KEY_LAST);
+    if (!lastPath) return false;
+    try {
+      await get().openProject(lastPath);
+      return true;
+    } catch {
+      // Project no longer exists — clear it
+      localStorage.removeItem(STORAGE_KEY_LAST);
+      return false;
+    }
+  },
+
+  loadRecentProjects: () => {
+    set({ recentProjects: loadRecentProjects() });
+  },
+
+  removeRecentProject: (path: string) => {
+    removeRecentProject(path);
+    set({ recentProjects: loadRecentProjects() });
   },
 
   setTextSnippets: async (snippets) => {
