@@ -17,9 +17,12 @@ function VideoList({ projectPath }: VideoListProps) {
   }, [projectPath]);
 
   const handleImport = async () => {
+    const filePath = await backend.selectVideoFile();
+    if (!filePath) return; // user cancelled
+
     setImporting(true);
     try {
-      const videoPath = await backend.importVideo(projectPath, "selected-file.mp4");
+      const videoPath = await backend.importVideo(projectPath, filePath);
       setVideos((prev) => [...prev, videoPath]);
     } finally {
       setImporting(false);

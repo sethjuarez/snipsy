@@ -125,4 +125,16 @@ export class TauriBackendService implements BackendService {
   async relaunchAsAdmin(): Promise<void> {
     return invoke("relaunch_as_admin");
   }
+
+  async selectVideoFile(): Promise<string | null> {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const result = await open({
+      multiple: false,
+      filters: [
+        { name: "Video Files", extensions: ["mp4", "mkv", "avi", "mov", "webm", "wmv"] },
+      ],
+    });
+    if (Array.isArray(result)) return result[0] ?? null;
+    return result;
+  }
 }

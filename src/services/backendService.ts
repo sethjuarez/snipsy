@@ -52,4 +52,5 @@ export interface BackendService {
   deactivateDemoTray(): Promise<void>;
   isElevated(): Promise<boolean>;
   relaunchAsAdmin(): Promise<void>;
+  selectVideoFile(): Promise<string | null>;
 }

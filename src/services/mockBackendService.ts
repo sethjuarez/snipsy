@@ -188,4 +188,12 @@ export class MockBackendService implements BackendService {
   async relaunchAsAdmin(): Promise<void> {
     // Mock: no-op in test mode
   }
+
+  private _importCounter = 0;
+
+  async selectVideoFile(): Promise<string | null> {
+    // Mock: return a fake file path to allow testing the import flow
+    this._importCounter++;
+    return `/mock/videos/mock-video-${this._importCounter}.mp4`;
+  }
 }
