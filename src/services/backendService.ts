@@ -1,5 +1,6 @@
 import type {
   ProjectData,
+  Script,
   TextSnippet,
   TransitionAction,
   VideoSnippet,
@@ -38,4 +39,7 @@ export interface BackendService {
     transitionActions?: TransitionAction[],
   ): Promise<void>;
   closePlaybackWindow(): Promise<void>;
+  saveScript(projectPath: string, script: Script): Promise<void>;
+  loadScripts(projectPath: string): Promise<Script[]>;
+  deleteScript(projectPath: string, id: string): Promise<void>;
 }

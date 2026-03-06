@@ -80,4 +80,21 @@ export class TauriBackendService implements BackendService {
   async closePlaybackWindow(): Promise<void> {
     return invoke("close_playback_window");
   }
+
+  async saveScript(
+    projectPath: string,
+    script: import("../types").Script,
+  ): Promise<void> {
+    return invoke("save_script", { projectPath, script });
+  }
+
+  async loadScripts(
+    projectPath: string,
+  ): Promise<import("../types").Script[]> {
+    return invoke("load_scripts", { projectPath });
+  }
+
+  async deleteScript(projectPath: string, id: string): Promise<void> {
+    return invoke("delete_script", { projectPath, id });
+  }
 }

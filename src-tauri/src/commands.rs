@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::models::{Project, ProjectData, TextSnippet, VideoSnippet};
+use crate::models::{Project, ProjectData, Script, TextSnippet, VideoSnippet};
 
 #[tauri::command]
 pub fn create_project(
@@ -120,6 +120,56 @@ pub fn import_video(project_path: String, source_file_path: String) -> Result<St
         .map_err(|e| format!("Failed to copy video file: {e}"))?;
 
     Ok(format!("videos/{file_name}"))
+}
+
+#[tauri::command]
+pub fn save_script(project_path: String, script: Script) -> Result<(), String> {
+    let scripts_dir = PathBuf::from(&project_path).join("scripts");
+    fs::create_dir_all(&scripts_dir)
+        .map_err(|e| format!("Failed to create scripts directory: {e}"))?;
+
+    let file_path = scripts_dir.join(format!("{}.json", script.id));
+    let json = serde_json::to_string_pretty(&script)
+        .map_err(|e| format!("Failed to serialize script: {e}"))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write script file: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn load_scripts(project_path: String) -> Result<Vec<Script>, String> {
+    let scripts_dir = PathBuf::from(&project_path).join("scripts");
+    if !scripts_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut scripts = Vec::new();
+    let entries =
+        fs::read_dir(&scripts_dir).map_err(|e| format!("Failed to read scripts directory: {e}"))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "json") {
+            let content =
+                fs::read_to_string(&path).map_err(|e| format!("Failed to read script file: {e}"))?;
+            let script: Script = serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse script file: {e}"))?;
+            scripts.push(script);
+        }
+    }
+
+    Ok(scripts)
+}
+
+#[tauri::command]
+pub fn delete_script(project_path: String, id: String) -> Result<(), String> {
+    let file_path = PathBuf::from(&project_path)
+        .join("scripts")
+        .join(format!("{}.json", id));
+    if file_path.exists() {
+        fs::remove_file(&file_path).map_err(|e| format!("Failed to delete script file: {e}"))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -274,5 +324,96 @@ mod tests {
             "/nonexistent/video.mp4".into(),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_and_load_scripts() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        let script = Script {
+            id: "script-1".into(),
+            title: "Build Demo Script".into(),
+            description: "Runs a build demo".into(),
+            steps: vec![
+                crate::models::ScriptStep::Wait { duration: 1000 },
+                crate::models::ScriptStep::Type {
+                    text: "npm run build".into(),
+                    delay: Some(50),
+                },
+            ],
+            output_video: "videos/build-demo.mp4".into(),
+        };
+
+        save_script(
+            project_path.to_string_lossy().into_owned(),
+            script.clone(),
+        )
+        .unwrap();
+
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(scripts.len(), 1);
+        assert_eq!(scripts[0].id, "script-1");
+        assert_eq!(scripts[0].title, "Build Demo Script");
+        assert_eq!(scripts[0].steps.len(), 2);
+    }
+
+    #[test]
+    fn delete_script_removes_file() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        let script = Script {
+            id: "script-del".into(),
+            title: "To Delete".into(),
+            description: "Will be deleted".into(),
+            steps: vec![],
+            output_video: "videos/output.mp4".into(),
+        };
+
+        save_script(
+            project_path.to_string_lossy().into_owned(),
+            script,
+        )
+        .unwrap();
+
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(scripts.len(), 1);
+
+        delete_script(
+            project_path.to_string_lossy().into_owned(),
+            "script-del".into(),
+        )
+        .unwrap();
+
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(scripts.len(), 0);
+    }
+
+    #[test]
+    fn load_scripts_empty_dir() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        assert!(scripts.is_empty());
     }
 }

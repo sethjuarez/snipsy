@@ -1,5 +1,5 @@
 import type { BackendService, SnippetHotkey } from "./backendService";
-import type { ProjectData, TextSnippet, VideoSnippet } from "../types";
+import type { ProjectData, Script, TextSnippet, VideoSnippet } from "../types";
 
 const FIXTURE_PROJECT: ProjectData = {
   project: {
@@ -54,6 +54,19 @@ const FIXTURE_PROJECT: ProjectData = {
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
+  private _scripts: Script[] = [
+    {
+      id: "sc-1",
+      title: "Build Demo Script",
+      description: "Opens terminal and runs build",
+      steps: [
+        { action: "wait", duration: 1000 },
+        { action: "type", text: "npm run build", delay: 50 },
+        { action: "keypress", key: "Enter" },
+      ],
+      outputVideo: "videos/build-demo.mp4",
+    },
+  ];
 
   async createProject(
     _path: string,
@@ -129,5 +142,22 @@ export class MockBackendService implements BackendService {
 
   async closePlaybackWindow(): Promise<void> {
     // Mock: no-op in test mode
+  }
+
+  async saveScript(_projectPath: string, script: Script): Promise<void> {
+    const index = this._scripts.findIndex((s) => s.id === script.id);
+    if (index >= 0) {
+      this._scripts[index] = structuredClone(script);
+    } else {
+      this._scripts.push(structuredClone(script));
+    }
+  }
+
+  async loadScripts(_projectPath: string): Promise<Script[]> {
+    return structuredClone(this._scripts);
+  }
+
+  async deleteScript(_projectPath: string, id: string): Promise<void> {
+    this._scripts = this._scripts.filter((s) => s.id !== id);
   }
 }

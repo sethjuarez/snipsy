@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ProjectData,
+  Script,
   TextSnippet,
   VideoSnippet,
 } from "../types";
@@ -14,6 +15,7 @@ interface ProjectState {
   projectDescription: string | null;
   textSnippets: TextSnippet[];
   videoSnippets: VideoSnippet[];
+  scripts: Script[];
   demoMode: boolean;
 
   createProject: (
@@ -26,6 +28,10 @@ interface ProjectState {
 
   setTextSnippets: (snippets: TextSnippet[]) => Promise<void>;
   setVideoSnippets: (snippets: VideoSnippet[]) => Promise<void>;
+
+  loadScripts: () => Promise<void>;
+  saveScript: (script: Script) => Promise<void>;
+  deleteScript: (id: string) => Promise<void>;
 
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
@@ -52,16 +58,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectDescription: null,
   textSnippets: [],
   videoSnippets: [],
+  scripts: [],
   demoMode: false,
 
   createProject: async (path, name, description) => {
     const data = await backend.createProject(path, name, description);
     applyProjectData(set, path, data);
+    set({ scripts: [] });
   },
 
   openProject: async (path) => {
     const data = await backend.openProject(path);
     applyProjectData(set, path, data);
+    const scripts = await backend.loadScripts(path);
+    set({ scripts });
   },
 
   closeProject: () => {
@@ -71,6 +81,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectDescription: null,
       textSnippets: [],
       videoSnippets: [],
+      scripts: [],
       demoMode: false,
     });
   },
@@ -89,6 +100,37 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       await backend.saveVideoSnippets(projectPath, snippets);
     }
     set({ videoSnippets: snippets });
+  },
+
+  loadScripts: async () => {
+    const { projectPath } = get();
+    if (projectPath) {
+      const scripts = await backend.loadScripts(projectPath);
+      set({ scripts });
+    }
+  },
+
+  saveScript: async (script) => {
+    const { projectPath, scripts } = get();
+    if (projectPath) {
+      await backend.saveScript(projectPath, script);
+    }
+    const existing = scripts.findIndex((s) => s.id === script.id);
+    if (existing >= 0) {
+      const updated = [...scripts];
+      updated[existing] = script;
+      set({ scripts: updated });
+    } else {
+      set({ scripts: [...scripts, script] });
+    }
+  },
+
+  deleteScript: async (id) => {
+    const { projectPath, scripts } = get();
+    if (projectPath) {
+      await backend.deleteScript(projectPath, id);
+    }
+    set({ scripts: scripts.filter((s) => s.id !== id) });
   },
 
   enterDemoMode: async () => {

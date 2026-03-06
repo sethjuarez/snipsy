@@ -6,7 +6,9 @@ import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList from "./components/VideoList";
 import VideoSnippetList from "./components/VideoSnippetList";
 import VideoSnippetForm from "./components/VideoSnippetForm";
-import type { TextSnippet, VideoSnippet } from "./types";
+import ScriptList from "./components/ScriptList";
+import ScriptForm from "./components/ScriptForm";
+import type { TextSnippet, VideoSnippet, Script } from "./types";
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
@@ -16,6 +18,9 @@ function App() {
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
   const setVideoSnippets = useProjectStore((s) => s.setVideoSnippets);
+  const scripts = useProjectStore((s) => s.scripts);
+  const saveScript = useProjectStore((s) => s.saveScript);
+  const deleteScriptFromStore = useProjectStore((s) => s.deleteScript);
   const demoMode = useProjectStore((s) => s.demoMode);
   const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
@@ -29,6 +34,10 @@ function App() {
   const [editingVideoSnippet, setEditingVideoSnippet] = useState<
     VideoSnippet | undefined
   >(undefined);
+  const [showScriptForm, setShowScriptForm] = useState(false);
+  const [editingScript, setEditingScript] = useState<Script | undefined>(
+    undefined,
+  );
 
   if (!projectName) {
     return <Welcome />;
@@ -90,6 +99,28 @@ function App() {
   const handleVideoCancel = () => {
     setShowVideoForm(false);
     setEditingVideoSnippet(undefined);
+  };
+
+  const handleScriptEdit = (script: Script) => {
+    setEditingScript(script);
+    setShowScriptForm(true);
+  };
+
+  const handleScriptDelete = (id: string) => {
+    if (window.confirm("Delete this script?")) {
+      deleteScriptFromStore(id);
+    }
+  };
+
+  const handleScriptSave = (script: Script) => {
+    saveScript(script);
+    setShowScriptForm(false);
+    setEditingScript(undefined);
+  };
+
+  const handleScriptCancel = () => {
+    setShowScriptForm(false);
+    setEditingScript(undefined);
   };
 
   return (
@@ -206,6 +237,42 @@ function App() {
               onDelete={handleVideoDelete}
               onPlay={playVideo}
               demoMode={demoMode}
+            />
+          )}
+        </section>
+
+        <section className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">
+              Scripts
+            </h2>
+            {!showScriptForm && (
+              <button
+                onClick={() => {
+                  setEditingScript(undefined);
+                  setShowScriptForm(true);
+                }}
+                className="px-4 py-2 bg-amber-600 text-white rounded font-medium hover:bg-amber-700 text-sm"
+                data-testid="add-script"
+              >
+                + Add Script
+              </button>
+            )}
+          </div>
+
+          {showScriptForm ? (
+            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
+              <ScriptForm
+                script={editingScript}
+                onSave={handleScriptSave}
+                onCancel={handleScriptCancel}
+              />
+            </div>
+          ) : (
+            <ScriptList
+              scripts={scripts}
+              onEdit={handleScriptEdit}
+              onDelete={handleScriptDelete}
             />
           )}
         </section>
