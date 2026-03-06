@@ -22,6 +22,22 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
       const result = await backend.installFfmpeg();
       setInstallState("success");
       setMessage(result);
+
+      // Auto-recheck — the running process might already see the new PATH
+      const available = await backend.checkFfmpeg();
+      if (available) {
+        onFixed();
+        return;
+      }
+
+      // PATH change won't be visible until restart — do it automatically
+      setMessage("FFmpeg installed! Restarting Snipsy to pick up the new PATH…");
+      try {
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
+      } catch {
+        setMessage("FFmpeg installed! Please close and reopen Snipsy to finish setup.");
+      }
     } catch (err) {
       setInstallState("error");
       setMessage(typeof err === "string" ? err : (err as Error).message || "Installation failed.");
