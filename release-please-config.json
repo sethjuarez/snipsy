@@ -1,0 +1,31 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "component": "snipsy",
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "chore", "section": "Miscellaneous" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "build", "section": "Build" },
+        { "type": "ci", "section": "CI/CD" }
+      ],
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "src-tauri/tauri.conf.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "toml",
+          "path": "src-tauri/Cargo.toml",
+          "key": "package.version"
+        }
+      ]
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}
