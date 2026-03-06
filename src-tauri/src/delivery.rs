@@ -55,11 +55,27 @@ impl Drop for InputBlock {
     }
 }
 
+/// Release all modifier keys to ensure a clean state before simulating input.
+/// When a global hotkey like Ctrl+Shift+1 triggers delivery, those modifiers
+/// are still physically held — releasing them prevents "stuck" modifiers from
+/// turning every keystroke into Ctrl+Shift+<char>.
+fn release_modifiers(enigo: &mut Enigo) {
+    let modifiers = [Key::Control, Key::Shift, Key::Alt, Key::Meta];
+    for key in modifiers {
+        let _ = enigo.key(key, Direction::Release);
+    }
+    // Brief pause for the OS to register the releases
+    thread::sleep(Duration::from_millis(30));
+}
+
 /// Deliver text using fast-type (simulated keystrokes).
 /// Blocks user input during delivery so focus can't be stolen.
 pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
+
+    // Release any held modifier keys from the hotkey trigger
+    release_modifiers(&mut enigo);
 
     // Capture focus context as a safety net for non-Windows platforms
     let focus_ctx = focus::capture_focused_window();
@@ -108,6 +124,9 @@ pub fn deliver_paste(text: &str) -> Result<(), String> {
 
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
+
+    // Release any held modifier keys from the hotkey trigger
+    release_modifiers(&mut enigo);
 
     #[cfg(target_os = "macos")]
     {
