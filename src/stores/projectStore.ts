@@ -27,7 +27,8 @@ interface ProjectState {
   setTextSnippets: (snippets: TextSnippet[]) => Promise<void>;
   setVideoSnippets: (snippets: VideoSnippet[]) => Promise<void>;
 
-  setDemoMode: (active: boolean) => void;
+  enterDemoMode: () => Promise<void>;
+  exitDemoMode: () => Promise<void>;
 }
 
 function applyProjectData(
@@ -89,5 +90,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ videoSnippets: snippets });
   },
 
-  setDemoMode: (active) => set({ demoMode: active }),
+  enterDemoMode: async () => {
+    const { textSnippets, videoSnippets } = get();
+    const hotkeys = [
+      ...textSnippets.map((s) => ({
+        id: s.id,
+        hotkey: s.hotkey,
+        snippetType: "text",
+      })),
+      ...videoSnippets.map((s) => ({
+        id: s.id,
+        hotkey: s.hotkey,
+        snippetType: "video",
+      })),
+    ];
+    await backend.enterDemoMode(hotkeys);
+    set({ demoMode: true });
+  },
+
+  exitDemoMode: async () => {
+    await backend.exitDemoMode();
+    set({ demoMode: false });
+  },
 }));

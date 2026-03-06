@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { BackendService } from "./backendService";
+import type { BackendService, SnippetHotkey } from "./backendService";
 import type { ProjectData, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
@@ -27,5 +27,25 @@ export class TauriBackendService implements BackendService {
     snippets: VideoSnippet[],
   ): Promise<void> {
     return invoke("save_video_snippets", { path, snippets });
+  }
+
+  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<void> {
+    return invoke("enter_demo_mode", { hotkeys });
+  }
+
+  async exitDemoMode(): Promise<void> {
+    return invoke("exit_demo_mode");
+  }
+
+  async isDemoMode(): Promise<boolean> {
+    return invoke<boolean>("is_demo_mode");
+  }
+
+  async deliverText(
+    text: string,
+    method: string,
+    typeDelay?: number,
+  ): Promise<void> {
+    return invoke("deliver_text", { text, method, typeDelay });
   }
 }

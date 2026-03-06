@@ -10,6 +10,9 @@ function App() {
   const closeProject = useProjectStore((s) => s.closeProject);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
+  const demoMode = useProjectStore((s) => s.demoMode);
+  const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
+  const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
 
   const [showForm, setShowForm] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(
@@ -55,12 +58,33 @@ function App() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">{projectName}</h1>
         </div>
-        <button
-          onClick={closeProject}
-          className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded"
-        >
-          Close Project
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={demoMode ? exitDemoMode : enterDemoMode}
+            className={`px-4 py-1.5 text-sm font-medium rounded ${
+              demoMode
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+            data-testid="demo-mode-toggle"
+          >
+            {demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
+          </button>
+          {demoMode && (
+            <span
+              className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded font-medium"
+              data-testid="demo-mode-indicator"
+            >
+              LIVE
+            </span>
+          )}
+          <button
+            onClick={closeProject}
+            className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded"
+          >
+            Close Project
+          </button>
+        </div>
       </header>
       <main className="p-6 max-w-4xl mx-auto">
         <section>

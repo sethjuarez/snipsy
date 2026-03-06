@@ -1,4 +1,4 @@
-import type { BackendService } from "./backendService";
+import type { BackendService, SnippetHotkey } from "./backendService";
 import type { ProjectData, TextSnippet, VideoSnippet } from "../types";
 
 const FIXTURE_PROJECT: ProjectData = {
@@ -53,6 +53,7 @@ const FIXTURE_PROJECT: ProjectData = {
 
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
+  private _demoMode = false;
 
   async createProject(
     _path: string,
@@ -83,5 +84,25 @@ export class MockBackendService implements BackendService {
     snippets: VideoSnippet[],
   ): Promise<void> {
     this.data.videoSnippets = structuredClone(snippets);
+  }
+
+  async enterDemoMode(_hotkeys: SnippetHotkey[]): Promise<void> {
+    this._demoMode = true;
+  }
+
+  async exitDemoMode(): Promise<void> {
+    this._demoMode = false;
+  }
+
+  async isDemoMode(): Promise<boolean> {
+    return this._demoMode;
+  }
+
+  async deliverText(
+    _text: string,
+    _method: string,
+    _typeDelay?: number,
+  ): Promise<void> {
+    // Mock: no-op in test mode
   }
 }
