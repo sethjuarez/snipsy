@@ -17,6 +17,7 @@ interface ProjectState {
   videoSnippets: VideoSnippet[];
   scripts: Script[];
   demoMode: boolean;
+  ffmpegAvailable: boolean | null;
 
   createProject: (
     path: string,
@@ -32,6 +33,7 @@ interface ProjectState {
   loadScripts: () => Promise<void>;
   saveScript: (script: Script) => Promise<void>;
   deleteScript: (id: string) => Promise<void>;
+  checkFfmpeg: () => Promise<void>;
 
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
@@ -60,6 +62,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   videoSnippets: [],
   scripts: [],
   demoMode: false,
+  ffmpegAvailable: null,
 
   createProject: async (path, name, description) => {
     const data = await backend.createProject(path, name, description);
@@ -72,6 +75,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     applyProjectData(set, path, data);
     const scripts = await backend.loadScripts(path);
     set({ scripts });
+    const ffmpegAvailable = await backend.checkFfmpeg();
+    set({ ffmpegAvailable });
   },
 
   closeProject: () => {
@@ -131,6 +136,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       await backend.deleteScript(projectPath, id);
     }
     set({ scripts: scripts.filter((s) => s.id !== id) });
+  },
+
+  checkFfmpeg: async () => {
+    const available = await backend.checkFfmpeg();
+    set({ ffmpegAvailable: available });
   },
 
   enterDemoMode: async () => {

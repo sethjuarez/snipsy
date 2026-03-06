@@ -97,4 +97,12 @@ export class TauriBackendService implements BackendService {
   async deleteScript(projectPath: string, id: string): Promise<void> {
     return invoke("delete_script", { projectPath, id });
   }
+
+  async runScript(projectPath: string, scriptId: string): Promise<string> {
+    return invoke("run_script", { projectPath, scriptId });
+  }
+
+  async checkFfmpeg(): Promise<boolean> {
+    return invoke("check_ffmpeg");
+  }
 }

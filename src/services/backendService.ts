@@ -42,4 +42,6 @@ export interface BackendService {
   saveScript(projectPath: string, script: Script): Promise<void>;
   loadScripts(projectPath: string): Promise<Script[]>;
   deleteScript(projectPath: string, id: string): Promise<void>;
+  runScript(projectPath: string, scriptId: string): Promise<string>;
+  checkFfmpeg(): Promise<boolean>;
 }

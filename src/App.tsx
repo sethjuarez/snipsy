@@ -25,6 +25,7 @@ function App() {
   const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
   const playVideo = useProjectStore((s) => s.playVideo);
+  const ffmpegAvailable = useProjectStore((s) => s.ffmpegAvailable);
 
   const [showForm, setShowForm] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(
@@ -242,6 +243,23 @@ function App() {
         </section>
 
         <section className="mt-8">
+          {ffmpegAvailable === false && (
+            <div
+              className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800"
+              data-testid="ffmpeg-warning"
+            >
+              ⚠️ FFmpeg not found on PATH. Script recording requires FFmpeg.
+              Install it from{" "}
+              <a
+                href="https://ffmpeg.org/download.html"
+                className="underline font-medium"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ffmpeg.org
+              </a>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
               Scripts

@@ -160,4 +160,12 @@ export class MockBackendService implements BackendService {
   async deleteScript(_projectPath: string, id: string): Promise<void> {
     this._scripts = this._scripts.filter((s) => s.id !== id);
   }
+
+  async runScript(_projectPath: string, _scriptId: string): Promise<string> {
+    return "videos/mock-output.mp4";
+  }
+
+  async checkFfmpeg(): Promise<boolean> {
+    return false; // Mock: FFmpeg not available in test mode
+  }
 }
