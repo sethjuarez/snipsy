@@ -72,13 +72,14 @@ function VideoTimeline({
       <video
         ref={videoRef}
         src={videoSrc}
-        className="w-full rounded border border-gray-200"
+        className="w-full rounded"
+        style={{ border: "1px solid var(--color-border)" }}
         data-testid="timeline-video"
       />
 
       <div className="space-y-2">
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-600 w-16">Start</label>
+          <label className="text-[12px] font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>Start</label>
           <input
             type="range"
             min={0}
@@ -89,13 +90,13 @@ function VideoTimeline({
             className="flex-1"
             data-testid="timeline-start"
           />
-          <span className="text-sm text-gray-500 w-12 text-right font-mono">
+          <span className="text-[12px] w-12 text-right font-mono" style={{ color: "var(--color-text-secondary)" }}>
             {formatTime(startTime)}
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-600 w-16">End</label>
+          <label className="text-[12px] font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>End</label>
           <input
             type="range"
             min={0}
@@ -106,13 +107,13 @@ function VideoTimeline({
             className="flex-1"
             data-testid="timeline-end"
           />
-          <span className="text-sm text-gray-500 w-12 text-right font-mono">
+          <span className="text-[12px] w-12 text-right font-mono" style={{ color: "var(--color-text-secondary)" }}>
             {formatTime(endTime)}
           </span>
         </div>
       </div>
 
-      <div className="flex justify-between text-xs text-gray-400">
+      <div className="flex justify-between text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
         <span>Current: {formatTime(currentTime)}</span>
         <span>
           Selection: {formatTime(startTime)} – {formatTime(endTime)} (

@@ -89,74 +89,80 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
     <form onSubmit={handleSubmit} className="space-y-4" data-testid="video-snippet-form">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>Title</label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Snippet title"
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded text-[13px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="video-snippet-title"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Video File</label>
+          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>Video File</label>
           <input
             type="text"
             value={videoFile}
             onChange={(e) => setVideoFile(e.target.value)}
             placeholder="videos/example.mp4"
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded text-[13px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="video-snippet-file"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>Description</label>
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description"
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 rounded text-[13px]"
+          style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
           data-testid="video-snippet-description"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Start (s)</label>
+          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>Start (s)</label>
           <input
             type="number"
             value={startTime}
             onChange={(e) => setStartTime(Number(e.target.value))}
             min={0}
             step={0.1}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded text-[13px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="video-snippet-start"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">End (s)</label>
+          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>End (s)</label>
           <input
             type="number"
             value={endTime}
             onChange={(e) => setEndTime(Number(e.target.value))}
             min={0}
             step={0.1}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded text-[13px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="video-snippet-end"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Speed</label>
+          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>Speed</label>
           <select
             value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded text-[13px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="video-snippet-speed"
           >
             <option value={0.5}>0.5x</option>
@@ -169,7 +175,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hotkey</label>
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>Hotkey</label>
         <input
           type="text"
           value={capturingHotkey ? "Press a key combo..." : hotkey}
@@ -178,36 +184,40 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
           onBlur={() => setCapturingHotkey(false)}
           onKeyDown={handleHotkeyCapture}
           placeholder="Click to capture hotkey"
-          className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
-            capturingHotkey ? "border-blue-500 bg-blue-50" : "border-gray-300"
-          }`}
+          className="w-full px-3 py-2 rounded font-mono text-[13px]"
+          style={capturingHotkey
+            ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
+            : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }
+          }
           data-testid="video-snippet-hotkey"
         />
       </div>
 
       <div data-testid="transition-actions-section">
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block font-medium text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
             Transition Actions
           </label>
           <button
             type="button"
             onClick={addTransitionAction}
-            className="text-sm text-purple-600 hover:text-purple-800 font-medium"
+            className="text-[12px] font-medium"
+            style={{ color: "var(--color-accent)" }}
             data-testid="add-transition-action"
           >
             + Add Action
           </button>
         </div>
         {transitionActions.length === 0 && (
-          <p className="text-sm text-gray-400" data-testid="no-transition-actions">
+          <p className="text-[12px]" style={{ color: "var(--color-text-secondary)" }} data-testid="no-transition-actions">
             No transition actions. Actions execute during video playback.
           </p>
         )}
         {transitionActions.map((action, index) => (
           <div
             key={index}
-            className="flex items-center gap-2 mb-2 p-2 bg-gray-50 rounded border border-gray-200"
+            className="flex items-center gap-2 mb-2 p-2 rounded"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border-subtle)" }}
             data-testid={`transition-action-${index}`}
           >
             <select
@@ -215,7 +225,8 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
               onChange={(e) =>
                 updateTransitionAction(index, "triggerAt", e.target.value)
               }
-              className="px-2 py-1 border border-gray-300 rounded text-sm"
+              className="px-2 py-1 rounded text-[12px]"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
               data-testid={`transition-trigger-${index}`}
             >
               <option value="end">At End</option>
@@ -229,7 +240,8 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
               onChange={(e) =>
                 updateTransitionAction(index, "action", e.target.value)
               }
-              className="px-2 py-1 border border-gray-300 rounded text-sm"
+              className="px-2 py-1 rounded text-[12px]"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
               data-testid={`transition-type-${index}`}
             >
               <option value="click">Click</option>
@@ -241,7 +253,8 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
                 updateTransitionAction(index, "x", Number(e.target.value))
               }
               placeholder="X"
-              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+              className="w-20 px-2 py-1 rounded text-[12px]"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
               data-testid={`transition-x-${index}`}
             />
             <input
@@ -251,13 +264,15 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
                 updateTransitionAction(index, "y", Number(e.target.value))
               }
               placeholder="Y"
-              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+              className="w-20 px-2 py-1 rounded text-[12px]"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
               data-testid={`transition-y-${index}`}
             />
             <button
               type="button"
               onClick={() => removeTransitionAction(index)}
-              className="text-sm text-red-500 hover:text-red-700"
+              className="text-[12px]"
+              style={{ color: "var(--color-danger)" }}
               data-testid={`transition-remove-${index}`}
             >
               ✕
@@ -269,7 +284,8 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700"
+          className="px-4 py-2 rounded font-medium text-[13px]"
+          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
           data-testid="video-snippet-save"
         >
           {snippet ? "Update" : "Create"}
@@ -277,7 +293,8 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded font-medium hover:bg-gray-200"
+          className="px-4 py-2 rounded font-medium text-[13px]"
+          style={{ backgroundColor: "var(--color-surface-alt)", color: "var(--color-text)" }}
           data-testid="video-snippet-cancel"
         >
           Cancel

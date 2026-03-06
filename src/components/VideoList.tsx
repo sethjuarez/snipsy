@@ -30,11 +30,12 @@ function VideoList({ projectPath }: VideoListProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-md font-medium text-gray-700">Imported Videos</h3>
+        <h3 className="text-[13px] font-medium" style={{ color: "var(--color-text-secondary)" }}>Imported Videos</h3>
         <button
           onClick={handleImport}
           disabled={importing}
-          className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+          className="px-3 py-1.5 text-[12px] rounded disabled:opacity-50"
+          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
           data-testid="import-video"
         >
           {importing ? "Importing..." : "Import Video"}
@@ -43,7 +44,8 @@ function VideoList({ projectPath }: VideoListProps) {
 
       {videos.length === 0 ? (
         <p
-          className="text-gray-400 text-sm text-center py-4"
+          className="text-center py-4 text-[12px]"
+          style={{ color: "var(--color-text-secondary)" }}
           data-testid="no-videos"
         >
           No videos imported yet.
@@ -53,10 +55,11 @@ function VideoList({ projectPath }: VideoListProps) {
           {videos.map((video, i) => (
             <li
               key={i}
-              className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-200 rounded px-3 py-2"
+              className="flex items-center gap-2 text-[12px] rounded px-3 py-2"
+              style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
               data-testid={`video-item-${i}`}
             >
-              <span className="text-purple-500">🎬</span>
+              <span style={{ color: "var(--color-accent)" }}>🎬</span>
               {video}
             </li>
           ))}
