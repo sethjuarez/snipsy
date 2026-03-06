@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { VideoSnippet } from "../types";
+import type { VideoSnippet, TransitionAction } from "../types";
 
 interface VideoSnippetFormProps {
   snippet?: VideoSnippet;
@@ -29,6 +29,30 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   const [hotkey, setHotkey] = useState(snippet?.hotkey ?? "");
   const [speed, setSpeed] = useState(snippet?.speed ?? 1.0);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [transitionActions, setTransitionActions] = useState<TransitionAction[]>(
+    snippet?.transitionActions ?? [],
+  );
+
+  const addTransitionAction = () => {
+    setTransitionActions([
+      ...transitionActions,
+      { triggerAt: "end", action: "click", x: 0, y: 0 },
+    ]);
+  };
+
+  const updateTransitionAction = (
+    index: number,
+    field: keyof TransitionAction,
+    value: string | number,
+  ) => {
+    const updated = [...transitionActions];
+    updated[index] = { ...updated[index], [field]: value };
+    setTransitionActions(updated);
+  };
+
+  const removeTransitionAction = (index: number) => {
+    setTransitionActions(transitionActions.filter((_, i) => i !== index));
+  };
 
   const handleHotkeyCapture = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -56,7 +80,8 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       endTime,
       hotkey,
       speed,
-      transitionActions: snippet?.transitionActions,
+      transitionActions:
+        transitionActions.length > 0 ? transitionActions : undefined,
     });
   };
 
@@ -158,6 +183,87 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
           }`}
           data-testid="video-snippet-hotkey"
         />
+      </div>
+
+      <div data-testid="transition-actions-section">
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Transition Actions
+          </label>
+          <button
+            type="button"
+            onClick={addTransitionAction}
+            className="text-sm text-purple-600 hover:text-purple-800 font-medium"
+            data-testid="add-transition-action"
+          >
+            + Add Action
+          </button>
+        </div>
+        {transitionActions.length === 0 && (
+          <p className="text-sm text-gray-400" data-testid="no-transition-actions">
+            No transition actions. Actions execute during video playback.
+          </p>
+        )}
+        {transitionActions.map((action, index) => (
+          <div
+            key={index}
+            className="flex items-center gap-2 mb-2 p-2 bg-gray-50 rounded border border-gray-200"
+            data-testid={`transition-action-${index}`}
+          >
+            <select
+              value={action.triggerAt}
+              onChange={(e) =>
+                updateTransitionAction(index, "triggerAt", e.target.value)
+              }
+              className="px-2 py-1 border border-gray-300 rounded text-sm"
+              data-testid={`transition-trigger-${index}`}
+            >
+              <option value="end">At End</option>
+              <option value="0">At 0s</option>
+              <option value="5">At 5s</option>
+              <option value="10">At 10s</option>
+              <option value="15">At 15s</option>
+            </select>
+            <select
+              value={action.action}
+              onChange={(e) =>
+                updateTransitionAction(index, "action", e.target.value)
+              }
+              className="px-2 py-1 border border-gray-300 rounded text-sm"
+              data-testid={`transition-type-${index}`}
+            >
+              <option value="click">Click</option>
+            </select>
+            <input
+              type="number"
+              value={action.x ?? 0}
+              onChange={(e) =>
+                updateTransitionAction(index, "x", Number(e.target.value))
+              }
+              placeholder="X"
+              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+              data-testid={`transition-x-${index}`}
+            />
+            <input
+              type="number"
+              value={action.y ?? 0}
+              onChange={(e) =>
+                updateTransitionAction(index, "y", Number(e.target.value))
+              }
+              placeholder="Y"
+              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+              data-testid={`transition-y-${index}`}
+            />
+            <button
+              type="button"
+              onClick={() => removeTransitionAction(index)}
+              className="text-sm text-red-500 hover:text-red-700"
+              data-testid={`transition-remove-${index}`}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
       </div>
 
       <div className="flex gap-3 pt-2">
