@@ -2,6 +2,7 @@ mod commands;
 mod delivery;
 mod demo;
 mod models;
+mod playback;
 mod tray;
 
 pub fn run() {
@@ -18,6 +19,8 @@ pub fn run() {
             demo::exit_demo_mode,
             demo::is_demo_mode,
             delivery::deliver_text,
+            playback::play_video,
+            playback::close_playback_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
