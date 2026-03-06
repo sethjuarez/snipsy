@@ -12,3 +12,13 @@ export function createBackendService(): BackendService {
   }
   return new MockBackendService();
 }
+
+let _backend: BackendService | null = null;
+
+/** Returns the singleton backend service instance. */
+export function getBackend(): BackendService {
+  if (!_backend) {
+    _backend = createBackendService();
+  }
+  return _backend;
+}

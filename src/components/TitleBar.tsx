@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop } from "lucide-react";
+import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert } from "lucide-react";
+import { getBackend } from "../services";
 import appIcon from "../assets/icon.png";
 
 interface TitleBarProps {
@@ -12,6 +13,7 @@ interface TitleBarProps {
 function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
   const [maximized, setMaximized] = useState(false);
+  const [elevated, setElevated] = useState(true); // assume true until checked
 
   // Resolve the Tauri window once — null when running in browser
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,6 +22,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
     import("@tauri-apps/api/window")
       .then((mod) => setAppWindow(mod.getCurrentWindow()))
       .catch(() => {});
+  }, []);
+
+  // Check elevation status on mount
+  useEffect(() => {
+    getBackend().isElevated().then(setElevated).catch(() => {});
   }, []);
 
   // Track maximized state
@@ -44,6 +51,10 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   }, [appWindow, demoMode]);
   const toggleMaximize = useCallback(() => appWindow?.toggleMaximize(), [appWindow]);
   const close = useCallback(() => appWindow?.close(), [appWindow]);
+
+  const handleRelaunchAsAdmin = useCallback(() => {
+    getBackend().relaunchAsAdmin().catch(() => {});
+  }, []);
 
   return (
     <div
@@ -90,6 +101,19 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
               {demoMode
                 ? <CircleStop size={16} className="demo-pulse" />
                 : <Play size={14} fill="currentColor" />}
+            </button>
+          )}
+
+          {/* Elevation warning — show when not running as admin */}
+          {projectName && !elevated && (
+            <button
+              onClick={handleRelaunchAsAdmin}
+              className="w-7 h-7 flex items-center justify-center rounded"
+              title="Input protection requires Admin. Click to restart as Administrator."
+              data-testid="elevation-warning"
+              style={{ color: "var(--color-warning, #f59e0b)" }}
+            >
+              <ShieldAlert size={14} />
             </button>
           )}
 

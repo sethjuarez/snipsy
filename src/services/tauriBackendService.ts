@@ -117,4 +117,12 @@ export class TauriBackendService implements BackendService {
   async deactivateDemoTray(): Promise<void> {
     return invoke("deactivate_demo_tray");
   }
+
+  async isElevated(): Promise<boolean> {
+    return invoke<boolean>("is_elevated");
+  }
+
+  async relaunchAsAdmin(): Promise<void> {
+    return invoke("relaunch_as_admin");
+  }
 }

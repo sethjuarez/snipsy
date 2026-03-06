@@ -1,6 +1,7 @@
 mod commands;
 mod delivery;
 mod demo;
+mod elevation;
 mod focus;
 mod models;
 mod playback;
@@ -27,6 +28,8 @@ pub fn run() {
             demo::exit_demo_mode,
             demo::is_demo_mode,
             delivery::deliver_text,
+            elevation::is_elevated,
+            elevation::relaunch_as_admin,
             playback::play_video,
             playback::close_playback_window,
             scripting::run_script,

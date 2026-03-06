@@ -4,13 +4,32 @@ use std::time::Duration;
 
 use crate::focus;
 
-// ─── Platform input blocking (inspired by AHK's BlockInput) ─────────────────
+// ─── Platform input blocking ────────────────────────────────────────────────
+// Primary: BlockInput (needs admin). Fallback: ClipCursor (locks mouse in place).
 
 #[cfg(target_os = "windows")]
 fn block_input(block: bool) {
+    use windows::Win32::Foundation::POINT;
     use windows::Win32::UI::Input::KeyboardAndMouse::BlockInput;
+    use windows::Win32::UI::WindowsAndMessaging::{ClipCursor, GetCursorPos};
+    use windows::Win32::Foundation::RECT;
+
     unsafe {
-        let _ = BlockInput(block);
+        if block {
+            // Try BlockInput first (requires admin)
+            let blocked = BlockInput(true).is_ok();
+            if !blocked {
+                // Fallback: lock mouse cursor to a 1px rect at current position
+                let mut pt = POINT::default();
+                let _ = GetCursorPos(&mut pt);
+                let rect = RECT { left: pt.x, top: pt.y, right: pt.x + 1, bottom: pt.y + 1 };
+                let _ = ClipCursor(Some(&rect));
+            }
+        } else {
+            // Unblock both — safe to call even if only one was active
+            let _ = BlockInput(false);
+            let _ = ClipCursor(None); // release cursor constraint
+        }
     }
 }
 

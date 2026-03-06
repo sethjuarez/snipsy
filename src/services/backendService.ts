@@ -50,4 +50,6 @@ export interface BackendService {
   installFfmpeg(): Promise<string>;
   activateDemoTray(): Promise<void>;
   deactivateDemoTray(): Promise<void>;
+  isElevated(): Promise<boolean>;
+  relaunchAsAdmin(): Promise<void>;
 }

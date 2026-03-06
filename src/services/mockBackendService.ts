@@ -180,4 +180,12 @@ export class MockBackendService implements BackendService {
   async deactivateDemoTray(): Promise<void> {
     // Mock: no-op in test mode
   }
+
+  async isElevated(): Promise<boolean> {
+    return true; // Mock: pretend elevated so UI doesn't show warning
+  }
+
+  async relaunchAsAdmin(): Promise<void> {
+    // Mock: no-op in test mode
+  }
 }
