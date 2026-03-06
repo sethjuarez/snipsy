@@ -3,6 +3,7 @@ mod delivery;
 mod demo;
 mod models;
 mod playback;
+mod scripting;
 mod tray;
 
 pub fn run() {
@@ -24,6 +25,8 @@ pub fn run() {
             delivery::deliver_text,
             playback::play_video,
             playback::close_playback_window,
+            scripting::run_script,
+            scripting::check_ffmpeg,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
