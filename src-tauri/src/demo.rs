@@ -57,12 +57,17 @@ pub fn enter_demo_mode(
     let gs = app.global_shortcut();
 
     for hk in &hotkeys {
+        // Skip snippets with empty hotkeys
+        if hk.hotkey.is_empty() {
+            continue;
+        }
+
         if hk.snippet_type == "text" {
             let text = hk.text.clone().unwrap_or_default();
             let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
             let type_delay = hk.type_delay;
 
-            gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
+            if let Err(e) = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
                     let _ = crate::delivery::deliver_text(
                         text.clone(),
@@ -70,8 +75,9 @@ pub fn enter_demo_mode(
                         type_delay,
                     );
                 }
-            })
-            .map_err(|e| format!("Failed to register hotkey '{}': {e}", hk.hotkey))?;
+            }) {
+                eprintln!("Warning: could not register hotkey '{}': {e}", hk.hotkey);
+            }
         }
         // Video snippets will emit events to the frontend
     }

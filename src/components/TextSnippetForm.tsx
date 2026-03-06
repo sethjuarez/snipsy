@@ -13,12 +13,18 @@ function formatKeyCombo(e: KeyboardEvent): string {
   if (e.shiftKey) parts.push("Shift");
   if (e.altKey) parts.push("Alt");
 
-  const key = e.key;
-  if (!["Control", "Shift", "Alt", "Meta"].includes(key)) {
-    if (key.length === 1) {
-      parts.push(key.toUpperCase());
+  // Use e.code (physical key) instead of e.key (produced character)
+  // so Shift+1 gives "1" not "!"
+  const code = e.code;
+  if (!["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"].includes(code)) {
+    if (code.startsWith("Digit")) {
+      parts.push(code.slice(5)); // Digit1 → 1
+    } else if (code.startsWith("Key")) {
+      parts.push(code.slice(3)); // KeyA → A
+    } else if (code.startsWith("Numpad")) {
+      parts.push("num" + code.slice(6)); // Numpad1 → num1
     } else {
-      parts.push(key);
+      parts.push(code); // F1, Space, etc.
     }
   }
 

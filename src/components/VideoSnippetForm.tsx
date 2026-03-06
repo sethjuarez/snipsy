@@ -12,11 +12,20 @@ function formatKeyCombo(e: KeyboardEvent): string {
   if (e.ctrlKey || e.metaKey) parts.push("CmdOrControl");
   if (e.shiftKey) parts.push("Shift");
   if (e.altKey) parts.push("Alt");
-  const key = e.key;
-  if (!["Control", "Shift", "Alt", "Meta"].includes(key)) {
-    if (key.length === 1) parts.push(key.toUpperCase());
-    else parts.push(key);
+
+  const code = e.code;
+  if (!["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"].includes(code)) {
+    if (code.startsWith("Digit")) {
+      parts.push(code.slice(5));
+    } else if (code.startsWith("Key")) {
+      parts.push(code.slice(3));
+    } else if (code.startsWith("Numpad")) {
+      parts.push("num" + code.slice(6));
+    } else {
+      parts.push(code);
+    }
   }
+
   return parts.join("+");
 }
 

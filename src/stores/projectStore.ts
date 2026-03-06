@@ -224,8 +224,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         snippetType: "video",
       })),
     ];
-    await backend.enterDemoMode(hotkeys);
-    await backend.activateDemoTray();
+    try {
+      await backend.enterDemoMode(hotkeys);
+    } catch (e) {
+      console.error("enterDemoMode failed:", e);
+    }
+    try {
+      await backend.activateDemoTray();
+    } catch (e) {
+      console.error("activateDemoTray failed:", e);
+    }
     // Hide window to system tray
     try {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -237,8 +245,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   exitDemoMode: async () => {
-    await backend.exitDemoMode();
-    await backend.deactivateDemoTray();
+    try {
+      await backend.exitDemoMode();
+    } catch (e) {
+      console.error("exitDemoMode failed:", e);
+    }
+    try {
+      await backend.deactivateDemoTray();
+    } catch (e) {
+      console.error("deactivateDemoTray failed:", e);
+    }
     // Show window back from tray
     try {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
