@@ -96,6 +96,32 @@ pub fn save_video_snippets(path: String, snippets: Vec<VideoSnippet>) -> Result<
     Ok(())
 }
 
+#[tauri::command]
+pub fn import_video(project_path: String, source_file_path: String) -> Result<String, String> {
+    let project_dir = PathBuf::from(&project_path);
+    let source = PathBuf::from(&source_file_path);
+
+    if !source.exists() {
+        return Err(format!("Source file does not exist: {source_file_path}"));
+    }
+
+    let videos_dir = project_dir.join("videos");
+    fs::create_dir_all(&videos_dir)
+        .map_err(|e| format!("Failed to create videos directory: {e}"))?;
+
+    let file_name = source
+        .file_name()
+        .ok_or("Invalid source file name")?
+        .to_string_lossy()
+        .to_string();
+
+    let dest = videos_dir.join(&file_name);
+    fs::copy(&source, &dest)
+        .map_err(|e| format!("Failed to copy video file: {e}"))?;
+
+    Ok(format!("videos/{file_name}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +229,50 @@ mod tests {
     #[test]
     fn open_nonexistent_project_errors() {
         let result = open_project("/tmp/nonexistent-project-12345".into());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_video_copies_file() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        // Create a fake video file
+        let source_file = tmp.path().join("test-video.mp4");
+        fs::write(&source_file, b"fake video content").unwrap();
+
+        let result = import_video(
+            project_path.to_string_lossy().into_owned(),
+            source_file.to_string_lossy().into_owned(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "videos/test-video.mp4");
+
+        // Verify the file was copied
+        assert!(project_path.join("videos/test-video.mp4").exists());
+    }
+
+    #[test]
+    fn import_video_nonexistent_source_errors() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        let result = import_video(
+            project_path.to_string_lossy().into_owned(),
+            "/nonexistent/video.mp4".into(),
+        );
         assert!(result.is_err());
     }
 }

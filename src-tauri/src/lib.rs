@@ -13,6 +13,7 @@ pub fn run() {
             commands::open_project,
             commands::save_text_snippets,
             commands::save_video_snippets,
+            commands::import_video,
             demo::enter_demo_mode,
             demo::exit_demo_mode,
             demo::is_demo_mode,
