@@ -3,10 +3,12 @@ import { useProjectStore } from "./stores/projectStore";
 import Welcome from "./components/Welcome";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
+import VideoList from "./components/VideoList";
 import type { TextSnippet } from "./types";
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
+  const projectPath = useProjectStore((s) => s.projectPath);
   const closeProject = useProjectStore((s) => s.closeProject);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
@@ -122,6 +124,15 @@ function App() {
             />
           )}
         </section>
+
+        {projectPath && (
+          <section className="mt-8">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              Videos
+            </h2>
+            <VideoList projectPath={projectPath} />
+          </section>
+        )}
       </main>
     </div>
   );

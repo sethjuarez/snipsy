@@ -105,4 +105,15 @@ export class MockBackendService implements BackendService {
   ): Promise<void> {
     // Mock: no-op in test mode
   }
+
+  async importVideo(
+    _projectPath: string,
+    _sourceFilePath: string,
+  ): Promise<string> {
+    return "videos/mock-video.mp4";
+  }
+
+  async getImportedVideos(_projectPath: string): Promise<string[]> {
+    return ["videos/build-process.mp4", "videos/deploy-demo.mp4"];
+  }
 }

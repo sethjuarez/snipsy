@@ -23,4 +23,6 @@ export interface BackendService {
     method: string,
     typeDelay?: number,
   ): Promise<void>;
+  importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
+  getImportedVideos(projectPath: string): Promise<string[]>;
 }

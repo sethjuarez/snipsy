@@ -48,4 +48,16 @@ export class TauriBackendService implements BackendService {
   ): Promise<void> {
     return invoke("deliver_text", { text, method, typeDelay });
   }
+
+  async importVideo(
+    projectPath: string,
+    sourceFilePath: string,
+  ): Promise<string> {
+    return invoke<string>("import_video", { projectPath, sourceFilePath });
+  }
+
+  async getImportedVideos(_projectPath: string): Promise<string[]> {
+    // TODO: implement Rust command to list videos in project
+    return [];
+  }
 }
