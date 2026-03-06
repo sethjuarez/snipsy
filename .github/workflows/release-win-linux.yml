@@ -30,7 +30,7 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Find release
+      - name: Find or create release
         id: find-release
         uses: actions/github-script@v7
         with:
@@ -90,11 +90,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Run Playwright tests
-        run: npx playwright install chromium && npx playwright test
-
-      - name: Run Rust tests
-        run: cd src-tauri && cargo test
+      - name: Run tests
+        run: npm test
 
       - uses: tauri-apps/tauri-action@v0
         env:

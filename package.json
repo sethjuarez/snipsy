@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "npx playwright install chromium && npx playwright test && cd src-tauri && cargo test",
     "tauri": "tauri"
   },
   "dependencies": {

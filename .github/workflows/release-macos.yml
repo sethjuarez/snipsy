@@ -61,8 +61,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Run Playwright tests
-        run: npx playwright install chromium && npx playwright test
+      - name: Run tests
+        run: npm test
 
       - name: Extract changelog
         id: changelog
