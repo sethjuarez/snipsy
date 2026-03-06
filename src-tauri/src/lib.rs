@@ -1,6 +1,7 @@
 mod commands;
 mod demo;
 mod models;
+mod tray;
 
 pub fn run() {
     tauri::Builder::default()
