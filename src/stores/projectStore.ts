@@ -120,6 +120,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       snippet.startTime,
       snippet.endTime,
       snippet.speed,
+      snippet.transitionActions,
     );
   },
 }));

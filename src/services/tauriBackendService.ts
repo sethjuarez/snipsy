@@ -66,8 +66,15 @@ export class TauriBackendService implements BackendService {
     startTime: number,
     endTime: number,
     speed: number,
+    transitionActions?: import("../types").TransitionAction[],
   ): Promise<void> {
-    return invoke("play_video", { videoFile, startTime, endTime, speed });
+    return invoke("play_video", {
+      videoFile,
+      startTime,
+      endTime,
+      speed,
+      transitionActions: transitionActions ?? null,
+    });
   }
 
   async closePlaybackWindow(): Promise<void> {

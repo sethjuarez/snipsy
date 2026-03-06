@@ -1,4 +1,9 @@
-import type { ProjectData, TextSnippet, VideoSnippet } from "../types";
+import type {
+  ProjectData,
+  TextSnippet,
+  TransitionAction,
+  VideoSnippet,
+} from "../types";
 
 export interface SnippetHotkey {
   id: string;
@@ -30,6 +35,7 @@ export interface BackendService {
     startTime: number,
     endTime: number,
     speed: number,
+    transitionActions?: TransitionAction[],
   ): Promise<void>;
   closePlaybackWindow(): Promise<void>;
 }
