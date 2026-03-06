@@ -3,9 +3,11 @@
   "identifier": "default",
   "description": "Default permissions for Snipsy",
   "windows": [
-    "main"
+    "main",
+    "playback"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "global-shortcut:default"
   ]
 }
