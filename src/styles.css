@@ -110,6 +110,18 @@ html, body, #root {
   background: var(--color-text-secondary);
 }
 
+/* ── Pointer cursor for all interactive elements ────────────── */
+button,
+[role="button"],
+summary,
+a[href],
+select,
+label[for],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+
 /* ── Focus ring utility ─────────────────────────────────────── */
 .focus-ring:focus {
   outline: 2px solid var(--color-accent);
