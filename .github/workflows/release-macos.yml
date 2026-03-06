@@ -27,7 +27,6 @@ jobs:
     timeout-minutes: 45
     env:
       SCCACHE_GHA_ENABLED: 'true'
-      RUSTC_WRAPPER: sccache
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +55,13 @@ jobs:
           targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
 
       - name: Configure sccache
+        id: sccache
         uses: mozilla-actions/sccache-action@v0.0.7
+        continue-on-error: true
+
+      - name: Enable sccache
+        if: steps.sccache.outcome == 'success'
+        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
       - name: Install frontend dependencies
         run: npm install
