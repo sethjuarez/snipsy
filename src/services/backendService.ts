@@ -10,6 +10,9 @@ export interface SnippetHotkey {
   id: string;
   hotkey: string;
   snippetType: string;
+  text?: string;
+  delivery?: string;
+  typeDelay?: number;
 }
 
 export interface BackendService {

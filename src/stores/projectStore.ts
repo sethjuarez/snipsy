@@ -214,6 +214,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         id: s.id,
         hotkey: s.hotkey,
         snippetType: "text",
+        text: s.text,
+        delivery: s.delivery,
+        typeDelay: s.typeDelay,
       })),
       ...videoSnippets.map((s) => ({
         id: s.id,

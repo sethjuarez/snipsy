@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// A snippet hotkey registration for demo mode
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +10,10 @@ pub struct SnippetHotkey {
     pub id: String,
     pub hotkey: String,
     pub snippet_type: String,
+    // Text snippet delivery data
+    pub text: Option<String>,
+    pub delivery: Option<String>,
+    pub type_delay: Option<u32>,
 }
 
 /// State tracking for demo mode
@@ -41,20 +46,53 @@ impl Default for AppState {
 
 #[tauri::command]
 pub fn enter_demo_mode(
+    app: tauri::AppHandle,
     state: tauri::State<AppState>,
     hotkeys: Vec<SnippetHotkey>,
 ) -> Result<(), String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
     demo.active = true;
-    demo.registered_hotkeys = hotkeys;
+    demo.registered_hotkeys = hotkeys.clone();
+
+    let gs = app.global_shortcut();
+
+    for hk in &hotkeys {
+        if hk.snippet_type == "text" {
+            let text = hk.text.clone().unwrap_or_default();
+            let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+            let type_delay = hk.type_delay;
+
+            gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let _ = crate::delivery::deliver_text(
+                        text.clone(),
+                        delivery.clone(),
+                        type_delay,
+                    );
+                }
+            })
+            .map_err(|e| format!("Failed to register hotkey '{}': {e}", hk.hotkey))?;
+        }
+        // Video snippets will emit events to the frontend
+    }
+
     Ok(())
 }
 
 #[tauri::command]
-pub fn exit_demo_mode(state: tauri::State<AppState>) -> Result<(), String> {
+pub fn exit_demo_mode(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
     demo.active = false;
+
+    let gs = app.global_shortcut();
+    for hk in &demo.registered_hotkeys {
+        let _ = gs.unregister(hk.hotkey.as_str());
+    }
     demo.registered_hotkeys.clear();
+
     Ok(())
 }
 
@@ -81,10 +119,14 @@ mod tests {
             id: "ts-1".into(),
             hotkey: "CmdOrControl+Shift+1".into(),
             snippet_type: "text".into(),
+            text: Some("hello world".into()),
+            delivery: Some("fast-type".into()),
+            type_delay: Some(30),
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, "ts-1");
         assert_eq!(deserialized.snippet_type, "text");
+        assert_eq!(deserialized.text.unwrap(), "hello world");
     }
 }
