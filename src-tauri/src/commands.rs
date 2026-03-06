@@ -123,6 +123,31 @@ pub fn import_video(project_path: String, source_file_path: String) -> Result<St
 }
 
 #[tauri::command]
+pub fn list_imported_videos(project_path: String) -> Result<Vec<String>, String> {
+    let videos_dir = PathBuf::from(&project_path).join("videos");
+    if !videos_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut videos = Vec::new();
+    let entries = fs::read_dir(&videos_dir)
+        .map_err(|e| format!("Failed to read videos directory: {e}"))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name() {
+                videos.push(format!("videos/{}", name.to_string_lossy()));
+            }
+        }
+    }
+
+    videos.sort();
+    Ok(videos)
+}
+
+#[tauri::command]
 pub fn save_script(project_path: String, script: Script) -> Result<(), String> {
     let scripts_dir = PathBuf::from(&project_path).join("scripts");
     fs::create_dir_all(&scripts_dir)
