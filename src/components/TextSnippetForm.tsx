@@ -70,7 +70,7 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4" data-testid="snippet-form">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
           Title
         </label>
         <input
@@ -79,13 +79,14 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Snippet title"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 rounded text-[13px]"
+          style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
           data-testid="snippet-title"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
           Description
         </label>
         <input
@@ -93,13 +94,14 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description"
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 rounded text-[13px]"
+          style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
           data-testid="snippet-description"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
           Text Content
         </label>
         <textarea
@@ -107,13 +109,14 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
           onChange={(e) => setText(e.target.value)}
           placeholder="The text to deliver..."
           rows={5}
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+          className="w-full px-3 py-2 rounded font-mono text-[13px]"
+          style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
           data-testid="snippet-text"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
           Hotkey
         </label>
         <div className="relative">
@@ -125,18 +128,17 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
             onBlur={() => setCapturingHotkey(false)}
             onKeyDown={handleHotkeyCapture}
             placeholder="Click to capture hotkey"
-            className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
-              capturingHotkey
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300"
-            }`}
+            className="w-full px-3 py-2 rounded font-mono text-[13px]"
+            style={capturingHotkey
+              ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
+              : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="snippet-hotkey"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
           Delivery Method
         </label>
         <div className="flex gap-4">
@@ -149,7 +151,7 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
               onChange={() => setDelivery("fast-type")}
               data-testid="delivery-fast-type"
             />
-            <span className="text-sm text-gray-700">Fast Type</span>
+            <span className="text-[12px]" style={{ color: "var(--color-text)" }}>Fast Type</span>
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -160,14 +162,14 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
               onChange={() => setDelivery("paste")}
               data-testid="delivery-paste"
             />
-            <span className="text-sm text-gray-700">Paste</span>
+            <span className="text-[12px]" style={{ color: "var(--color-text)" }}>Paste</span>
           </label>
         </div>
       </div>
 
       {delivery === "fast-type" && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
             Type Delay (ms)
           </label>
           <input
@@ -176,7 +178,8 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
             onChange={(e) => setTypeDelay(Number(e.target.value))}
             min={1}
             max={500}
-            className="w-32 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-3 py-2 rounded text-[13px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="snippet-type-delay"
           />
         </div>
@@ -185,7 +188,8 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
       <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700"
+          className="px-4 py-2 rounded font-medium text-[13px]"
+          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
           data-testid="snippet-save"
         >
           {snippet ? "Update" : "Create"}
@@ -193,7 +197,8 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded font-medium hover:bg-gray-200"
+          className="px-4 py-2 rounded font-medium text-[13px]"
+          style={{ backgroundColor: "var(--color-surface-alt)", color: "var(--color-text)" }}
           data-testid="snippet-cancel"
         >
           Cancel

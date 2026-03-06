@@ -9,9 +9,9 @@ interface TextSnippetListProps {
 function TextSnippetList({ snippets, onEdit, onDelete }: TextSnippetListProps) {
   if (snippets.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-400" data-testid="empty-state">
-        <p className="text-lg">No text snippets yet</p>
-        <p className="text-sm mt-1">Create one to get started.</p>
+      <div className="text-center py-12" data-testid="empty-state" style={{ color: "var(--color-text-secondary)" }}>
+        <p className="text-[13px]">No text snippets yet</p>
+        <p className="text-[12px] mt-1">Create one to get started.</p>
       </div>
     );
   }
@@ -21,29 +21,29 @@ function TextSnippetList({ snippets, onEdit, onDelete }: TextSnippetListProps) {
       {snippets.map((snippet) => (
         <div
           key={snippet.id}
-          className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3"
+          className="flex items-center justify-between rounded-lg px-4 py-3"
           data-testid={`snippet-${snippet.id}`}
+          style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
-              <h3 className="font-medium text-gray-900 truncate">
+              <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
                 {snippet.title}
               </h3>
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+              <span className="text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
                 {snippet.hotkey}
               </span>
               <span
-                className={`text-xs px-2 py-0.5 rounded ${
-                  snippet.delivery === "fast-type"
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-green-50 text-green-700"
-                }`}
+                className="text-[11px] px-2 py-0.5 rounded"
+                style={snippet.delivery === "fast-type"
+                  ? { backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }
+                  : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-success)" }}
               >
                 {snippet.delivery}
               </span>
             </div>
             {snippet.description && (
-              <p className="text-sm text-gray-500 mt-0.5 truncate">
+              <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
                 {snippet.description}
               </p>
             )}
@@ -51,15 +51,17 @@ function TextSnippetList({ snippets, onEdit, onDelete }: TextSnippetListProps) {
           <div className="flex items-center gap-2 ml-4">
             <button
               onClick={() => onEdit(snippet)}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-[12px]"
               data-testid={`edit-${snippet.id}`}
+              style={{ color: "var(--color-accent)" }}
             >
               Edit
             </button>
             <button
               onClick={() => onDelete(snippet.id)}
-              className="text-sm text-red-600 hover:text-red-800"
+              className="text-[12px]"
               data-testid={`delete-${snippet.id}`}
+              style={{ color: "var(--color-danger)" }}
             >
               Delete
             </button>
