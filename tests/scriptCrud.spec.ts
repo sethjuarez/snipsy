@@ -5,7 +5,9 @@ test.describe("Script CRUD", () => {
     await page.goto("/");
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
-    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByTestId("sidebar")).toBeVisible();
+    // Navigate to Scripts view
+    await page.getByTestId("nav-scripts").click();
   });
 
   test("shows scripts from mock data", async ({ page }) => {

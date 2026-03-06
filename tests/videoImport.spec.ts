@@ -5,7 +5,9 @@ test.describe("Video Import", () => {
     await page.goto("/");
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
-    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByTestId("sidebar")).toBeVisible();
+    // Navigate to Videos view
+    await page.getByTestId("nav-videos").click();
   });
 
   test("shows video list from mock data", async ({ page }) => {

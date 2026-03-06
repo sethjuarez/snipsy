@@ -8,8 +8,8 @@ test.describe("Text Snippet List", () => {
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     // Click the submit button (not the mode toggle)
     await page.locator('button:text-is("Open")').click();
-    // Wait for project editor to appear
-    await expect(page.locator("header")).toBeVisible();
+    // Wait for project to load (sidebar appears)
+    await expect(page.getByTestId("sidebar")).toBeVisible();
   });
 
   test("displays text snippets from mock data", async ({ page }) => {
@@ -29,12 +29,13 @@ test.describe("Text Snippet List", () => {
   });
 
   test("shows empty state when no snippets", async ({ page }) => {
-    // Close project and create a new empty one
-    await page.getByRole("button", { name: "Close Project" }).click();
+    // Create a new empty project by navigating fresh
+    await page.goto("/");
     await page.getByRole("button", { name: "New Project" }).click();
     await page.getByPlaceholder("/path/to/project").fill("/mock/new");
     await page.getByPlaceholder("My Demo").fill("Empty");
     await page.locator('button:text-is("Create")').click();
+    await expect(page.getByTestId("sidebar")).toBeVisible();
     await expect(page.getByTestId("empty-state")).toBeVisible();
     await expect(page.getByTestId("empty-state")).toContainText(
       "No text snippets yet",

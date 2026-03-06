@@ -1,1 +1,122 @@
 @import "tailwindcss";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+
+/* ── Tailwind v4 theme tokens ───────────────────────────────── */
+@theme {
+  --color-surface: var(--color-surface);
+  --color-surface-alt: var(--color-surface-alt);
+  --color-surface-inset: var(--color-surface-inset);
+  --color-surface-toolbar: var(--color-surface-toolbar);
+  --color-border: var(--color-border);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-text: var(--color-text);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-danger: var(--color-danger);
+  --color-danger-hover: var(--color-danger-hover);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* ── Light theme (default) ──────────────────────────────────── */
+:root {
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8f9fa;
+  --color-surface-inset: #f0f1f3;
+  --color-surface-toolbar: #f4f5f6;
+  --color-border: #e0e2e6;
+  --color-border-subtle: #ebedf0;
+  --color-text: #1a1c20;
+  --color-text-secondary: #6b7280;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4fd8;
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+
+  --titlebar-height: 40px;
+  --statusbar-height: 26px;
+  --sidebar-width: 200px;
+  --sidebar-collapsed-width: 48px;
+}
+
+/* ── Dark theme ─────────────────────────────────────────────── */
+.dark {
+  --color-surface: #1e1e1e;
+  --color-surface-alt: #252526;
+  --color-surface-inset: #2d2d30;
+  --color-surface-toolbar: #333336;
+  --color-border: #3e3e42;
+  --color-border-subtle: #2d2d30;
+  --color-text: #e4e4e7;
+  --color-text-secondary: #9ca3af;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #60a5fa;
+  --color-danger: #ef4444;
+  --color-danger-hover: #f87171;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+}
+
+/* ── Base styles ────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── No-select utility (for UI chrome) ──────────────────────── */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Custom scrollbars ──────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* ── Focus ring utility ─────────────────────────────────────── */
+.focus-ring:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+/* ── Smooth transitions ─────────────────────────────────────── */
+.theme-transition {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}

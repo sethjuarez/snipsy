@@ -5,7 +5,9 @@ test.describe("Video Snippet CRUD", () => {
     await page.goto("/");
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
-    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByTestId("sidebar")).toBeVisible();
+    // Navigate to Clips view
+    await page.getByTestId("nav-video-snippets").click();
   });
 
   test("shows video snippets from mock data", async ({ page }) => {

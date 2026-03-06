@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useProjectStore } from "./stores/projectStore";
 import Welcome from "./components/Welcome";
+import TitleBar from "./components/TitleBar";
+import Sidebar from "./components/Sidebar";
+import StatusBar from "./components/StatusBar";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList from "./components/VideoList";
@@ -9,11 +12,11 @@ import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
 import type { TextSnippet, VideoSnippet, Script } from "./types";
+import type { AppView } from "./components/Sidebar";
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
   const projectPath = useProjectStore((s) => s.projectPath);
-  const closeProject = useProjectStore((s) => s.closeProject);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
@@ -27,39 +30,29 @@ function App() {
   const playVideo = useProjectStore((s) => s.playVideo);
   const ffmpegAvailable = useProjectStore((s) => s.ffmpegAvailable);
 
+  const [activeView, setActiveView] = useState<AppView>("text-snippets");
   const [showForm, setShowForm] = useState(false);
-  const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(
-    undefined,
-  );
+  const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(undefined);
   const [showVideoForm, setShowVideoForm] = useState(false);
-  const [editingVideoSnippet, setEditingVideoSnippet] = useState<
-    VideoSnippet | undefined
-  >(undefined);
+  const [editingVideoSnippet, setEditingVideoSnippet] = useState<VideoSnippet | undefined>(undefined);
   const [showScriptForm, setShowScriptForm] = useState(false);
-  const [editingScript, setEditingScript] = useState<Script | undefined>(
-    undefined,
-  );
+  const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
 
-  if (!projectName) {
-    return <Welcome />;
-  }
-
+  // -- Text snippet handlers --
   const handleEdit = (snippet: TextSnippet) => {
     setEditingSnippet(snippet);
     setShowForm(true);
   };
-
   const handleDelete = (id: string) => {
     if (window.confirm("Delete this snippet?")) {
       setTextSnippets(textSnippets.filter((s) => s.id !== id));
     }
   };
-
   const handleSave = (snippet: TextSnippet) => {
-    const existing = textSnippets.findIndex((s) => s.id === snippet.id);
-    if (existing >= 0) {
+    const idx = textSnippets.findIndex((s) => s.id === snippet.id);
+    if (idx >= 0) {
       const updated = [...textSnippets];
-      updated[existing] = snippet;
+      updated[idx] = snippet;
       setTextSnippets(updated);
     } else {
       setTextSnippets([...textSnippets, snippet]);
@@ -67,28 +60,26 @@ function App() {
     setShowForm(false);
     setEditingSnippet(undefined);
   };
-
   const handleCancel = () => {
     setShowForm(false);
     setEditingSnippet(undefined);
   };
 
+  // -- Video snippet handlers --
   const handleVideoEdit = (snippet: VideoSnippet) => {
     setEditingVideoSnippet(snippet);
     setShowVideoForm(true);
   };
-
   const handleVideoDelete = (id: string) => {
     if (window.confirm("Delete this video snippet?")) {
       setVideoSnippets(videoSnippets.filter((s) => s.id !== id));
     }
   };
-
   const handleVideoSave = (snippet: VideoSnippet) => {
-    const existing = videoSnippets.findIndex((s) => s.id === snippet.id);
-    if (existing >= 0) {
+    const idx = videoSnippets.findIndex((s) => s.id === snippet.id);
+    if (idx >= 0) {
       const updated = [...videoSnippets];
-      updated[existing] = snippet;
+      updated[idx] = snippet;
       setVideoSnippets(updated);
     } else {
       setVideoSnippets([...videoSnippets, snippet]);
@@ -96,205 +87,206 @@ function App() {
     setShowVideoForm(false);
     setEditingVideoSnippet(undefined);
   };
-
   const handleVideoCancel = () => {
     setShowVideoForm(false);
     setEditingVideoSnippet(undefined);
   };
 
+  // -- Script handlers --
   const handleScriptEdit = (script: Script) => {
     setEditingScript(script);
     setShowScriptForm(true);
   };
-
   const handleScriptDelete = (id: string) => {
     if (window.confirm("Delete this script?")) {
       deleteScriptFromStore(id);
     }
   };
-
   const handleScriptSave = (script: Script) => {
     saveScript(script);
     setShowScriptForm(false);
     setEditingScript(undefined);
   };
-
   const handleScriptCancel = () => {
     setShowScriptForm(false);
     setEditingScript(undefined);
   };
 
+  const handleToggleDemo = () => {
+    if (demoMode) exitDemoMode();
+    else enterDemoMode();
+  };
+
+  // ── Welcome screen (no project loaded) ──
+  if (!projectName) {
+    return (
+      <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
+        <TitleBar projectName={null} demoMode={false} onToggleDemo={() => {}} />
+        <div className="flex-1 flex items-center justify-center">
+          <Welcome />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main app layout ──
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{projectName}</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={demoMode ? exitDemoMode : enterDemoMode}
-            className={`px-4 py-1.5 text-sm font-medium rounded ${
-              demoMode
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-            data-testid="demo-mode-toggle"
-          >
-            {demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
-          </button>
-          {demoMode && (
-            <span
-              className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded font-medium"
-              data-testid="demo-mode-indicator"
-            >
-              LIVE
-            </span>
-          )}
-          <button
-            onClick={closeProject}
-            className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded"
-          >
-            Close Project
-          </button>
-        </div>
-      </header>
-      <main className="p-6 max-w-4xl mx-auto">
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Text Snippets
-            </h2>
-            {!showForm && (
-              <button
-                onClick={() => {
-                  setEditingSnippet(undefined);
-                  setShowForm(true);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 text-sm"
-                data-testid="add-snippet"
-              >
-                + Add Snippet
-              </button>
+    <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} />
+
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar activeView={activeView} onViewChange={setActiveView} />
+
+        {/* Content area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Content header */}
+          <ContentHeader
+            view={activeView}
+            showForm={
+              (activeView === "text-snippets" && showForm) ||
+              (activeView === "video-snippets" && showVideoForm) ||
+              (activeView === "scripts" && showScriptForm)
+            }
+            onAdd={() => {
+              if (activeView === "text-snippets") {
+                setEditingSnippet(undefined);
+                setShowForm(true);
+              } else if (activeView === "video-snippets") {
+                setEditingVideoSnippet(undefined);
+                setShowVideoForm(true);
+              } else if (activeView === "scripts") {
+                setEditingScript(undefined);
+                setShowScriptForm(true);
+              }
+            }}
+            onCloseForm={() => {
+              handleCancel();
+              handleVideoCancel();
+              handleScriptCancel();
+            }}
+          />
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {activeView === "text-snippets" && (
+              showForm ? (
+                <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
+                  <TextSnippetForm snippet={editingSnippet} onSave={handleSave} onCancel={handleCancel} />
+                </div>
+              ) : (
+                <TextSnippetList snippets={textSnippets} onEdit={handleEdit} onDelete={handleDelete} />
+              )
+            )}
+
+            {activeView === "videos" && projectPath && (
+              <VideoList projectPath={projectPath} />
+            )}
+
+            {activeView === "video-snippets" && (
+              showVideoForm ? (
+                <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
+                  <VideoSnippetForm snippet={editingVideoSnippet} onSave={handleVideoSave} onCancel={handleVideoCancel} />
+                </div>
+              ) : (
+                <VideoSnippetList
+                  snippets={videoSnippets}
+                  onEdit={handleVideoEdit}
+                  onDelete={handleVideoDelete}
+                  onPlay={playVideo}
+                  demoMode={demoMode}
+                />
+              )
+            )}
+
+            {activeView === "scripts" && (
+              <>
+                {ffmpegAvailable === false && (
+                  <div
+                    className="mb-4 p-3 rounded-lg text-[12px]"
+                    data-testid="ffmpeg-warning"
+                    style={{
+                      backgroundColor: "var(--color-surface-inset)",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-warning)",
+                    }}
+                  >
+                    ⚠️ FFmpeg not found. Script recording requires FFmpeg.
+                  </div>
+                )}
+                {showScriptForm ? (
+                  <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
+                    <ScriptForm script={editingScript} onSave={handleScriptSave} onCancel={handleScriptCancel} />
+                  </div>
+                ) : (
+                  <ScriptList scripts={scripts} onEdit={handleScriptEdit} onDelete={handleScriptDelete} />
+                )}
+              </>
             )}
           </div>
+        </main>
+      </div>
 
-          {showForm ? (
-            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
-              <TextSnippetForm
-                snippet={editingSnippet}
-                onSave={handleSave}
-                onCancel={handleCancel}
-              />
-            </div>
-          ) : (
-            <TextSnippetList
-              snippets={textSnippets}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          )}
-        </section>
+      <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} />
+    </div>
+  );
+}
 
-        {projectPath && (
-          <section className="mt-8">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Videos
-            </h2>
-            <VideoList projectPath={projectPath} />
-          </section>
-        )}
+/* ── Content header with title + add button ── */
+const VIEW_LABELS: Record<AppView, string> = {
+  "text-snippets": "Text Snippets",
+  videos: "Videos",
+  "video-snippets": "Video Clips",
+  scripts: "Scripts",
+};
 
-        <section className="mt-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Video Snippets
-            </h2>
-            {!showVideoForm && (
-              <button
-                onClick={() => {
-                  setEditingVideoSnippet(undefined);
-                  setShowVideoForm(true);
-                }}
-                className="px-4 py-2 bg-purple-600 text-white rounded font-medium hover:bg-purple-700 text-sm"
-                data-testid="add-video-snippet"
-              >
-                + Add Video Snippet
-              </button>
-            )}
-          </div>
+function ContentHeader({
+  view,
+  showForm,
+  onAdd,
+  onCloseForm,
+}: {
+  view: AppView;
+  showForm: boolean;
+  onAdd: () => void;
+  onCloseForm: () => void;
+}) {
+  const canAdd = view !== "videos";
 
-          {showVideoForm ? (
-            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
-              <VideoSnippetForm
-                snippet={editingVideoSnippet}
-                onSave={handleVideoSave}
-                onCancel={handleVideoCancel}
-              />
-            </div>
-          ) : (
-            <VideoSnippetList
-              snippets={videoSnippets}
-              onEdit={handleVideoEdit}
-              onDelete={handleVideoDelete}
-              onPlay={playVideo}
-              demoMode={demoMode}
-            />
-          )}
-        </section>
-
-        <section className="mt-8">
-          {ffmpegAvailable === false && (
-            <div
-              className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800"
-              data-testid="ffmpeg-warning"
-            >
-              ⚠️ FFmpeg not found on PATH. Script recording requires FFmpeg.
-              Install it from{" "}
-              <a
-                href="https://ffmpeg.org/download.html"
-                className="underline font-medium"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                ffmpeg.org
-              </a>
-            </div>
-          )}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Scripts
-            </h2>
-            {!showScriptForm && (
-              <button
-                onClick={() => {
-                  setEditingScript(undefined);
-                  setShowScriptForm(true);
-                }}
-                className="px-4 py-2 bg-amber-600 text-white rounded font-medium hover:bg-amber-700 text-sm"
-                data-testid="add-script"
-              >
-                + Add Script
-              </button>
-            )}
-          </div>
-
-          {showScriptForm ? (
-            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
-              <ScriptForm
-                script={editingScript}
-                onSave={handleScriptSave}
-                onCancel={handleScriptCancel}
-              />
-            </div>
-          ) : (
-            <ScriptList
-              scripts={scripts}
-              onEdit={handleScriptEdit}
-              onDelete={handleScriptDelete}
-            />
-          )}
-        </section>
-      </main>
+  return (
+    <div
+      className="flex items-center justify-between px-4 shrink-0"
+      style={{
+        height: 40,
+        borderBottom: "1px solid var(--color-border)",
+        backgroundColor: "var(--color-surface)",
+      }}
+    >
+      <h2 className="text-[13px] font-semibold" style={{ color: "var(--color-text)" }}>
+        {VIEW_LABELS[view]}
+      </h2>
+      {canAdd && !showForm && (
+        <button
+          onClick={onAdd}
+          className="px-3 py-1 rounded text-[11px] font-medium"
+          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+          data-testid={
+            view === "text-snippets" ? "add-snippet" :
+            view === "video-snippets" ? "add-video-snippet" :
+            "add-script"
+          }
+        >
+          + Add
+        </button>
+      )}
+      {showForm && (
+        <button
+          onClick={onCloseForm}
+          className="px-3 py-1 rounded text-[11px] font-medium"
+          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+        >
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

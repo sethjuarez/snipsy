@@ -5,7 +5,7 @@ test.describe("Text Snippet Form", () => {
     await page.goto("/");
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
-    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByTestId("sidebar")).toBeVisible();
   });
 
   test("can open create form and cancel", async ({ page }) => {
