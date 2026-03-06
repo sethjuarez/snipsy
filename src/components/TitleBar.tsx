@@ -34,7 +34,6 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   return (
     <div
       className="no-select flex items-center justify-between shrink-0"
-      data-tauri-drag-region
       style={{
         height: "var(--titlebar-height)",
         backgroundColor: "var(--color-surface-toolbar)",
@@ -42,23 +41,26 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
         padding: "0 12px",
       }}
     >
-      {/* Left: App name + project */}
+      {/* Left: App name + project (draggable) */}
       <div className="flex items-center gap-2" data-tauri-drag-region>
-        <span className="font-semibold text-[13px]" style={{ color: "var(--color-text)" }}>
+        <span className="font-semibold text-[13px]" data-tauri-drag-region style={{ color: "var(--color-text)" }}>
           Snipsy
         </span>
         {projectName && (
           <>
-            <span style={{ color: "var(--color-text-secondary)" }}>/</span>
-            <span className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+            <span data-tauri-drag-region style={{ color: "var(--color-text-secondary)" }}>/</span>
+            <span className="text-[12px]" data-tauri-drag-region style={{ color: "var(--color-text-secondary)" }}>
               {projectName}
             </span>
           </>
         )}
       </div>
 
-      {/* Right: controls */}
-      <div className="flex items-center gap-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+      {/* Center spacer (draggable) */}
+      <div className="flex-1" data-tauri-drag-region />
+
+      {/* Right: controls (NOT draggable) */}
+      <div className="flex items-center gap-1">
         {/* Demo mode toggle */}
         {projectName && (
           <button
