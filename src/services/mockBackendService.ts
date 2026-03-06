@@ -172,4 +172,12 @@ export class MockBackendService implements BackendService {
   async installFfmpeg(): Promise<string> {
     return "FFmpeg installed successfully (mock).";
   }
+
+  async activateDemoTray(): Promise<void> {
+    // Mock: no-op in test mode
+  }
+
+  async deactivateDemoTray(): Promise<void> {
+    // Mock: no-op in test mode
+  }
 }

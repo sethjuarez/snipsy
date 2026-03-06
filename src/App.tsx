@@ -49,6 +49,16 @@ function App() {
     autoOpenLastProject();
   }, [autoOpenLastProject]);
 
+  // Listen for tray "Exit Demo Mode" event
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/event")
+      .then((mod) => mod.listen("exit-demo-mode", () => { exitDemoMode(); }))
+      .then((fn) => { unlisten = fn; })
+      .catch(() => {});
+    return () => unlisten?.();
+  }, [exitDemoMode]);
+
   // -- Text snippet handlers --
   const handleEdit = (snippet: TextSnippet) => {
     setEditingSnippet(snippet);

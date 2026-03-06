@@ -31,6 +31,8 @@ pub fn run() {
             scripting::run_script,
             scripting::check_ffmpeg,
             scripting::install_ffmpeg,
+            tray::activate_demo_tray,
+            tray::deactivate_demo_tray,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

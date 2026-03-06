@@ -109,4 +109,12 @@ export class TauriBackendService implements BackendService {
   async installFfmpeg(): Promise<string> {
     return invoke("install_ffmpeg");
   }
+
+  async activateDemoTray(): Promise<void> {
+    return invoke("activate_demo_tray");
+  }
+
+  async deactivateDemoTray(): Promise<void> {
+    return invoke("deactivate_demo_tray");
+  }
 }

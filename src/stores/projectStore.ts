@@ -222,11 +222,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       })),
     ];
     await backend.enterDemoMode(hotkeys);
+    await backend.activateDemoTray();
+    // Hide window to system tray
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().hide();
+    } catch {
+      // Not in Tauri (browser/test) — no-op
+    }
     set({ demoMode: true });
   },
 
   exitDemoMode: async () => {
     await backend.exitDemoMode();
+    await backend.deactivateDemoTray();
+    // Show window back from tray
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      await win.show();
+      await win.setFocus();
+    } catch {
+      // Not in Tauri (browser/test) — no-op
+    }
     set({ demoMode: false });
   },
 

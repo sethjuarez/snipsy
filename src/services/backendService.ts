@@ -45,4 +45,6 @@ export interface BackendService {
   runScript(projectPath: string, scriptId: string): Promise<string>;
   checkFfmpeg(): Promise<boolean>;
   installFfmpeg(): Promise<string>;
+  activateDemoTray(): Promise<void>;
+  deactivateDemoTray(): Promise<void>;
 }

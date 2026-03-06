@@ -10,19 +10,20 @@ test.describe("Demo Mode Toggle", () => {
   });
 
   test("shows enter demo mode button", async ({ page }) => {
-    await expect(page.getByTestId("demo-mode-toggle")).toBeVisible();
-    await expect(page.getByTestId("demo-mode-toggle")).toContainText("Demo");
+    const toggle = page.getByTestId("demo-mode-toggle");
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("title", "Enter Demo Mode");
   });
 
   test("can toggle demo mode on and off", async ({ page }) => {
     // Enter demo mode
     await page.getByTestId("demo-mode-toggle").click();
-    await expect(page.getByTestId("demo-mode-toggle")).toContainText("LIVE");
+    await expect(page.getByTestId("demo-mode-toggle")).toHaveAttribute("title", "Exit Demo Mode");
     await expect(page.getByTestId("status-bar")).toContainText("LIVE DEMO");
 
     // Exit demo mode
     await page.getByTestId("demo-mode-toggle").click();
-    await expect(page.getByTestId("demo-mode-toggle")).toContainText("Demo");
+    await expect(page.getByTestId("demo-mode-toggle")).toHaveAttribute("title", "Enter Demo Mode");
     await expect(page.getByTestId("status-bar")).not.toContainText("LIVE DEMO");
   });
 });
