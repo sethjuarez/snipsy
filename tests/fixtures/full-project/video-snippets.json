@@ -1,0 +1,30 @@
+[
+  {
+    "id": "vs-1",
+    "title": "Build Process",
+    "description": "Shows the build completing in 3x speed",
+    "videoFile": "videos/build-process.mp4",
+    "startTime": 12.5,
+    "endTime": 45.0,
+    "hotkey": "CmdOrControl+Shift+4",
+    "speed": 3.0,
+    "transitionActions": [
+      {
+        "triggerAt": "end",
+        "action": "click",
+        "x": 350,
+        "y": 40
+      }
+    ]
+  },
+  {
+    "id": "vs-2",
+    "title": "Deploy Demo",
+    "description": "Shows the deploy completing at normal speed",
+    "videoFile": "videos/deploy-demo.mp4",
+    "startTime": 0.0,
+    "endTime": 60.0,
+    "hotkey": "CmdOrControl+Shift+5",
+    "speed": 1.0
+  }
+]

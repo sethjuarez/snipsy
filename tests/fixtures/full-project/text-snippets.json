@@ -1,0 +1,19 @@
+[
+  {
+    "id": "ts-1",
+    "title": "React Import",
+    "description": "Adds the React import to the top of the file",
+    "text": "import React from 'react';",
+    "hotkey": "CmdOrControl+Shift+1",
+    "delivery": "fast-type",
+    "typeDelay": 30
+  },
+  {
+    "id": "ts-2",
+    "title": "Console Log",
+    "description": "Adds a console.log statement",
+    "text": "console.log('Hello, world!');",
+    "hotkey": "CmdOrControl+Shift+2",
+    "delivery": "paste"
+  }
+]
