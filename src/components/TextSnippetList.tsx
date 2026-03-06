@@ -1,3 +1,4 @@
+import { Pencil, Trash2, Keyboard, Clipboard } from "lucide-react";
 import type { TextSnippet } from "../types";
 
 interface TextSnippetListProps {
@@ -30,7 +31,8 @@ function TextSnippetList({ snippets, onEdit, onDelete }: TextSnippetListProps) {
               <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
                 {snippet.title}
               </h3>
-              <span className="text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+              <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+                <Keyboard size={10} />
                 {snippet.hotkey}
               </span>
               <span
@@ -39,7 +41,11 @@ function TextSnippetList({ snippets, onEdit, onDelete }: TextSnippetListProps) {
                   ? { backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }
                   : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-success)" }}
               >
-                {snippet.delivery}
+                {snippet.delivery === "fast-type" ? (
+                  <span className="flex items-center gap-1"><Keyboard size={10} /> fast-type</span>
+                ) : (
+                  <span className="flex items-center gap-1"><Clipboard size={10} /> paste</span>
+                )}
               </span>
             </div>
             {snippet.description && (
@@ -51,19 +57,19 @@ function TextSnippetList({ snippets, onEdit, onDelete }: TextSnippetListProps) {
           <div className="flex items-center gap-2 ml-4">
             <button
               onClick={() => onEdit(snippet)}
-              className="text-[12px]"
+              className="flex items-center gap-1 text-[12px]"
               data-testid={`edit-${snippet.id}`}
               style={{ color: "var(--color-accent)" }}
             >
-              Edit
+              <Pencil size={12} /> Edit
             </button>
             <button
               onClick={() => onDelete(snippet.id)}
-              className="text-[12px]"
+              className="flex items-center gap-1 text-[12px]"
               data-testid={`delete-${snippet.id}`}
               style={{ color: "var(--color-danger)" }}
             >
-              Delete
+              <Trash2 size={12} /> Delete
             </button>
           </div>
         </div>

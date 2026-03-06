@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useProjectStore } from "./stores/projectStore";
+import { Plus, AlertTriangle, X as XIcon } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -202,7 +203,7 @@ function App() {
               <>
                 {ffmpegAvailable === false && (
                   <div
-                    className="mb-4 p-3 rounded-lg text-[12px]"
+                    className="mb-4 p-3 rounded-lg text-[12px] flex items-center gap-2"
                     data-testid="ffmpeg-warning"
                     style={{
                       backgroundColor: "var(--color-surface-inset)",
@@ -210,7 +211,7 @@ function App() {
                       color: "var(--color-warning)",
                     }}
                   >
-                    ⚠️ FFmpeg not found. Script recording requires FFmpeg.
+                    <AlertTriangle size={14} /> FFmpeg not found. Script recording requires FFmpeg.
                   </div>
                 )}
                 {showScriptForm ? (
@@ -267,7 +268,7 @@ function ContentHeader({
       {canAdd && !showForm && (
         <button
           onClick={onAdd}
-          className="px-3 py-1 rounded text-[11px] font-medium"
+          className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
           style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
           data-testid={
             view === "text-snippets" ? "add-snippet" :
@@ -275,16 +276,16 @@ function ContentHeader({
             "add-script"
           }
         >
-          + Add
+          <Plus size={12} /> Add
         </button>
       )}
       {showForm && (
         <button
           onClick={onCloseForm}
-          className="px-3 py-1 rounded text-[11px] font-medium"
+          className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
         >
-          Cancel
+          <XIcon size={12} /> Cancel
         </button>
       )}
     </div>

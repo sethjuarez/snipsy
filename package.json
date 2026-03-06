@@ -10,7 +10,10 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/geist-sans": "^5.2.5",
     "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router": "^7.13.1",

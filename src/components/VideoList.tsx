@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createBackendService } from "../services";
+import { FileVideo, Upload } from "lucide-react";
 
 const backend = createBackendService();
 
@@ -18,8 +19,6 @@ function VideoList({ projectPath }: VideoListProps) {
   const handleImport = async () => {
     setImporting(true);
     try {
-      // In real app, a file dialog would open here.
-      // For mock mode, we just simulate an import.
       const videoPath = await backend.importVideo(projectPath, "selected-file.mp4");
       setVideos((prev) => [...prev, videoPath]);
     } finally {
@@ -34,10 +33,11 @@ function VideoList({ projectPath }: VideoListProps) {
         <button
           onClick={handleImport}
           disabled={importing}
-          className="px-3 py-1.5 text-[12px] rounded disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded disabled:opacity-50"
           style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
           data-testid="import-video"
         >
+          <Upload size={12} />
           {importing ? "Importing..." : "Import Video"}
         </button>
       </div>
@@ -59,7 +59,7 @@ function VideoList({ projectPath }: VideoListProps) {
               style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
               data-testid={`video-item-${i}`}
             >
-              <span style={{ color: "var(--color-accent)" }}>🎬</span>
+              <FileVideo size={14} style={{ color: "var(--color-accent)" }} />
               {video}
             </li>
           ))}

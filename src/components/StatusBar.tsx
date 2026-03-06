@@ -1,3 +1,5 @@
+import { Folder, AlertTriangle, Radio } from "lucide-react";
+
 interface StatusBarProps {
   projectPath: string | null;
   ffmpegAvailable: boolean | null;
@@ -18,15 +20,22 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode }: StatusBarProps) {
       data-testid="status-bar"
     >
       <div className="flex items-center gap-3">
-        {demoMode && <span className="font-medium">● LIVE DEMO</span>}
+        {demoMode && (
+          <span className="flex items-center gap-1 font-medium">
+            <Radio size={10} /> LIVE DEMO
+          </span>
+        )}
         {projectPath && !demoMode && (
-          <span className="truncate max-w-xs">{projectPath}</span>
+          <span className="flex items-center gap-1.5 truncate max-w-xs">
+            <Folder size={11} />
+            {projectPath}
+          </span>
         )}
       </div>
       <div className="flex items-center gap-3">
         {ffmpegAvailable === false && (
-          <span style={{ color: demoMode ? "#fff" : "var(--color-warning)" }}>
-            ⚠ FFmpeg missing
+          <span className="flex items-center gap-1" style={{ color: demoMode ? "#fff" : "var(--color-warning)" }}>
+            <AlertTriangle size={11} /> FFmpeg missing
           </span>
         )}
       </div>

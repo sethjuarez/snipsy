@@ -1,3 +1,4 @@
+import { Pencil, Trash2 } from "lucide-react";
 import type { Script } from "../types";
 
 interface ScriptListProps {
@@ -52,19 +53,19 @@ function ScriptList({ scripts, onEdit, onDelete }: ScriptListProps) {
           <div className="flex items-center gap-2 ml-4">
             <button
               onClick={() => onEdit(script)}
-              className="text-[12px]"
+              className="flex items-center gap-1 text-[12px]"
               style={{ color: "var(--color-accent)" }}
               data-testid={`script-edit-${script.id}`}
             >
-              Edit
+              <Pencil size={12} /> Edit
             </button>
             <button
               onClick={() => onDelete(script.id)}
-              className="text-[12px]"
+              className="flex items-center gap-1 text-[12px]"
               style={{ color: "var(--color-danger)" }}
               data-testid={`script-delete-${script.id}`}
             >
-              Delete
+              <Trash2 size={12} /> Delete
             </button>
           </div>
         </div>

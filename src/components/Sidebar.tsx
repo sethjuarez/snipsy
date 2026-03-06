@@ -1,16 +1,18 @@
+import { FileText, Film, Video, ScrollText, type LucideIcon } from "lucide-react";
+
 export type AppView = "text-snippets" | "videos" | "video-snippets" | "scripts";
 
 interface NavItem {
   id: AppView;
   label: string;
-  icon: string;
+  Icon: LucideIcon;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "text-snippets", label: "Text", icon: "📝" },
-  { id: "video-snippets", label: "Clips", icon: "🎬" },
-  { id: "videos", label: "Videos", icon: "📹" },
-  { id: "scripts", label: "Scripts", icon: "📋" },
+  { id: "text-snippets", label: "Text", Icon: FileText },
+  { id: "video-snippets", label: "Clips", Icon: Film },
+  { id: "videos", label: "Videos", Icon: Video },
+  { id: "scripts", label: "Scripts", Icon: ScrollText },
 ];
 
 interface SidebarProps {
@@ -45,7 +47,7 @@ function Sidebar({ activeView, onViewChange, collapsed = false }: SidebarProps) 
               data-testid={`nav-${item.id}`}
               title={item.label}
             >
-              <span className="text-[14px]">{item.icon}</span>
+              <item.Icon size={15} />
               {!collapsed && <span>{item.label}</span>}
             </button>
           );

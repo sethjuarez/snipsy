@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useProjectStore } from "../stores/projectStore";
+import { FolderOpen, FolderPlus, FolderSearch } from "lucide-react";
 
 function Welcome() {
   const [path, setPath] = useState("");
@@ -10,6 +11,20 @@ function Welcome() {
 
   const openProject = useProjectStore((s) => s.openProject);
   const createProject = useProjectStore((s) => s.createProject);
+
+  const handleBrowse = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: mode === "open" ? "Open project folder" : "Choose project folder",
+      });
+      if (selected) setPath(selected);
+    } catch {
+      // Not in Tauri — ignore, user can still type path manually
+    }
+  };
 
   const handleOpen = async () => {
     if (!path.trim()) return;
@@ -43,20 +58,22 @@ function Welcome() {
       <div className="flex gap-2 mb-6">
         <button
           onClick={() => setMode("open")}
-          className="flex-1 py-2 px-4 rounded font-medium text-[13px]"
+          className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded font-medium text-[13px]"
           style={mode === "open"
             ? { backgroundColor: "var(--color-accent)", color: "#fff" }
             : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
         >
+          <FolderOpen size={15} />
           Open Project
         </button>
         <button
           onClick={() => setMode("create")}
-          className="flex-1 py-2 px-4 rounded font-medium text-[13px]"
+          className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded font-medium text-[13px]"
           style={mode === "create"
             ? { backgroundColor: "var(--color-accent)", color: "#fff" }
             : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
         >
+          <FolderPlus size={15} />
           New Project
         </button>
       </div>
@@ -66,14 +83,27 @@ function Welcome() {
           <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
             Project Path
           </label>
-          <input
-            type="text"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="/path/to/project"
-            className="w-full px-3 py-2 rounded text-[13px]"
-            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/path/to/project"
+              className="flex-1 px-3 py-2 rounded text-[13px]"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            />
+            <button
+              type="button"
+              onClick={handleBrowse}
+              className="flex items-center gap-1.5 px-3 py-2 rounded text-[12px] font-medium"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+              title="Browse for folder"
+              data-testid="browse-folder"
+            >
+              <FolderSearch size={14} />
+              Browse
+            </button>
+          </div>
         </div>
 
         {mode === "create" && (

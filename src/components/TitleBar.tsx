@@ -1,4 +1,5 @@
 import { useTheme } from "../hooks/useTheme";
+import { Minus, Square, X, Moon, Sun, Radio } from "lucide-react";
 
 interface TitleBarProps {
   projectName: string | null;
@@ -62,14 +63,15 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
         {projectName && (
           <button
             onClick={onToggleDemo}
-            className="px-3 py-0.5 rounded text-[11px] font-medium"
+            className="flex items-center gap-1 px-3 py-0.5 rounded text-[11px] font-medium"
             data-testid="demo-mode-toggle"
             style={{
               backgroundColor: demoMode ? "var(--color-danger)" : "var(--color-success)",
               color: "#fff",
             }}
           >
-            {demoMode ? "● LIVE" : "Demo"}
+            {demoMode && <Radio size={10} />}
+            {demoMode ? "LIVE" : "Demo"}
           </button>
         )}
 
@@ -81,7 +83,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           data-testid="theme-toggle"
           style={{ color: "var(--color-text-secondary)" }}
         >
-          {theme === "light" ? "🌙" : "☀️"}
+          {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
         </button>
 
         {/* Window controls */}
@@ -91,7 +93,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           style={{ color: "var(--color-text-secondary)" }}
           aria-label="Minimize"
         >
-          ─
+          <Minus size={14} />
         </button>
         <button
           onClick={toggleMaximize}
@@ -99,7 +101,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           style={{ color: "var(--color-text-secondary)" }}
           aria-label="Maximize"
         >
-          □
+          <Square size={11} />
         </button>
         <button
           onClick={close}
@@ -107,7 +109,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           style={{ color: "var(--color-danger)" }}
           aria-label="Close"
         >
-          ✕
+          <X size={14} />
         </button>
       </div>
     </div>

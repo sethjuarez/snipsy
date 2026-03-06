@@ -1,3 +1,4 @@
+import { Pencil, Trash2, Play, Keyboard } from "lucide-react";
 import type { VideoSnippet } from "../types";
 
 interface VideoSnippetListProps {
@@ -32,7 +33,8 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay, demoMode }: Vide
               <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
                 {snippet.title}
               </h3>
-              <span className="text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+              <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+                <Keyboard size={10} />
                 {snippet.hotkey}
               </span>
               <span className="text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
@@ -53,28 +55,28 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay, demoMode }: Vide
             {demoMode && onPlay && (
               <button
                 onClick={() => onPlay(snippet)}
-                className="text-[12px] font-medium"
+                className="flex items-center gap-1 text-[12px] font-medium"
                 style={{ color: "var(--color-success)" }}
                 data-testid={`video-play-${snippet.id}`}
               >
-                ▶ Play
+                <Play size={12} /> Play
               </button>
             )}
             <button
               onClick={() => onEdit(snippet)}
-              className="text-[12px]"
+              className="flex items-center gap-1 text-[12px]"
               style={{ color: "var(--color-accent)" }}
               data-testid={`video-edit-${snippet.id}`}
             >
-              Edit
+              <Pencil size={12} /> Edit
             </button>
             <button
               onClick={() => onDelete(snippet.id)}
-              className="text-[12px]"
+              className="flex items-center gap-1 text-[12px]"
               style={{ color: "var(--color-danger)" }}
               data-testid={`video-delete-${snippet.id}`}
             >
-              Delete
+              <Trash2 size={12} /> Delete
             </button>
           </div>
         </div>
