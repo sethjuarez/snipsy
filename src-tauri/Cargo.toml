@@ -21,6 +21,7 @@ arboard = "3"
 
 # Tauri plugins
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
 
 [dev-dependencies]
 tempfile = "3"

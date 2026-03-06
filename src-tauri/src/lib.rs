@@ -10,6 +10,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(demo::AppState::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::create_project,
             commands::open_project,
