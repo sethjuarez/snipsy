@@ -1,6 +1,7 @@
 mod commands;
 mod delivery;
 mod demo;
+mod focus;
 mod models;
 mod playback;
 mod scripting;

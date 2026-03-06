@@ -2,12 +2,22 @@ use enigo::{Enigo, Keyboard, Settings, Key, Direction};
 use std::thread;
 use std::time::Duration;
 
-/// Deliver text using fast-type (simulated keystrokes)
+use crate::focus;
+
+/// Deliver text using fast-type (simulated keystrokes) with focus lock.
+/// Verifies the target window is still focused before each character.
 pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
 
+    let focus_ctx = focus::capture_focused_window();
+
     for ch in text.chars() {
+        // Re-focus the target window if focus was stolen
+        if let Some(ref ctx) = focus_ctx {
+            focus::ensure_focused(ctx);
+        }
+
         if ch == '\n' {
             enigo.key(Key::Return, Direction::Click)
                 .map_err(|e| format!("Failed to press Return: {e}"))?;
@@ -24,13 +34,18 @@ pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// Deliver text using paste (clipboard + Ctrl+V)
+/// Deliver text using paste (clipboard + Ctrl+V) with focus lock.
 pub fn deliver_paste(text: &str) -> Result<(), String> {
     let mut clipboard = arboard::Clipboard::new()
         .map_err(|e| format!("Failed to access clipboard: {e}"))?;
     clipboard
         .set_text(text)
         .map_err(|e| format!("Failed to set clipboard text: {e}"))?;
+
+    // Ensure the target window is focused before pasting
+    if let Some(ctx) = focus::capture_focused_window() {
+        focus::ensure_focused(&ctx);
+    }
 
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
