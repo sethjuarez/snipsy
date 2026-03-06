@@ -62,8 +62,6 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 30
-    env:
-      SCCACHE_GHA_ENABLED: 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -82,16 +80,6 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Configure sccache
-        id: sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
-        continue-on-error: true
-
-      - name: Enable sccache
-        if: steps.sccache.outcome == 'success'
-        shell: bash
-        run: echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
       - name: Install frontend dependencies
         run: npm install
