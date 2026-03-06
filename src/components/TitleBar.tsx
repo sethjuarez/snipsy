@@ -1,5 +1,6 @@
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Minus, Square, X, Moon, Sun, Radio } from "lucide-react";
+import { Minus, Square, Copy, X, Moon, Sun, Radio } from "lucide-react";
 import appIcon from "../assets/icon.png";
 
 interface TitleBarProps {
@@ -10,27 +11,32 @@ interface TitleBarProps {
 
 function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
+  const [maximized, setMaximized] = useState(false);
 
-  const minimize = async () => {
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      getCurrentWindow().minimize();
-    } catch { /* not in Tauri */ }
-  };
+  // Resolve the Tauri window once — null when running in browser
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [appWindow, setAppWindow] = useState<any>(null);
+  useEffect(() => {
+    import("@tauri-apps/api/window")
+      .then((mod) => setAppWindow(mod.getCurrentWindow()))
+      .catch(() => {});
+  }, []);
 
-  const toggleMaximize = async () => {
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      getCurrentWindow().toggleMaximize();
-    } catch { /* not in Tauri */ }
-  };
+  // Track maximized state
+  useEffect(() => {
+    if (!appWindow) return;
+    appWindow.isMaximized().then(setMaximized).catch(() => {});
 
-  const close = async () => {
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      getCurrentWindow().close();
-    } catch { /* not in Tauri */ }
-  };
+    let unlisten: (() => void) | undefined;
+    appWindow.onResized(() => {
+      appWindow.isMaximized().then(setMaximized).catch(() => {});
+    }).then((fn: () => void) => { unlisten = fn; });
+    return () => unlisten?.();
+  }, [appWindow]);
+
+  const minimize = useCallback(() => appWindow?.minimize(), [appWindow]);
+  const toggleMaximize = useCallback(() => appWindow?.toggleMaximize(), [appWindow]);
+  const close = useCallback(() => appWindow?.close(), [appWindow]);
 
   return (
     <div
@@ -63,8 +69,8 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
       <div data-tauri-drag-region className="flex-1" />
 
       {/* Right: controls (no-drag so buttons are clickable) */}
-      <div className="flex items-center shrink-0">
-        <div className="flex items-center gap-1 px-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+      <div className="flex items-center shrink-0" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <div className="flex items-center gap-1 px-1">
           {/* Demo mode toggle */}
           {projectName && (
             <button
@@ -96,11 +102,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
         {/* Separator */}
         <div className="w-px h-4 mx-1 shrink-0" style={{ backgroundColor: "var(--color-border)" }} />
 
-        {/* Window controls — match cutready's pattern: full-height buttons */}
+        {/* Window controls */}
         <button
           onClick={minimize}
           className="inline-flex items-center justify-center w-11 hover:opacity-80"
-          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)", WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)" }}
           aria-label="Minimize"
         >
           <Minus size={14} />
@@ -108,15 +114,15 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
         <button
           onClick={toggleMaximize}
           className="inline-flex items-center justify-center w-11 hover:opacity-80"
-          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)", WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)" }}
           aria-label="Maximize"
         >
-          <Square size={11} />
+          {maximized ? <Copy size={11} /> : <Square size={11} />}
         </button>
         <button
           onClick={close}
-          className="inline-flex items-center justify-center w-11 hover:opacity-80"
-          style={{ height: "var(--titlebar-height)", color: "var(--color-danger)", WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          className="inline-flex items-center justify-center w-11 hover:bg-red-500 hover:text-white transition-colors"
+          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)" }}
           aria-label="Close"
         >
           <X size={14} />
