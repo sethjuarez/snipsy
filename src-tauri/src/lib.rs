@@ -29,6 +29,7 @@ pub fn run() {
             playback::close_playback_window,
             scripting::run_script,
             scripting::check_ffmpeg,
+            scripting::install_ffmpeg,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

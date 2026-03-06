@@ -4,9 +4,10 @@ interface StatusBarProps {
   projectPath: string | null;
   ffmpegAvailable: boolean | null;
   demoMode: boolean;
+  onFfmpegClick?: () => void;
 }
 
-function StatusBar({ projectPath, ffmpegAvailable, demoMode }: StatusBarProps) {
+function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: StatusBarProps) {
   return (
     <div
       className="no-select flex items-center justify-between px-3 shrink-0"
@@ -34,9 +35,13 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode }: StatusBarProps) {
       </div>
       <div className="flex items-center gap-3">
         {ffmpegAvailable === false && (
-          <span className="flex items-center gap-1" style={{ color: demoMode ? "#fff" : "var(--color-warning)" }}>
-            <AlertTriangle size={11} /> FFmpeg missing
-          </span>
+          <button
+            onClick={onFfmpegClick}
+            className="flex items-center gap-1 cursor-pointer hover:underline"
+            style={{ color: demoMode ? "#fff" : "var(--color-warning)" }}
+          >
+            <AlertTriangle size={11} /> FFmpeg missing — click to fix
+          </button>
         )}
       </div>
     </div>

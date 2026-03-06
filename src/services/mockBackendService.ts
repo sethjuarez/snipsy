@@ -168,4 +168,8 @@ export class MockBackendService implements BackendService {
   async checkFfmpeg(): Promise<boolean> {
     return false; // Mock: FFmpeg not available in test mode
   }
+
+  async installFfmpeg(): Promise<string> {
+    return "FFmpeg installed successfully (mock).";
+  }
 }

@@ -5,6 +5,7 @@ import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
+import FFmpegHelper from "./components/FFmpegHelper";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList from "./components/VideoList";
@@ -38,6 +39,8 @@ function App() {
   const [editingVideoSnippet, setEditingVideoSnippet] = useState<VideoSnippet | undefined>(undefined);
   const [showScriptForm, setShowScriptForm] = useState(false);
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
+  const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
+  const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
 
   // -- Text snippet handlers --
   const handleEdit = (snippet: TextSnippet) => {
@@ -202,8 +205,9 @@ function App() {
             {activeView === "scripts" && (
               <>
                 {ffmpegAvailable === false && (
-                  <div
-                    className="mb-4 p-3 rounded-lg text-[12px] flex items-center gap-2"
+                  <button
+                    onClick={() => setShowFfmpegHelper(true)}
+                    className="mb-4 p-3 rounded-lg text-[12px] flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
                     data-testid="ffmpeg-warning"
                     style={{
                       backgroundColor: "var(--color-surface-inset)",
@@ -211,8 +215,8 @@ function App() {
                       color: "var(--color-warning)",
                     }}
                   >
-                    <AlertTriangle size={14} /> FFmpeg not found. Script recording requires FFmpeg.
-                  </div>
+                    <AlertTriangle size={14} /> FFmpeg not found — click to install
+                  </button>
                 )}
                 {showScriptForm ? (
                   <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
@@ -227,7 +231,14 @@ function App() {
         </main>
       </div>
 
-      <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} />
+      <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} onFfmpegClick={() => setShowFfmpegHelper(true)} />
+
+      {showFfmpegHelper && (
+        <FFmpegHelper
+          onClose={() => setShowFfmpegHelper(false)}
+          onFixed={() => { setShowFfmpegHelper(false); checkFfmpeg(); }}
+        />
+      )}
     </div>
   );
 }

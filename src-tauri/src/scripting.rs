@@ -245,6 +245,49 @@ pub fn check_ffmpeg() -> bool {
     detect_ffmpeg()
 }
 
+/// Attempt to install FFmpeg using the platform package manager.
+/// Returns Ok(message) on success or Err(message) on failure.
+#[tauri::command]
+pub async fn install_ffmpeg() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Try winget first, fall back to no-op with instructions
+        let output = Command::new("winget")
+            .args(["install", "--id", "Gyan.FFmpeg", "-e", "--accept-source-agreements", "--accept-package-agreements"])
+            .output()
+            .map_err(|e| format!("Failed to run winget: {}. Please install FFmpeg manually from https://ffmpeg.org", e))?;
+
+        if output.status.success() {
+            Ok("FFmpeg installed successfully via winget. You may need to restart Snipsy for it to be detected on PATH.".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Err(format!("winget install failed:\n{}\n{}\n\nTry running 'winget install ffmpeg' manually in a terminal, or download from https://ffmpeg.org", stdout, stderr))
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("brew")
+            .args(["install", "ffmpeg"])
+            .output()
+            .map_err(|e| format!("Failed to run brew: {}. Please install FFmpeg manually: brew install ffmpeg", e))?;
+
+        if output.status.success() {
+            Ok("FFmpeg installed successfully via Homebrew.".to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("brew install failed: {}. Try running 'brew install ffmpeg' manually.", stderr))
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Can't reliably pick a package manager, give instructions
+        Err("Please install FFmpeg using your package manager:\n• Ubuntu/Debian: sudo apt install ffmpeg\n• Fedora: sudo dnf install ffmpeg\n• Arch: sudo pacman -S ffmpeg".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
