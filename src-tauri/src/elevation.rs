@@ -37,13 +37,14 @@ pub fn relaunch_as_admin() -> Result<(), String> {
 
         let verb = to_wide(OsStr::new("runas"));
         let file = to_wide(exe.as_os_str());
+        let params = to_wide(OsStr::new("--elevated"));
 
         unsafe {
             let result = ShellExecuteW(
                 None,
                 PCWSTR(verb.as_ptr()),
                 PCWSTR(file.as_ptr()),
-                PCWSTR::null(),
+                PCWSTR(params.as_ptr()),
                 PCWSTR::null(),
                 SW_SHOWNORMAL,
             );
