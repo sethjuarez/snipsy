@@ -34,13 +34,31 @@ function Welcome() {
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const removeRecent = useProjectStore((s) => s.removeRecentProject);
 
-  const handleBrowse = async () => {
+  const handleOpenProject = async () => {
+    setError(null);
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const selected = await open({
         directory: true,
         multiple: false,
-        title: showForm === "open" ? "Open project folder" : "Choose project folder",
+        title: "Open project folder",
+      });
+      if (selected) {
+        await openProject(selected);
+      }
+    } catch {
+      // Not in Tauri — fall back to manual path form
+      setShowForm("open");
+    }
+  };
+
+  const handleBrowseForCreate = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Choose project folder",
       });
       if (selected) setPath(selected);
     } catch {
@@ -101,7 +119,7 @@ function Welcome() {
             {!showForm && (
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => { setShowForm("open"); setError(null); }}
+                  onClick={handleOpenProject}
                   className="flex flex-col items-center gap-2 p-5 rounded-lg text-[13px] font-medium transition-all hover:shadow-md"
                   style={{
                     backgroundColor: "var(--color-surface-alt)",
@@ -167,7 +185,7 @@ function Welcome() {
                     />
                     <button
                       type="button"
-                      onClick={handleBrowse}
+                      onClick={handleBrowseForCreate}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-medium"
                       style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
                       data-testid="browse-folder"
