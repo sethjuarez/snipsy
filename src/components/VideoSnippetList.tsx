@@ -4,9 +4,11 @@ interface VideoSnippetListProps {
   snippets: VideoSnippet[];
   onEdit: (snippet: VideoSnippet) => void;
   onDelete: (id: string) => void;
+  onPlay?: (snippet: VideoSnippet) => void;
+  demoMode?: boolean;
 }
 
-function VideoSnippetList({ snippets, onEdit, onDelete }: VideoSnippetListProps) {
+function VideoSnippetList({ snippets, onEdit, onDelete, onPlay, demoMode }: VideoSnippetListProps) {
   if (snippets.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400" data-testid="video-empty-state">
@@ -47,6 +49,15 @@ function VideoSnippetList({ snippets, onEdit, onDelete }: VideoSnippetListProps)
             </p>
           </div>
           <div className="flex items-center gap-2 ml-4">
+            {demoMode && onPlay && (
+              <button
+                onClick={() => onPlay(snippet)}
+                className="text-sm text-green-600 hover:text-green-800 font-medium"
+                data-testid={`video-play-${snippet.id}`}
+              >
+                ▶ Play
+              </button>
+            )}
             <button
               onClick={() => onEdit(snippet)}
               className="text-sm text-blue-600 hover:text-blue-800"

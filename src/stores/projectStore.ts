@@ -29,6 +29,7 @@ interface ProjectState {
 
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
+  playVideo: (snippet: VideoSnippet) => Promise<void>;
 }
 
 function applyProjectData(
@@ -111,5 +112,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   exitDemoMode: async () => {
     await backend.exitDemoMode();
     set({ demoMode: false });
+  },
+
+  playVideo: async (snippet) => {
+    await backend.playVideo(
+      snippet.videoFile,
+      snippet.startTime,
+      snippet.endTime,
+      snippet.speed,
+    );
   },
 }));

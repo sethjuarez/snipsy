@@ -116,4 +116,17 @@ export class MockBackendService implements BackendService {
   async getImportedVideos(_projectPath: string): Promise<string[]> {
     return ["videos/build-process.mp4", "videos/deploy-demo.mp4"];
   }
+
+  async playVideo(
+    _videoFile: string,
+    _startTime: number,
+    _endTime: number,
+    _speed: number,
+  ): Promise<void> {
+    // Mock: no-op in test mode
+  }
+
+  async closePlaybackWindow(): Promise<void> {
+    // Mock: no-op in test mode
+  }
 }

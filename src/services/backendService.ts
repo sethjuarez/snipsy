@@ -25,4 +25,11 @@ export interface BackendService {
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<string[]>;
+  playVideo(
+    videoFile: string,
+    startTime: number,
+    endTime: number,
+    speed: number,
+  ): Promise<void>;
+  closePlaybackWindow(): Promise<void>;
 }

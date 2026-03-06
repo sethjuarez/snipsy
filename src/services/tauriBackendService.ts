@@ -60,4 +60,17 @@ export class TauriBackendService implements BackendService {
     // TODO: implement Rust command to list videos in project
     return [];
   }
+
+  async playVideo(
+    videoFile: string,
+    startTime: number,
+    endTime: number,
+    speed: number,
+  ): Promise<void> {
+    return invoke("play_video", { videoFile, startTime, endTime, speed });
+  }
+
+  async closePlaybackWindow(): Promise<void> {
+    return invoke("close_playback_window");
+  }
 }

@@ -19,6 +19,7 @@ function App() {
   const demoMode = useProjectStore((s) => s.demoMode);
   const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
+  const playVideo = useProjectStore((s) => s.playVideo);
 
   const [showForm, setShowForm] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(
@@ -203,6 +204,8 @@ function App() {
               snippets={videoSnippets}
               onEdit={handleVideoEdit}
               onDelete={handleVideoDelete}
+              onPlay={playVideo}
+              demoMode={demoMode}
             />
           )}
         </section>
