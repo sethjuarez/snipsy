@@ -55,22 +55,25 @@ function formatTime(seconds: number, precise = false): string {
   return `${m}:${s.toString().padStart(2, "0")}.${ms}`;
 }
 
-function formatKeyCombo(e: React.KeyboardEvent): string {
+function formatKeyCombo(e: KeyboardEvent): string {
   const parts: string[] = [];
   if (e.ctrlKey || e.metaKey) parts.push("CmdOrControl");
   if (e.shiftKey) parts.push("Shift");
   if (e.altKey) parts.push("Alt");
 
   const code = e.code;
-  if (["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"].includes(code)) {
-    return parts.join("+");
+  if (!["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"].includes(code)) {
+    if (code.startsWith("Digit")) {
+      parts.push(code.slice(5));
+    } else if (code.startsWith("Key")) {
+      parts.push(code.slice(3));
+    } else if (code.startsWith("Numpad")) {
+      parts.push("num" + code.slice(6));
+    } else {
+      parts.push(code);
+    }
   }
 
-  let key = code;
-  if (code.startsWith("Digit")) key = code.slice(5);
-  else if (code.startsWith("Key")) key = code.slice(3);
-  else if (code.startsWith("Numpad")) key = "num" + code.slice(6);
-  parts.push(key);
   return parts.join("+");
 }
 
@@ -238,10 +241,11 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
     }
   }, [playing, startTime, effectiveSpeed]);
 
-  const handleHotkeyCapture = (e: React.KeyboardEvent) => {
+  const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const combo = formatKeyCombo(e);
-    if (combo) {
+    e.stopPropagation();
+    const combo = formatKeyCombo(e.nativeEvent as KeyboardEvent);
+    if (combo.includes("+") && !combo.endsWith("+")) {
       setHotkey(combo);
       setCapturingHotkey(false);
     }
@@ -460,22 +464,22 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
             }}
             data-testid="clip-description"
           />
-          <div
-            tabIndex={0}
-            onClick={() => setCapturingHotkey(true)}
-            onKeyDown={capturingHotkey ? handleHotkeyCapture : undefined}
-            className="flex-1 min-w-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px]"
-            style={{
-              backgroundColor: "var(--color-surface-inset)",
-              color: hotkey ? "var(--color-text)" : "var(--color-text-secondary)",
-              border: `1px solid ${capturingHotkey ? "var(--color-accent)" : "var(--color-border)"}`,
-            }}
-            data-testid="clip-hotkey"
-          >
-            <Keyboard size={12} />
-            <span className="truncate">
-              {capturingHotkey ? "Press keys..." : hotkey || "Hotkey *"}
-            </span>
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            <Keyboard size={12} style={{ color: "var(--color-text-secondary)", flexShrink: 0 }} />
+            <input
+              type="text"
+              value={capturingHotkey ? "Press a key combo..." : hotkey}
+              readOnly
+              onFocus={() => setCapturingHotkey(true)}
+              onBlur={() => setCapturingHotkey(false)}
+              onKeyDown={handleHotkeyCapture}
+              placeholder="Click to capture hotkey"
+              className="w-full px-2 py-1.5 rounded font-mono text-[12px]"
+              style={capturingHotkey
+                ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
+                : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: hotkey ? "var(--color-text)" : "var(--color-text-secondary)" }}
+              data-testid="clip-hotkey"
+            />
           </div>
         </div>
 
