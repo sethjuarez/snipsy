@@ -40,6 +40,7 @@ import("@tauri-apps/api/core")
 
 interface ClipEditorProps {
   video: ImportedVideo;
+  existingClip?: VideoSnippet;
   onSave: (clip: Omit<VideoSnippet, "id">) => void;
   onCancel: () => void;
 }
@@ -77,13 +78,13 @@ function formatKeyCombo(e: KeyboardEvent): string {
   return parts.join("+");
 }
 
-function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
+function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [startTime, setStartTime] = useState(0);
-  const [endTime, setEndTime] = useState(0);
+  const [startTime, setStartTime] = useState(existingClip?.startTime ?? 0);
+  const [endTime, setEndTime] = useState(existingClip?.endTime ?? 0);
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState<"start" | "end" | null>(null);
   const [activeHandle, setActiveHandle] = useState<"start" | "end">("start");
@@ -98,9 +99,9 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   const effectiveSpeed = targetSec > 0 ? computedSpeed : 1;
 
   // Metadata fields
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [hotkey, setHotkey] = useState("");
+  const [title, setTitle] = useState(existingClip?.title ?? "");
+  const [description, setDescription] = useState(existingClip?.description ?? "");
+  const [hotkey, setHotkey] = useState(existingClip?.hotkey ?? "");
   const [capturingHotkey, setCapturingHotkey] = useState(false);
 
   const videoSrc = video.absolutePath && convertFileSrc
@@ -116,6 +117,14 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
     }
   }, [video.absolutePath]);
 
+  // Pre-compute target duration from existing clip speed
+  useEffect(() => {
+    if (existingClip && existingClip.speed !== 1) {
+      const dur = existingClip.endTime - existingClip.startTime;
+      setTargetDuration(Math.round(dur / existingClip.speed).toString());
+    }
+  }, [existingClip]);
+
   // Video event handlers
   useEffect(() => {
     const vid = videoRef.current;
@@ -123,7 +132,10 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
 
     const onMeta = () => {
       setDuration(vid.duration);
-      setEndTime(vid.duration);
+      // Only default endTime to full duration for new clips
+      if (!existingClip) setEndTime(vid.duration);
+      // Seek to start of existing clip so it's visible
+      if (existingClip) vid.currentTime = existingClip.startTime;
     };
     const onTime = () => {
       setCurrentTime(vid.currentTime);

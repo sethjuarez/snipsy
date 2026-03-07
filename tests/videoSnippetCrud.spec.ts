@@ -42,13 +42,14 @@ test.describe("Video Snippet CRUD", () => {
 
   test("can edit a video snippet", async ({ page }) => {
     await page.getByTestId("video-edit-vs-1").click();
-    await expect(page.getByTestId("video-snippet-form")).toBeVisible();
-    await expect(page.getByTestId("video-snippet-title")).toHaveValue(
-      "Build Process",
-    );
+    // Edit now opens the visual clip editor
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    await expect(page.getByTestId("clip-title")).toHaveValue("Build Process");
 
-    await page.getByTestId("video-snippet-title").fill("Updated Build");
-    await page.getByTestId("video-snippet-save").click();
+    await page.getByTestId("clip-title").fill("Updated Build");
+    await page.getByTestId("clip-save").click();
+    // Returns to video-snippets list (the view changed to videos, navigate back)
+    await page.getByTestId("nav-video-snippets").click();
     await expect(page.getByText("Updated Build")).toBeVisible();
   });
 

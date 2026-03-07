@@ -14,8 +14,11 @@ import VideoSnippetList from "./components/VideoSnippetList";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
+import { createBackendService } from "./services";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
+
+const backend = createBackendService();
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
@@ -89,7 +92,19 @@ function App() {
   };
 
   // -- Video snippet handlers --
-  const handleVideoEdit = (snippet: VideoSnippet) => {
+  const handleVideoEdit = async (snippet: VideoSnippet) => {
+    // Open the visual clip editor for this snippet
+    if (projectPath) {
+      const videos = await backend.getImportedVideos(projectPath);
+      const match = videos.find((v) => v.relativePath === snippet.videoFile);
+      if (match) {
+        setEditingVideoSnippet(snippet);
+        setClipEditingVideo(match);
+        setActiveView("videos");
+        return;
+      }
+    }
+    // Fallback to form if video not found
     setEditingVideoSnippet(snippet);
     setShowVideoForm(true);
   };
@@ -188,6 +203,7 @@ function App() {
               handleVideoCancel();
               handleScriptCancel();
               setClipEditingVideo(null);
+              setEditingVideoSnippet(undefined);
             }}
           />
 
@@ -208,15 +224,31 @@ function App() {
                 <div className="h-full rounded-lg p-4" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                   <ClipEditor
                     video={clipEditingVideo}
+                    existingClip={editingVideoSnippet}
                     onSave={(clip) => {
-                      const newSnippet: VideoSnippet = {
-                        id: crypto.randomUUID(),
-                        ...clip,
-                      };
-                      setVideoSnippets([...videoSnippets, newSnippet]);
+                      if (editingVideoSnippet) {
+                        // Update existing snippet
+                        const idx = videoSnippets.findIndex((s) => s.id === editingVideoSnippet.id);
+                        if (idx >= 0) {
+                          const updated = [...videoSnippets];
+                          updated[idx] = { id: editingVideoSnippet.id, ...clip };
+                          setVideoSnippets(updated);
+                        }
+                      } else {
+                        // Create new snippet
+                        const newSnippet: VideoSnippet = {
+                          id: crypto.randomUUID(),
+                          ...clip,
+                        };
+                        setVideoSnippets([...videoSnippets, newSnippet]);
+                      }
                       setClipEditingVideo(null);
+                      setEditingVideoSnippet(undefined);
                     }}
-                    onCancel={() => setClipEditingVideo(null)}
+                    onCancel={() => {
+                      setClipEditingVideo(null);
+                      setEditingVideoSnippet(undefined);
+                    }}
                   />
                 </div>
               ) : (

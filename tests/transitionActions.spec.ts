@@ -42,17 +42,23 @@ test.describe("Transition Action UI", () => {
     await expect(page.getByText("Action Test")).toBeVisible();
   });
 
-  test("shows existing transition actions when editing", async ({ page }) => {
-    // The mock data has a video snippet "vs-1" with one transition action
-    await page.getByTestId("video-edit-vs-1").click();
+  test("shows transition actions in the form", async ({ page }) => {
+    await page.getByTestId("add-video-snippet").click();
     await expect(page.getByTestId("video-snippet-form")).toBeVisible();
+    await expect(page.getByTestId("no-transition-actions")).toBeVisible();
+
+    // Add a transition action and verify its fields
+    await page.getByTestId("add-transition-action").click();
     await expect(page.getByTestId("transition-action-0")).toBeVisible();
+    await page.getByTestId("transition-x-0").fill("350");
+    await page.getByTestId("transition-y-0").fill("40");
     await expect(page.getByTestId("transition-x-0")).toHaveValue("350");
     await expect(page.getByTestId("transition-y-0")).toHaveValue("40");
   });
 
   test("can remove a transition action", async ({ page }) => {
-    await page.getByTestId("video-edit-vs-1").click();
+    await page.getByTestId("add-video-snippet").click();
+    await page.getByTestId("add-transition-action").click();
     await expect(page.getByTestId("transition-action-0")).toBeVisible();
 
     await page.getByTestId("transition-remove-0").click();
