@@ -1,4 +1,4 @@
-import { Pencil, Trash2, Play, Keyboard, Monitor } from "lucide-react";
+import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off } from "lucide-react";
 import type { VideoSnippet } from "../types";
 
 interface VideoSnippetListProps {
@@ -58,6 +58,14 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                   {snippet.targetMonitor}
                 </span>
               )}
+              <span
+                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+                title={snippet.hideCursor !== false ? "Cursor hidden during playback" : "Cursor visible during playback"}
+                data-testid={`cursor-indicator-${snippet.id}`}
+              >
+                {snippet.hideCursor !== false ? <MousePointer2Off size={10} /> : <MousePointer size={10} />}
+              </span>
             </div>
             {snippet.description && (
               <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
