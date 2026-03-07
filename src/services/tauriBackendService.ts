@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { availableMonitors } from "@tauri-apps/api/window";
 import type { BackendService, SnippetHotkey } from "./backendService";
 import type { ProjectData, MonitorInfo, TextSnippet, VideoSnippet } from "../types";
 
@@ -147,14 +146,10 @@ export class TauriBackendService implements BackendService {
   }
 
   async listMonitors(): Promise<MonitorInfo[]> {
-    const monitors = await availableMonitors();
-    return monitors.map((m, i) => ({
-      name: m.name ?? `Monitor ${i + 1}`,
-      width: m.size.width,
-      height: m.size.height,
-      x: m.position.x,
-      y: m.position.y,
-      scaleFactor: m.scaleFactor,
-    }));
+    return invoke<MonitorInfo[]>("list_monitors");
+  }
+
+  async captureMonitorPreview(monitorName: string): Promise<string> {
+    return invoke<string>("capture_monitor_preview", { monitorName });
   }
 }

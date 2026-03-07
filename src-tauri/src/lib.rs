@@ -24,6 +24,8 @@ pub fn run() {
             commands::list_imported_videos,
             commands::delete_video,
             commands::get_video_fps,
+            commands::list_monitors,
+            commands::capture_monitor_preview,
             commands::save_script,
             commands::load_scripts,
             commands::delete_script,

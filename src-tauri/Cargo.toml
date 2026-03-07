@@ -18,6 +18,9 @@ serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 enigo = { version = "0.3", features = ["serde"] }
 arboard = "3"
+xcap = "0.8"
+image = "0.25"
+base64 = "0.22"
 
 # Tauri plugins
 tauri-plugin-global-shortcut = "2"

@@ -279,6 +279,77 @@ pub fn delete_video(project_path: String, relative_path: String) -> Result<(), S
     Ok(())
 }
 
+/// Monitor info returned to the frontend.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorInfoResult {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub scale_factor: f64,
+}
+
+/// List all available monitors with their positions and dimensions.
+#[tauri::command]
+pub fn list_monitors() -> Result<Vec<MonitorInfoResult>, String> {
+    let monitors = xcap::Monitor::all().map_err(|e| format!("Failed to list monitors: {e}"))?;
+    let mut results = Vec::new();
+    for (i, m) in monitors.iter().enumerate() {
+        results.push(MonitorInfoResult {
+            name: {
+                let n = m.name().unwrap_or_default();
+                if n.is_empty() { format!("Monitor {}", i + 1) } else { n }
+            },
+            width: m.width().unwrap_or(0),
+            height: m.height().unwrap_or(0),
+            x: m.x().unwrap_or(0),
+            y: m.y().unwrap_or(0),
+            scale_factor: m.scale_factor().unwrap_or(1.0) as f64,
+        });
+    }
+    Ok(results)
+}
+
+/// Capture a small preview screenshot of a monitor and return it as a base64-encoded JPEG.
+#[tauri::command]
+pub fn capture_monitor_preview(monitor_name: String) -> Result<String, String> {
+    use base64::Engine;
+    use image::imageops::FilterType;
+    use std::io::{BufWriter, Cursor};
+
+    let monitors = xcap::Monitor::all().map_err(|e| format!("Failed to list monitors: {e}"))?;
+    let monitor = monitors
+        .iter()
+        .find(|m| m.name().unwrap_or_default() == monitor_name)
+        .or_else(|| monitors.first())
+        .ok_or("No monitors found")?;
+
+    let img = monitor
+        .capture_image()
+        .map_err(|e| format!("Capture failed: {e}"))?;
+
+    // Resize to thumbnail (320px wide, maintain aspect ratio)
+    let thumb_w = 320u32;
+    let thumb_h = (img.height() as f64 * thumb_w as f64 / img.width() as f64) as u32;
+    let thumb = image::imageops::resize(&img, thumb_w, thumb_h.max(1), FilterType::Triangle);
+
+    // Encode as JPEG
+    let rgb = image::DynamicImage::ImageRgba8(thumb).to_rgb8();
+    let mut buf = Vec::new();
+    {
+        let mut cursor = Cursor::new(&mut buf);
+        let writer = BufWriter::new(&mut cursor);
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(writer, 80);
+        encoder
+            .encode(&rgb, rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
+            .map_err(|e| format!("JPEG encode failed: {e}"))?;
+    }
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
+}
+
 #[tauri::command]
 pub fn save_script(project_path: String, script: Script) -> Result<(), String> {
     let scripts_dir = PathBuf::from(&project_path).join("scripts");

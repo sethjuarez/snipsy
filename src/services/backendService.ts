@@ -58,4 +58,5 @@ export interface BackendService {
   deleteVideo(projectPath: string, relativePath: string): Promise<void>;
   getVideoFps(videoPath: string): Promise<number>;
   listMonitors(): Promise<MonitorInfo[]>;
+  captureMonitorPreview(monitorName: string): Promise<string>;
 }

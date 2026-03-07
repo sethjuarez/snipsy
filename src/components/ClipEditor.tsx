@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor } from "lucide-react";
+import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw } from "lucide-react";
 import { createBackendService } from "../services";
 import type { ImportedVideo, MonitorInfo, VideoSnippet } from "../types";
 
@@ -105,6 +105,8 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [targetMonitor, setTargetMonitor] = useState(existingClip?.targetMonitor ?? "");
+  const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
+  const [capturingPreview, setCapturingPreview] = useState(false);
 
   const videoSrc = video.absolutePath && convertFileSrc
     ? convertFileSrc(video.absolutePath)
@@ -115,10 +117,17 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     backend.listMonitors()
       .then((mons) => {
         setMonitors(mons);
-        // Default to first monitor if none selected
         if (!targetMonitor && mons.length > 0) setTargetMonitor(mons[0].name);
       })
       .catch(() => {});
+  }, []);
+
+  const capturePreview = useCallback((name: string) => {
+    setCapturingPreview(true);
+    backend.captureMonitorPreview(name)
+      .then((b64) => setMonitorPreview(`data:image/jpeg;base64,${b64}`))
+      .catch(() => setMonitorPreview(null))
+      .finally(() => setCapturingPreview(false));
   }, []);
 
   // Detect FPS for frame-stepping
@@ -521,10 +530,22 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           </button>
           {monitors.length > 0 && (
             <div className="flex items-center gap-1.5">
+              {monitorPreview && (
+                <img
+                  src={monitorPreview}
+                  alt="Monitor preview"
+                  className="h-7 rounded border"
+                  style={{ borderColor: "var(--color-border)" }}
+                  data-testid="monitor-preview"
+                />
+              )}
               <Monitor size={12} style={{ color: "var(--color-text-secondary)" }} />
               <select
                 value={targetMonitor}
-                onChange={(e) => setTargetMonitor(e.target.value)}
+                onChange={(e) => {
+                  setTargetMonitor(e.target.value);
+                  setMonitorPreview(null);
+                }}
                 className="px-2 py-1 rounded text-[11px]"
                 style={{
                   backgroundColor: "var(--color-surface-inset)",
@@ -539,6 +560,20 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
                   </option>
                 ))}
               </select>
+              <button
+                onClick={() => capturePreview(targetMonitor)}
+                disabled={capturingPreview}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  backgroundColor: "var(--color-surface-inset)",
+                  border: "1px solid var(--color-border)",
+                }}
+                title="Capture monitor preview"
+                data-testid="monitor-refresh"
+              >
+                <RefreshCw size={11} className={capturingPreview ? "animate-spin" : ""} />
+              </button>
             </div>
           )}
           <button
