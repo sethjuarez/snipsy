@@ -1,5 +1,70 @@
 # Changelog
 
+## [0.3.0](https://github.com/sethjuarez/snipsy/compare/v0.2.0...v0.3.0) (2026-03-07)
+
+
+### Features
+
+* add Lucide icons and folder browse dialog ([0d5ac6e](https://github.com/sethjuarez/snipsy/commit/0d5ac6eb60456b00b53c12a8c946a746a2c5b4dd))
+* add Restart Snipsy button after FFmpeg install ([27f6a51](https://github.com/sethjuarez/snipsy/commit/27f6a511f8068d58ceb8ce64e044bf74cacc1b3f))
+* admin elevation detection with relaunch-as-admin for focus protection ([d79a144](https://github.com/sethjuarez/snipsy/commit/d79a1440875e4c56337db69428c962adde65ee92))
+* big play button on each clip for instant preview ([39d083b](https://github.com/sethjuarez/snipsy/commit/39d083b3cc37b8202bc75984b2f9df0b3a1581cf))
+* BlockInput prevents focus steal during text delivery (AHK pattern) ([f7520b6](https://github.com/sethjuarez/snipsy/commit/f7520b6418b7aa12a684b0f76bacebfbb6a82613))
+* clickable FFmpeg warnings with install helper dialog ([0d05859](https://github.com/sethjuarez/snipsy/commit/0d05859c5b430ee9bd8dbf885c3856292f24a94e))
+* complete UI/UX overhaul with desktop app layout ([2d2f96a](https://github.com/sethjuarez/snipsy/commit/2d2f96aa2afa1a307102e3c1d9c38ab01d1f9fd4))
+* cross-platform focus lock prevents text going to wrong window ([b0e6183](https://github.com/sethjuarez/snipsy/commit/b0e6183598940c45e008cb9462da4f2f88902a39))
+* custom Snipsy app icon with snippet card design ([2733b96](https://github.com/sethjuarez/snipsy/commit/2733b963518aa37e6bb2cac3add31b97e5f53798))
+* demo mode minimizes to system tray with glowing LIVE indicator ([366f320](https://github.com/sethjuarez/snipsy/commit/366f32007ee6aee0c56483d449e10a2b26ccaed5))
+* edit video snippets in visual clip editor with pre-populated fields ([cf2a601](https://github.com/sethjuarez/snipsy/commit/cf2a601a8eafe299cf32f6682e727c0425f9708f))
+* end behavior option — freeze on last frame or close window ([bebe5c9](https://github.com/sethjuarez/snipsy/commit/bebe5c9542ce4754cec27b1ed30d27b24fa22237))
+* end handle previews video + target duration replaces speed buttons ([c8b1f1a](https://github.com/sethjuarez/snipsy/commit/c8b1f1a5622f7511305467abaedd27734ba3903d))
+* frame-by-frame adjustment for clip start/end handles ([d45f010](https://github.com/sethjuarez/snipsy/commit/d45f01021cba47e5878c6119ce48f94047f8e73d))
+* hold-to-repeat on frame-step buttons ([62b8e57](https://github.com/sethjuarez/snipsy/commit/62b8e57d3d3eebd898c768cdc53887d1de2f800f))
+* monitor screenshot preview with refresh button ([3b17b8d](https://github.com/sethjuarez/snipsy/commit/3b17b8d7bbba09c2f56fbc5bc23e7af239ebbb6b))
+* monitor selector dropdown in clip editor ([559ac55](https://github.com/sethjuarez/snipsy/commit/559ac55b6c8f55ae03f2929eb811b21023a5b630))
+* navigate to clips list after save, fallback monitor on playback ([87ff907](https://github.com/sethjuarez/snipsy/commit/87ff9074b62db3a7375050d665e1b063d9eb3c59))
+* Open Project directly launches folder picker ([ede064c](https://github.com/sethjuarez/snipsy/commit/ede064c1779d9d3b572cb821c590c856da1d2029))
+* play video on selected monitor ([ef3c7b3](https://github.com/sethjuarez/snipsy/commit/ef3c7b34e8e44c1016b49876e13faadbee53065f))
+* register OS-level global shortcuts for text snippet delivery ([3c5e898](https://github.com/sethjuarez/snipsy/commit/3c5e8982b4822e85a4de8e04bf1f58b500e02936))
+* remove video with confirmation dialog and associated clip cleanup ([0d0d097](https://github.com/sethjuarez/snipsy/commit/0d0d097f5c26375c212ff2345ea18d6128723446))
+* rich home screen with recent projects and auto-open ([81e81ef](https://github.com/sethjuarez/snipsy/commit/81e81efb311bedf1092263050f11c9493df1d2a0))
+* video clip editor with thumbnail cards and timeline scrubber ([1e180b2](https://github.com/sethjuarez/snipsy/commit/1e180b2b30f590a4059a7d0d670355f7c0f35bdd))
+* wire video snippet hotkeys to play video in demo mode ([f658471](https://github.com/sethjuarez/snipsy/commit/f658471579fc280caf900f5129e4540a09f688f8))
+
+
+### Bug Fixes
+
+* add pointer cursor for all interactive elements ([4b9fbb6](https://github.com/sethjuarez/snipsy/commit/4b9fbb6d277093571f828216b3ab01a677a1964e))
+* add window control permissions and rewrite titlebar for Tauri ([450cf89](https://github.com/sethjuarez/snipsy/commit/450cf89a6b7d46da193f26113bd27a01d7f0855e))
+* auto-restart app after FFmpeg install to pick up new PATH ([7ca2fd6](https://github.com/sethjuarez/snipsy/commit/7ca2fd6f7d429c96de1fd4a7beadf0c386dd374e))
+* clip editor hotkey capture matches text snippet pattern ([66dec37](https://github.com/sethjuarez/snipsy/commit/66dec3735f5c3b30f3239f57432ebb9b29cb5f0a))
+* detect FFmpeg from user PATH when running as admin ([5dfd4cf](https://github.com/sethjuarez/snipsy/commit/5dfd4cf5dd0ffe993f78986c9a3cf9cff24f18c5))
+* enable asset protocol so thumbnails load in webview ([30eee97](https://github.com/sethjuarez/snipsy/commit/30eee9721a66bee74c84aa667426e7ca51b26a35))
+* enable frameless window and fix titlebar click handling ([de9e5bd](https://github.com/sethjuarez/snipsy/commit/de9e5bd9fc83d87fca8dec1a69a3d434f5f1eedb))
+* frame-step buttons now correctly update on each click ([60598cd](https://github.com/sethjuarez/snipsy/commit/60598cd129ab9ea47c46aa290379e483f3bf94a9))
+* frame-step now pauses video, shows precise time, preloads for seeking ([d86f6db](https://github.com/sethjuarez/snipsy/commit/d86f6db2bf012e6d9b6ddd40d7e451a11debb35d))
+* hide console window when relaunching as admin in dev mode ([254abd4](https://github.com/sethjuarez/snipsy/commit/254abd49031dfa857888c60a8bafb5eac8691595))
+* hotkey capture uses physical key codes for Tauri compatibility ([d1fedf2](https://github.com/sethjuarez/snipsy/commit/d1fedf246ced0e67e761c9b54906a01c866712ea))
+* persist imported videos by reading from disk on project load ([35969fe](https://github.com/sethjuarez/snipsy/commit/35969fe1db86636fd0f059b70a1ba64462860358))
+* persist targetMonitor in Rust VideoSnippet model ([54a6212](https://github.com/sethjuarez/snipsy/commit/54a6212e19bef0968ffdf04042ca210b31999615))
+* playback window fills screen without gaps ([64eface](https://github.com/sethjuarez/snipsy/commit/64efacef5416aa44fe995cd952f608a220c72938))
+* playback window now loads video via asset protocol ([0df6a60](https://github.com/sethjuarez/snipsy/commit/0df6a601a358679afc086946d52cf9582d804646))
+* release modifier keys before text delivery to prevent stuck Ctrl/Shift ([4d70154](https://github.com/sethjuarez/snipsy/commit/4d7015431613644fae541ee6f842942d84602008))
+* replace red titlebar with pulsing red stop icon for demo mode ([1826f21](https://github.com/sethjuarez/snipsy/commit/1826f216b8f0bca1f0e411d2b0d3133539844292))
+* titlebar drag and button clicks using cutready pattern ([b04bf97](https://github.com/sethjuarez/snipsy/commit/b04bf9798e5db630ff22ab980af9df007a63657e))
+* video import opens native file picker dialog ([d24642d](https://github.com/sethjuarez/snipsy/commit/d24642d50ded16efd8af1d4cbe1f6c09be3eecf8))
+
+
+### Miscellaneous
+
+* remove dead code warning for PlayVideoParams ([70cd223](https://github.com/sethjuarez/snipsy/commit/70cd223923d0b9722a82de8f53b63a3670fe1c2b))
+
+
+### Refactoring
+
+* compact clip editor layout to maximize video space ([97c69b8](https://github.com/sethjuarez/snipsy/commit/97c69b871b86f9961770fe762521378a89c00079))
+* switch video list from card grid to compact list layout ([2470c0c](https://github.com/sethjuarez/snipsy/commit/2470c0c1d79c2c363f651af58501ab66f7dd4258))
+
 ## [0.2.0](https://github.com/sethjuarez/snipsy/compare/v0.1.0...v0.2.0) (2026-03-06)
 
 
