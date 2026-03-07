@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Play, Pause, Save, X, Keyboard } from "lucide-react";
+import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight } from "lucide-react";
+import { createBackendService } from "../services";
 import type { ImportedVideo, VideoSnippet } from "../types";
+
+const backend = createBackendService();
 
 // Convert local file path to a URL the webview can load (only in Tauri context)
 let convertFileSrc: ((path: string) => string) | null = null;
@@ -49,6 +52,8 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   const [endTime, setEndTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState<"start" | "end" | null>(null);
+  const [activeHandle, setActiveHandle] = useState<"start" | "end">("start");
+  const [frameDuration, setFrameDuration] = useState(1 / 30);
   const [targetDuration, setTargetDuration] = useState<string>("");
 
   // Derived: clip duration and computed speed
@@ -67,6 +72,15 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   const videoSrc = video.absolutePath && convertFileSrc
     ? convertFileSrc(video.absolutePath)
     : video.absolutePath;
+
+  // Detect FPS for frame-stepping
+  useEffect(() => {
+    if (video.absolutePath) {
+      backend.getVideoFps(video.absolutePath)
+        .then((fps) => { if (fps > 0) setFrameDuration(1 / fps); })
+        .catch(() => {});
+    }
+  }, [video.absolutePath]);
 
   // Video event handlers
   useEffect(() => {
@@ -138,10 +152,32 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   const handleTimelineClick = useCallback((e: React.MouseEvent) => {
     const t = getTimeFromMouseEvent(e);
     if (t === null) return;
-    // Click on the timeline scrubs the playhead
     if (videoRef.current) videoRef.current.currentTime = t;
     setCurrentTime(t);
   }, [getTimeFromMouseEvent]);
+
+  const nudgeHandle = useCallback((handle: "start" | "end", direction: 1 | -1) => {
+    const step = frameDuration * direction;
+    if (handle === "start") {
+      const val = Math.max(0, Math.min(startTime + step, endTime - frameDuration));
+      setStartTime(val);
+      if (videoRef.current) videoRef.current.currentTime = val;
+    } else {
+      const val = Math.min(duration, Math.max(endTime + step, startTime + frameDuration));
+      setEndTime(val);
+      if (videoRef.current) videoRef.current.currentTime = val;
+    }
+  }, [frameDuration, startTime, endTime, duration]);
+
+  const handleTimelineKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      nudgeHandle(activeHandle, -1);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      nudgeHandle(activeHandle, 1);
+    }
+  }, [activeHandle, nudgeHandle]);
 
   const handlePreview = useCallback(() => {
     const vid = videoRef.current;
@@ -199,13 +235,37 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
 
       {/* Controls below video */}
       <div className="shrink-0 mt-3 space-y-2.5">
-        {/* Timeline bar with inline start/end handles */}
-        <div
-          ref={timelineRef}
-          className="relative h-7 rounded cursor-pointer select-none"
-          style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
-          onClick={handleTimelineClick}
-        >
+        {/* Timeline with frame-step buttons */}
+        <div className="flex items-center gap-1.5">
+          {/* Start frame-step buttons */}
+          <button
+            onClick={() => { setActiveHandle("start"); nudgeHandle("start", -1); }}
+            className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
+            style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+            title="Start − 1 frame"
+            data-testid="frame-back-start"
+          >
+            <ChevronLeft size={12} />
+          </button>
+          <button
+            onClick={() => { setActiveHandle("start"); nudgeHandle("start", 1); }}
+            className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
+            style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+            title="Start + 1 frame"
+            data-testid="frame-fwd-start"
+          >
+            <ChevronRight size={12} />
+          </button>
+
+          {/* Timeline bar */}
+          <div
+            ref={timelineRef}
+            tabIndex={0}
+            className="relative flex-1 h-7 rounded cursor-pointer select-none outline-none"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+            onClick={handleTimelineClick}
+            onKeyDown={handleTimelineKeyDown}
+          >
           {/* Selection region */}
           <div
             className="absolute top-0 bottom-0 rounded"
@@ -230,7 +290,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
               backgroundColor: "var(--color-accent)",
               opacity: dragging === "start" ? 1 : 0.7,
             }}
-            onMouseDown={(e) => { e.stopPropagation(); setDragging("start"); }}
+            onMouseDown={(e) => { e.stopPropagation(); setActiveHandle("start"); setDragging("start"); }}
             data-testid="clip-start"
           />
           {/* End handle */}
@@ -242,7 +302,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
               backgroundColor: "var(--color-accent)",
               opacity: dragging === "end" ? 1 : 0.7,
             }}
-            onMouseDown={(e) => { e.stopPropagation(); setDragging("end"); }}
+            onMouseDown={(e) => { e.stopPropagation(); setActiveHandle("end"); setDragging("end"); }}
             data-testid="clip-end"
           />
           {/* Time labels on the bar */}
@@ -258,6 +318,27 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
           >
             {formatTime(endTime)}
           </span>
+          </div>
+
+          {/* End frame-step buttons */}
+          <button
+            onClick={() => { setActiveHandle("end"); nudgeHandle("end", -1); }}
+            className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
+            style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+            title="End − 1 frame"
+            data-testid="frame-back-end"
+          >
+            <ChevronLeft size={12} />
+          </button>
+          <button
+            onClick={() => { setActiveHandle("end"); nudgeHandle("end", 1); }}
+            className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
+            style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+            title="End + 1 frame"
+            data-testid="frame-fwd-end"
+          >
+            <ChevronRight size={12} />
+          </button>
         </div>
 
         {/* Row 1: Clip duration + target playback time + Preview */}

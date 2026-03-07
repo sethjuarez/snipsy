@@ -55,4 +55,5 @@ export interface BackendService {
   relaunchAsAdmin(): Promise<void>;
   selectVideoFile(): Promise<string | null>;
   deleteVideo(projectPath: string, relativePath: string): Promise<void>;
+  getVideoFps(videoPath: string): Promise<number>;
 }

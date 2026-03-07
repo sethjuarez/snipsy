@@ -212,4 +212,8 @@ export class MockBackendService implements BackendService {
   async deleteVideo(_projectPath: string, relativePath: string): Promise<void> {
     this._importedVideos = this._importedVideos.filter((v) => v.relativePath !== relativePath);
   }
+
+  async getVideoFps(_videoPath: string): Promise<number> {
+    return 30;
+  }
 }

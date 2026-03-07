@@ -140,4 +140,8 @@ export class TauriBackendService implements BackendService {
   async deleteVideo(projectPath: string, relativePath: string): Promise<void> {
     return invoke("delete_video", { projectPath, relativePath });
   }
+
+  async getVideoFps(videoPath: string): Promise<number> {
+    return invoke<number>("get_video_fps", { videoPath });
+  }
 }

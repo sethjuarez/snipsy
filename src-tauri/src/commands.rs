@@ -158,6 +158,48 @@ fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path
     Ok(())
 }
 
+/// Get the frame rate (FPS) of a video using ffprobe.
+/// Returns the FPS as a float, or an error if ffprobe is unavailable.
+#[tauri::command]
+pub fn get_video_fps(video_path: String) -> Result<f64, String> {
+    let ffprobe = crate::scripting::resolve_ffmpeg_path()
+        .map(|p| {
+            let mut pb = std::path::PathBuf::from(p);
+            pb.set_file_name(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
+            if pb.is_file() {
+                pb.to_string_lossy().into_owned()
+            } else {
+                "ffprobe".to_string()
+            }
+        })
+        .unwrap_or_else(|| "ffprobe".to_string());
+
+    let output = std::process::Command::new(ffprobe)
+        .args([
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=r_frame_rate",
+            "-of", "csv=p=0",
+            &video_path,
+        ])
+        .output()
+        .map_err(|e| format!("ffprobe not available: {e}"))?;
+
+    if !output.status.success() {
+        return Err("ffprobe failed to read video".into());
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // r_frame_rate is typically "30/1" or "30000/1001"
+    if let Some((num, den)) = raw.split_once('/') {
+        let n: f64 = num.parse().unwrap_or(30.0);
+        let d: f64 = den.parse().unwrap_or(1.0);
+        if d > 0.0 { Ok(n / d) } else { Ok(30.0) }
+    } else {
+        raw.parse::<f64>().or(Ok(30.0))
+    }
+}
+
 /// Imported video metadata returned to the frontend.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
