@@ -17,9 +17,13 @@ interface ClipEditorProps {
   onCancel: () => void;
 }
 
-function formatTime(seconds: number): string {
+function formatTime(seconds: number, precise = false): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
+  if (precise) {
+    const ms = Math.floor((seconds % 1) * 100);
+    return `${m}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+  }
   const ms = Math.floor((seconds % 1) * 10);
   return `${m}:${s.toString().padStart(2, "0")}.${ms}`;
 }
@@ -157,15 +161,24 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   }, [getTimeFromMouseEvent]);
 
   const nudgeHandle = (handle: "start" | "end", direction: 1 | -1) => {
+    const vid = videoRef.current;
+    if (!vid || duration <= 0) return;
+    // Pause so the seeked frame is visible
+    if (!vid.paused) {
+      vid.pause();
+      setPlaying(false);
+    }
     const step = frameDuration * direction;
     if (handle === "start") {
       const val = Math.max(0, Math.min(startTime + step, endTime - frameDuration));
       setStartTime(val);
-      if (videoRef.current) videoRef.current.currentTime = val;
+      vid.currentTime = val;
+      setCurrentTime(val);
     } else {
       const val = Math.min(duration, Math.max(endTime + step, startTime + frameDuration));
       setEndTime(val);
-      if (videoRef.current) videoRef.current.currentTime = val;
+      vid.currentTime = val;
+      setCurrentTime(val);
     }
   };
 
@@ -228,6 +241,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
         <video
           ref={videoRef}
           src={videoSrc}
+          preload="auto"
           className="w-full h-full object-contain"
           data-testid="clip-editor-video"
         />
@@ -310,13 +324,13 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
             className="absolute text-[9px] font-mono pointer-events-none"
             style={{ left: 4, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }}
           >
-            {formatTime(startTime)}
+            {formatTime(startTime, true)}
           </span>
           <span
             className="absolute text-[9px] font-mono pointer-events-none"
             style={{ right: 4, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }}
           >
-            {formatTime(endTime)}
+            {formatTime(endTime, true)}
           </span>
           </div>
 
