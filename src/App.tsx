@@ -260,7 +260,7 @@ function App() {
                   <TextSnippetForm snippet={editingSnippet} onSave={handleSave} onCancel={handleCancel} />
                 </div>
               ) : (
-                <TextSnippetList snippets={textSnippets} onEdit={handleEdit} onDelete={handleDelete} />
+                <TextSnippetList snippets={textSnippets} onEdit={handleEdit} onDelete={handleDelete} onReorder={setTextSnippets} />
               )
             )}
 

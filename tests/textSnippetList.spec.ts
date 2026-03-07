@@ -29,6 +29,12 @@ test.describe("Text Snippet List", () => {
     await expect(page.getByTestId("snippet-ts-1")).toContainText("fast-type");
   });
 
+  test("shows drag handles for reordering", async ({ page }) => {
+    await expect(page.getByTestId("drag-handle-ts-1")).toBeVisible();
+    await expect(page.getByTestId("drag-handle-ts-2")).toBeVisible();
+    await expect(page.getByTestId("drag-handle-ts-3")).toBeVisible();
+  });
+
   test("shows empty state when no snippets", async ({ page }) => {
     // Clear localStorage to prevent auto-open from previous tests
     await page.goto("/");
