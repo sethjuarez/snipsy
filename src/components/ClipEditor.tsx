@@ -106,6 +106,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [targetMonitor, setTargetMonitor] = useState(existingClip?.targetMonitor ?? "");
   const [endBehavior, setEndBehavior] = useState<EndBehavior>(existingClip?.endBehavior ?? "close");
+  const [hideCursor, setHideCursor] = useState(existingClip?.hideCursor ?? true);
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
 
@@ -298,6 +299,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       hotkey,
       targetMonitor: targetMonitor || undefined,
       endBehavior,
+      hideCursor,
     });
   };
 
@@ -595,6 +597,16 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               <option value="freeze">Freeze last frame</option>
             </select>
           </div>
+          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={hideCursor}
+              onChange={(e) => setHideCursor(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+              data-testid="clip-hide-cursor"
+            />
+            Hide cursor
+          </label>
           <button
             onClick={handleSave}
             disabled={!canSave}

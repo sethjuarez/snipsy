@@ -13,6 +13,7 @@ pub async fn play_video(
     transition_actions: Option<Vec<TransitionAction>>,
     target_monitor: Option<String>,
     end_behavior: Option<String>,
+    hide_cursor: Option<bool>,
 ) -> Result<(), String> {
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
@@ -31,13 +32,15 @@ pub async fn play_video(
     };
 
     let eb = end_behavior.as_deref().unwrap_or("close");
+    let hc = if hide_cursor.unwrap_or(true) { "true" } else { "false" };
     let url = format!(
-        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}",
+        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}",
         urlencoded(&abs_path),
         start_time,
         end_time,
         speed,
-        eb
+        eb,
+        hc
     );
 
     let mut builder = WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))

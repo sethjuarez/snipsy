@@ -44,6 +44,7 @@ export interface VideoSnippet {
   speed: number;
   targetMonitor?: string;
   endBehavior?: EndBehavior;
+  hideCursor?: boolean;
   transitionActions?: TransitionAction[];
 }
 

@@ -10,6 +10,7 @@ function Playback() {
   const end = parseFloat(searchParams.get("end") ?? "0");
   const speed = parseFloat(searchParams.get("speed") ?? "1");
   const endBehavior = searchParams.get("endBehavior") ?? "close";
+  const hideCursor = searchParams.get("hideCursor") !== "false";
 
   const [videoSrc, setVideoSrc] = useState<string>("");
 
@@ -101,7 +102,7 @@ function Playback() {
   return (
     <div
       className="bg-black flex items-center justify-center"
-      style={{ position: "fixed", inset: 0, cursor: "none" }}
+      style={{ position: "fixed", inset: 0, cursor: hideCursor ? "none" : "auto" }}
       data-testid="playback-container"
     >
       <video

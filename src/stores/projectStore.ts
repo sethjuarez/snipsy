@@ -298,6 +298,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       snippet.transitionActions,
       monitor,
       snippet.endBehavior,
+      snippet.hideCursor,
     );
   },
 }));

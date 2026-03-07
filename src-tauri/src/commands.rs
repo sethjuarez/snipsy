@@ -491,6 +491,7 @@ mod tests {
             speed: 2.0,
             target_monitor: Some("Primary Monitor".into()),
             end_behavior: None,
+            hide_cursor: None,
             transition_actions: None,
         }];
 

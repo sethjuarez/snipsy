@@ -55,6 +55,7 @@ export interface BackendService {
     transitionActions?: TransitionAction[],
     targetMonitor?: string,
     endBehavior?: string,
+    hideCursor?: boolean,
   ): Promise<void>;
   closePlaybackWindow(): Promise<void>;
   saveScript(projectPath: string, script: Script): Promise<void>;

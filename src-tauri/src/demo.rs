@@ -23,6 +23,7 @@ pub struct SnippetHotkey {
     pub transition_actions: Option<Vec<crate::models::TransitionAction>>,
     pub target_monitor: Option<String>,
     pub end_behavior: Option<String>,
+    pub hide_cursor: Option<bool>,
 }
 
 /// State tracking for demo mode
@@ -96,6 +97,7 @@ pub fn enter_demo_mode(
             let transition_actions = hk.transition_actions.clone();
             let target_monitor = hk.target_monitor.clone();
             let end_behavior = hk.end_behavior.clone();
+            let hide_cursor = hk.hide_cursor;
 
             if let Err(e) = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
@@ -116,6 +118,7 @@ pub fn enter_demo_mode(
                             transition_actions,
                             target_monitor,
                             end_behavior,
+                            hide_cursor,
                         )
                         .await
                         {
@@ -183,6 +186,7 @@ mod tests {
             transition_actions: None,
             target_monitor: None,
             end_behavior: None,
+            hide_cursor: None,
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
@@ -208,6 +212,7 @@ mod tests {
             transition_actions: None,
             target_monitor: Some("Primary Monitor".into()),
             end_behavior: Some("freeze".into()),
+            hide_cursor: Some(true),
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();

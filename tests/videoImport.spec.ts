@@ -72,6 +72,17 @@ test.describe("Video Import", () => {
     await expect(select).toHaveValue("freeze");
   });
 
+  test("clip editor shows hide cursor checkbox defaulting to checked", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    const checkbox = page.getByTestId("clip-hide-cursor");
+    await expect(checkbox).toBeVisible();
+    await expect(checkbox).toBeChecked();
+    // Can uncheck
+    await checkbox.uncheck();
+    await expect(checkbox).not.toBeChecked();
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();
