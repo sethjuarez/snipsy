@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useProjectStore } from "./stores/projectStore";
-import { Plus, AlertTriangle, X as XIcon } from "lucide-react";
+import { Plus, AlertTriangle, X as XIcon, Circle, Square } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -14,11 +14,11 @@ import VideoSnippetList from "./components/VideoSnippetList";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
-import { createBackendService } from "./services";
+import { getBackend } from "./services";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
-const backend = createBackendService();
+const backend = getBackend();
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
@@ -47,7 +47,10 @@ function App() {
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
   const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
   const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showRecordingDialog, setShowRecordingDialog] = useState(false);
   const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
+  const loadScripts = useProjectStore((s) => s.loadScripts);
 
   // Auto-open last project on startup
   useEffect(() => {
@@ -150,6 +153,34 @@ function App() {
     setEditingScript(undefined);
   };
 
+  // -- Recording handlers --
+  const handleStartRecording = useCallback(async () => {
+    if (!projectPath) return;
+    try {
+      await backend.startRecordingScript(projectPath);
+      setIsRecording(true);
+    } catch (e) {
+      alert(`Failed to start recording: ${e}`);
+    }
+  }, [projectPath]);
+
+  const handleStopRecording = useCallback(async () => {
+    if (!projectPath) return;
+    setShowRecordingDialog(true);
+  }, [projectPath]);
+
+  const handleSaveRecording = useCallback(async (title: string, description: string) => {
+    if (!projectPath) return;
+    try {
+      await backend.stopRecordingScript(projectPath, title, description);
+      setIsRecording(false);
+      setShowRecordingDialog(false);
+      await loadScripts();
+    } catch (e) {
+      alert(`Failed to save recording: ${e}`);
+    }
+  }, [projectPath, loadScripts]);
+
   const handleToggleDemo = () => {
     if (demoMode) exitDemoMode();
     else enterDemoMode();
@@ -186,6 +217,9 @@ function App() {
               (activeView === "videos" && clipEditingVideo !== null) ||
               (activeView === "scripts" && showScriptForm)
             }
+            isRecording={isRecording}
+            onRecord={handleStartRecording}
+            onStopRecord={handleStopRecording}
             onAdd={() => {
               if (activeView === "text-snippets") {
                 setEditingSnippet(undefined);
@@ -282,6 +316,34 @@ function App() {
 
             {activeView === "scripts" && (
               <>
+                {isRecording && (
+                  <div
+                    className="mb-4 p-3 rounded-lg text-[12px] flex items-center gap-2 w-full"
+                    data-testid="recording-indicator"
+                    style={{
+                      backgroundColor: "var(--color-surface-inset)",
+                      border: "1px solid var(--color-danger)",
+                      color: "var(--color-danger)",
+                    }}
+                  >
+                    <Circle size={10} fill="currentColor" className="animate-pulse" />
+                    <span className="font-medium">Recording in progress...</span>
+                    <button
+                      onClick={handleStopRecording}
+                      className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+                      style={{ backgroundColor: "var(--color-danger)", color: "#fff" }}
+                      data-testid="stop-recording"
+                    >
+                      <Square size={10} fill="currentColor" /> Stop Recording
+                    </button>
+                  </div>
+                )}
+                {showRecordingDialog && (
+                  <RecordingSaveDialog
+                    onSave={handleSaveRecording}
+                    onCancel={() => { setShowRecordingDialog(false); }}
+                  />
+                )}
                 {ffmpegAvailable === false && (
                   <button
                     onClick={() => setShowFfmpegHelper(true)}
@@ -332,11 +394,17 @@ const VIEW_LABELS: Record<AppView, string> = {
 function ContentHeader({
   view,
   showForm,
+  isRecording,
+  onRecord,
+  onStopRecord,
   onAdd,
   onCloseForm,
 }: {
   view: AppView;
   showForm: boolean;
+  isRecording?: boolean;
+  onRecord?: () => void;
+  onStopRecord?: () => void;
   onAdd: () => void;
   onCloseForm: () => void;
 }) {
@@ -354,29 +422,119 @@ function ContentHeader({
       <h2 className="text-[13px] font-semibold" style={{ color: "var(--color-text)" }}>
         {VIEW_LABELS[view]}
       </h2>
-      {canAdd && !showForm && (
-        <button
-          onClick={onAdd}
-          className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
-          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
-          data-testid={
-            view === "text-snippets" ? "add-snippet" :
-            view === "video-snippets" ? "add-video-snippet" :
-            "add-script"
-          }
-        >
-          <Plus size={12} /> Add
-        </button>
-      )}
-      {showForm && (
-        <button
-          onClick={onCloseForm}
-          className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
-        >
-          <XIcon size={12} /> Cancel
-        </button>
-      )}
+      <div className="flex items-center gap-2">
+        {view === "scripts" && !showForm && !isRecording && (
+          <button
+            onClick={onRecord}
+            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+            style={{ backgroundColor: "var(--color-danger)", color: "#fff" }}
+            data-testid="record-script"
+          >
+            <Circle size={10} fill="currentColor" /> Record
+          </button>
+        )}
+        {view === "scripts" && isRecording && (
+          <button
+            onClick={onStopRecord}
+            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium animate-pulse"
+            style={{ backgroundColor: "var(--color-danger)", color: "#fff" }}
+            data-testid="stop-recording-header"
+          >
+            <Square size={10} fill="currentColor" /> Stop
+          </button>
+        )}
+        {canAdd && !showForm && (
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+            style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+            data-testid={
+              view === "text-snippets" ? "add-snippet" :
+              view === "video-snippets" ? "add-video-snippet" :
+              "add-script"
+            }
+          >
+            <Plus size={12} /> Add
+          </button>
+        )}
+        {showForm && (
+          <button
+            onClick={onCloseForm}
+            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+          >
+            <XIcon size={12} /> Cancel
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Recording save dialog ── */
+function RecordingSaveDialog({
+  onSave,
+  onCancel,
+}: {
+  onSave: (title: string, description: string) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+
+  return (
+    <div
+      className="mb-4 rounded-lg p-5"
+      style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
+      data-testid="recording-save-dialog"
+    >
+      <h3 className="text-[13px] font-semibold mb-3" style={{ color: "var(--color-text)" }}>
+        Save Recorded Script
+      </h3>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="My Recorded Script"
+            className="w-full rounded px-3 py-1.5 text-[12px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            data-testid="recording-title"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Description</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description"
+            className="w-full rounded px-3 py-1.5 text-[12px]"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            data-testid="recording-description"
+          />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-1.5 rounded text-[11px] font-medium"
+            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(title || "Untitled Recording", description)}
+            className="px-4 py-1.5 rounded text-[11px] font-medium"
+            style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+            data-testid="recording-save"
+          >
+            Save Script
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

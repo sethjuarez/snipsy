@@ -5,9 +5,9 @@ import type {
   TextSnippet,
   VideoSnippet,
 } from "../types";
-import { createBackendService, type BackendService } from "../services";
+import { getBackend, type BackendService } from "../services";
 
-const backend: BackendService = createBackendService();
+const backend: BackendService = getBackend();
 
 const STORAGE_KEY_LAST = "snipsy:lastProject";
 const STORAGE_KEY_RECENT = "snipsy:recentProjects";

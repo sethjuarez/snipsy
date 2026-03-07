@@ -233,4 +233,34 @@ export class MockBackendService implements BackendService {
     // Return a tiny 1x1 white JPEG as base64 for tests
     return "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AKwA//9k=";
   }
+
+  private _isRecording = false;
+
+  async startRecordingScript(_projectPath: string): Promise<string> {
+    this._isRecording = true;
+    return "screenshots/mock-start.png";
+  }
+
+  async stopRecordingScript(_projectPath: string, title: string, description: string): Promise<import("../types").Script> {
+    this._isRecording = false;
+    const script: import("../types").Script = {
+      id: `rec-${Date.now()}`,
+      title,
+      description,
+      steps: [
+        { action: "click", x: 500, y: 300, button: "left" },
+        { action: "type", text: "recorded text", delay: 30 },
+        { action: "keypress", key: "Enter" },
+      ],
+      outputVideo: "videos/recorded-mock.mp4",
+      platform: "windows",
+      recordedAt: new Date().toISOString(),
+    };
+    this._scripts.push(script);
+    return structuredClone(script);
+  }
+
+  async isRecording(): Promise<boolean> {
+    return this._isRecording;
+  }
 }

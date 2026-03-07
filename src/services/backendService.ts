@@ -72,4 +72,7 @@ export interface BackendService {
   getVideoFps(videoPath: string): Promise<number>;
   listMonitors(): Promise<MonitorInfo[]>;
   captureMonitorPreview(monitorName: string): Promise<string>;
+  startRecordingScript(projectPath: string): Promise<string>;
+  stopRecordingScript(projectPath: string, title: string, description: string): Promise<Script>;
+  isRecording(): Promise<boolean>;
 }

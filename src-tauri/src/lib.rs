@@ -5,12 +5,14 @@ mod elevation;
 mod focus;
 mod models;
 mod playback;
+mod recorder;
 mod scripting;
 mod tray;
 
 pub fn run() {
     tauri::Builder::default()
         .manage(demo::AppState::default())
+        .manage(recorder::RecorderState::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -37,6 +39,9 @@ pub fn run() {
             elevation::relaunch_as_admin,
             playback::play_video,
             playback::close_playback_window,
+            recorder::start_recording_script,
+            recorder::stop_recording_script,
+            recorder::is_recording,
             scripting::run_script,
             scripting::check_ffmpeg,
             scripting::install_ffmpeg,

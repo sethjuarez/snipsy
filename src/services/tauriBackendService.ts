@@ -158,4 +158,16 @@ export class TauriBackendService implements BackendService {
   async captureMonitorPreview(monitorName: string): Promise<string> {
     return invoke<string>("capture_monitor_preview", { monitorName });
   }
+
+  async startRecordingScript(projectPath: string): Promise<string> {
+    return invoke<string>("start_recording_script", { projectPath });
+  }
+
+  async stopRecordingScript(projectPath: string, title: string, description: string): Promise<import("../types").Script> {
+    return invoke<import("../types").Script>("stop_recording_script", { projectPath, title, description });
+  }
+
+  async isRecording(): Promise<boolean> {
+    return invoke<boolean>("is_recording");
+  }
 }
