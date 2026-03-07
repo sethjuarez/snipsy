@@ -21,6 +21,7 @@ pub async fn play_video(
     end_time: f64,
     speed: f64,
     transition_actions: Option<Vec<TransitionAction>>,
+    target_monitor: Option<String>,
 ) -> Result<(), String> {
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
@@ -36,15 +37,45 @@ pub async fn play_video(
         speed
     );
 
-    WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))
+    let mut builder = WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))
         .initialization_script("window.__IS_PLAYBACK = true;")
         .title("Snipsy Playback")
         .decorations(false)
         .always_on_top(true)
-        .fullscreen(true)
         .resizable(false)
         .focused(true)
-        .skip_taskbar(true)
+        .skip_taskbar(true);
+
+    // Position on selected monitor, or default to fullscreen on primary
+    let mut positioned = false;
+    if let Some(ref mon_name) = target_monitor {
+        if let Ok(monitors) = xcap::Monitor::all() {
+            if let Some(mon) = monitors.iter().find(|m| m.name().unwrap_or_default() == *mon_name) {
+                let w = mon.width().unwrap_or(1920);
+                let h = mon.height().unwrap_or(1080);
+                let x = mon.x().unwrap_or(0);
+                let y = mon.y().unwrap_or(0);
+                let scale = mon.scale_factor().unwrap_or(1.0) as f64;
+
+                // Convert physical to logical coordinates for Tauri
+                let logical_w = w as f64 / scale;
+                let logical_h = h as f64 / scale;
+                let logical_x = x as f64 / scale;
+                let logical_y = y as f64 / scale;
+
+                builder = builder
+                    .inner_size(logical_w, logical_h)
+                    .position(logical_x, logical_y);
+                positioned = true;
+            }
+        }
+    }
+
+    if !positioned {
+        builder = builder.fullscreen(true);
+    }
+
+    builder
         .build()
         .map_err(|e| format!("Failed to create playback window: {}", e))?;
 

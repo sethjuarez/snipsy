@@ -274,6 +274,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       snippet.endTime,
       snippet.speed,
       snippet.transitionActions,
+      snippet.targetMonitor,
     );
   },
 }));

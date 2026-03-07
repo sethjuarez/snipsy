@@ -148,6 +148,7 @@ export class MockBackendService implements BackendService {
     _endTime: number,
     _speed: number,
     _transitionActions?: import("../types").TransitionAction[],
+    _targetMonitor?: string,
   ): Promise<void> {
     // Mock: no-op in test mode
   }
