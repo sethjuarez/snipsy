@@ -38,6 +38,8 @@ pub struct VideoSnippet {
     pub hotkey: String,
     pub speed: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_monitor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transition_actions: Option<Vec<TransitionAction>>,
 }
 
