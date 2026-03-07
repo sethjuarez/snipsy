@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/sethjuarez/snipsy/compare/v0.3.0...v0.4.0) (2026-03-07)
+
+
+### Features
+
+* enhanced script data model with platform tagging, window-relative coords, and L3-forward schema ([3b4a133](https://github.com/sethjuarez/snipsy/commit/3b4a1339aa4e8c69d66ff6b19f2c792926f0827f))
+* modifier combo replay, FFmpeg guard, and script polish ([5e1d1df](https://github.com/sethjuarez/snipsy/commit/5e1d1dfe242ecadb9989c1bb8930569035b12841))
+* script recording infrastructure with rdev global input capture and recording UI ([b8bc2f4](https://github.com/sethjuarez/snipsy/commit/b8bc2f4fcbcce461bbbe74f7d85332c2a6d5fd30))
+* window-relative coordinate replay and Replay & Record button ([4a86ba6](https://github.com/sethjuarez/snipsy/commit/4a86ba61e600a3fa43d417dc1910395e38d4f032))
+
+
+### CI/CD
+
+* add libpipewire-0.3-dev for rdev on Linux ([025648c](https://github.com/sethjuarez/snipsy/commit/025648c8a3f8553804d3ddc2fd0f3ffe80d6a956))
+
 ## [0.3.0](https://github.com/sethjuarez/snipsy/compare/v0.2.0...v0.3.0) (2026-03-07)
 
 
