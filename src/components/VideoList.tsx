@@ -84,7 +84,7 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
           No videos imported yet.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3" data-testid="video-list">
+        <div className="flex flex-col gap-2" data-testid="video-list">
           {videos.map((video, i) => {
             const thumbUrl = video.thumbnailPath && convertFileSrc
               ? convertFileSrc(video.thumbnailPath)
@@ -94,14 +94,14 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
             return (
               <div
                 key={video.relativePath}
-                className="rounded-lg overflow-hidden"
+                className="flex items-center gap-3 rounded-lg px-3 py-2"
                 style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
                 data-testid={`video-item-${i}`}
               >
                 {/* Thumbnail */}
                 <div
-                  className="relative w-full flex items-center justify-center overflow-hidden"
-                  style={{ aspectRatio: "16/9", backgroundColor: "var(--color-surface-inset)" }}
+                  className="shrink-0 rounded overflow-hidden flex items-center justify-center"
+                  style={{ width: 80, height: 45, backgroundColor: "var(--color-surface-inset)" }}
                 >
                   {thumbUrl ? (
                     <img
@@ -111,54 +111,45 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
                       draggable={false}
                     />
                   ) : (
-                    <FileVideo size={32} style={{ color: "var(--color-text-secondary)", opacity: 0.4 }} />
+                    <FileVideo size={18} style={{ color: "var(--color-text-secondary)", opacity: 0.4 }} />
                   )}
                 </div>
 
-                {/* Info */}
-                <div className="px-3 py-2.5 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <span
-                      className="text-[12px] font-medium truncate"
-                      style={{ color: "var(--color-text)" }}
-                      title={video.name}
-                    >
-                      {video.name}
-                    </span>
-                    <span
-                      className="flex items-center gap-1 text-[11px] shrink-0"
-                      style={{ color: "var(--color-text-secondary)" }}
-                    >
-                      <Film size={11} /> {count}
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onCreateClip(video)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-[11px] font-medium"
-                      style={{
-                        backgroundColor: "var(--color-accent)",
-                        color: "#fff",
-                      }}
-                      data-testid={`create-clip-${i}`}
-                    >
-                      <Scissors size={11} /> Create Clip
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(video)}
-                      className="flex items-center justify-center px-2 py-1.5 rounded text-[11px]"
-                      style={{
-                        backgroundColor: "var(--color-surface-inset)",
-                        color: "var(--color-danger, #ef4444)",
-                      }}
-                      data-testid={`delete-video-${i}`}
-                      title="Remove video"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
+                {/* Name + clip count */}
+                <div className="flex-1 min-w-0">
+                  <span
+                    className="block text-[12px] font-medium truncate"
+                    style={{ color: "var(--color-text)" }}
+                    title={video.name}
+                  >
+                    {video.name}
+                  </span>
+                  <span
+                    className="flex items-center gap-1 text-[11px] mt-0.5"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    <Film size={10} /> {count} clip{count !== 1 ? "s" : ""}
+                  </span>
                 </div>
+
+                {/* Actions */}
+                <button
+                  onClick={() => onCreateClip(video)}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] font-medium"
+                  style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+                  data-testid={`create-clip-${i}`}
+                >
+                  <Scissors size={11} /> Create Clip
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(video)}
+                  className="shrink-0 flex items-center justify-center w-7 h-7 rounded"
+                  style={{ color: "var(--color-danger, #ef4444)" }}
+                  data-testid={`delete-video-${i}`}
+                  title="Remove video"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             );
           })}
