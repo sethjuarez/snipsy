@@ -47,9 +47,16 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
-  const [speed, setSpeed] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState<"start" | "end" | null>(null);
+  const [targetDuration, setTargetDuration] = useState<string>("");
+
+  // Derived: clip duration and computed speed
+  const clipDuration = endTime - startTime;
+  const targetSec = parseFloat(targetDuration);
+  const computedSpeed = targetSec > 0 ? clipDuration / targetSec : 1;
+  // Effective playback speed (target duration overrides 1× default)
+  const effectiveSpeed = targetSec > 0 ? computedSpeed : 1;
 
   // Metadata fields
   const [title, setTitle] = useState("");
@@ -113,7 +120,9 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
         if (videoRef.current) videoRef.current.currentTime = Math.max(0, clamped);
       } else {
         const clamped = Math.max(t, startTime + 0.1);
-        setEndTime(Math.min(duration, clamped));
+        const val = Math.min(duration, clamped);
+        setEndTime(val);
+        if (videoRef.current) videoRef.current.currentTime = val;
       }
     };
     const onUp = () => setDragging(null);
@@ -142,10 +151,10 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
       vid.pause();
     } else {
       vid.currentTime = startTime;
-      vid.playbackRate = speed;
+      vid.playbackRate = effectiveSpeed;
       vid.play();
     }
-  }, [playing, startTime, speed]);
+  }, [playing, startTime, effectiveSpeed]);
 
   const handleHotkeyCapture = (e: React.KeyboardEvent) => {
     e.preventDefault();
@@ -164,7 +173,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
       videoFile: video.relativePath,
       startTime,
       endTime,
-      speed,
+      speed: effectiveSpeed,
       hotkey,
     });
   };
@@ -251,27 +260,36 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
           </span>
         </div>
 
-        {/* Row 1: Duration + Speed buttons + Preview */}
+        {/* Row 1: Clip duration + target playback time + Preview */}
         <div className="flex items-center gap-3">
           <span className="text-[11px] shrink-0" style={{ color: "var(--color-text-secondary)" }}>
-            {formatTime(endTime - startTime)}
+            Clip: {formatTime(clipDuration)}
           </span>
-          <div className="flex items-center gap-1">
-            {[0.5, 1, 1.5, 2, 3].map((s) => (
-              <button
-                key={s}
-                onClick={() => setSpeed(s)}
-                className="px-2 py-0.5 rounded text-[10px] font-medium"
-                style={{
-                  backgroundColor: speed === s ? "var(--color-accent)" : "var(--color-surface-inset)",
-                  color: speed === s ? "#fff" : "var(--color-text)",
-                  border: `1px solid ${speed === s ? "var(--color-accent)" : "var(--color-border)"}`,
-                }}
-                data-testid={`speed-${s}`}
-              >
-                {s}×
-              </button>
-            ))}
+          <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>→</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>Play in</span>
+            <input
+              type="text"
+              value={targetDuration}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9.]/g, "");
+                setTargetDuration(val);
+              }}
+              placeholder={`${Math.round(clipDuration)}s`}
+              className="w-14 px-1.5 py-0.5 rounded text-[11px] text-center font-mono"
+              style={{
+                backgroundColor: "var(--color-surface-inset)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+              }}
+              data-testid="target-duration"
+            />
+            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>s</span>
+            {targetSec > 0 && (
+              <span className="text-[10px] font-mono" style={{ color: "var(--color-text-secondary)" }}>
+                ({computedSpeed.toFixed(1)}×)
+              </span>
+            )}
           </div>
           <div className="flex-1" />
           <button
