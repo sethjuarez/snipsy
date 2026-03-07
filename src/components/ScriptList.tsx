@@ -1,4 +1,4 @@
-import { Pencil, Trash2, Monitor } from "lucide-react";
+import { Pencil, Trash2, Monitor, Play } from "lucide-react";
 import type { Script } from "../types";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -11,9 +11,10 @@ interface ScriptListProps {
   scripts: Script[];
   onEdit: (script: Script) => void;
   onDelete: (id: string) => void;
+  onRun?: (scriptId: string) => void;
 }
 
-function ScriptList({ scripts, onEdit, onDelete }: ScriptListProps) {
+function ScriptList({ scripts, onEdit, onDelete, onRun }: ScriptListProps) {
   if (scripts.length === 0) {
     return (
       <div
@@ -63,6 +64,16 @@ function ScriptList({ scripts, onEdit, onDelete }: ScriptListProps) {
             </p>
           </div>
           <div className="flex items-center gap-2 ml-4">
+            {onRun && (
+              <button
+                onClick={() => onRun(script.id)}
+                className="flex items-center gap-1 text-[12px]"
+                style={{ color: "var(--color-success, #22c55e)" }}
+                data-testid={`script-run-${script.id}`}
+              >
+                <Play size={12} /> Replay & Record
+              </button>
+            )}
             <button
               onClick={() => onEdit(script)}
               className="flex items-center gap-1 text-[12px]"

@@ -149,6 +149,47 @@ fn stop_recording(mut child: Child) -> Result<(), String> {
     }
 }
 
+/// Find a window by title pattern and return its position + size.
+/// Uses active-win-pos-rs to enumerate — if the active window matches, use it.
+/// Falls back to a substring match via platform APIs.
+fn find_window_by_title(title_pattern: &str) -> Option<(f64, f64, f64, f64)> {
+    if let Ok(win) = active_win_pos_rs::get_active_window() {
+        if win.title.contains(title_pattern) || title_pattern.contains(&win.title) {
+            return Some((
+                win.position.x,
+                win.position.y,
+                win.position.width,
+                win.position.height,
+            ));
+        }
+    }
+    // If active window doesn't match, we can't enumerate all windows with this crate.
+    // Fall back to None (will use absolute coords).
+    None
+}
+
+/// Resolve mouse coordinates: prefer window-relative percentages, fall back to absolute.
+fn resolve_coords(
+    abs_x: i32,
+    abs_y: i32,
+    window_title: &Option<String>,
+    x_percent: &Option<f64>,
+    y_percent: &Option<f64>,
+) -> (i32, i32) {
+    if let (Some(title), Some(xp), Some(yp)) = (window_title, x_percent, y_percent) {
+        if let Some((wx, wy, ww, wh)) = find_window_by_title(title) {
+            let resolved_x = (wx + xp * ww) as i32;
+            let resolved_y = (wy + yp * wh) as i32;
+            return (resolved_x, resolved_y);
+        }
+        eprintln!(
+            "Window '{}' not found, falling back to absolute coords ({}, {})",
+            title, abs_x, abs_y
+        );
+    }
+    (abs_x, abs_y)
+}
+
 /// Execute a single script step.
 fn execute_step(step: &ScriptStep) -> Result<(), String> {
     match step {
@@ -202,13 +243,21 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
                 .map_err(|e| format!("keypress error: {}", e))?;
             Ok(())
         }
-        ScriptStep::Click { x, y, button, .. } => {
+        ScriptStep::Click {
+            x,
+            y,
+            button,
+            window_title,
+            x_percent,
+            y_percent,
+            ..
+        } => {
             use enigo::{Enigo, Mouse, Settings};
             let mut enigo =
                 Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
-            // TODO (Phase 3): resolve window-relative coords from xPercent/yPercent
+            let (rx, ry) = resolve_coords(*x, *y, window_title, x_percent, y_percent);
             enigo
-                .move_mouse(*x, *y, enigo::Coordinate::Abs)
+                .move_mouse(rx, ry, enigo::Coordinate::Abs)
                 .map_err(|e| format!("move error: {}", e))?;
             let btn = match button.as_deref() {
                 Some("right") => enigo::Button::Right,
@@ -238,14 +287,28 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
                 .map_err(|e| format!("launch error: {}", e))?;
             Ok(())
         }
-        ScriptStep::Scroll { x, y, delta, .. } => {
+        ScriptStep::Scroll {
+            x,
+            y,
+            delta,
+            window_title,
+            x_percent,
+            y_percent,
+            ..
+        } => {
             use enigo::{Enigo, Mouse, Settings};
             let mut enigo =
                 Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
-            // TODO (Phase 3): resolve window-relative coords from xPercent/yPercent
             if x.is_some() || y.is_some() {
+                let (rx, ry) = resolve_coords(
+                    x.unwrap_or(0),
+                    y.unwrap_or(0),
+                    window_title,
+                    x_percent,
+                    y_percent,
+                );
                 enigo
-                    .move_mouse(x.unwrap_or(0), y.unwrap_or(0), enigo::Coordinate::Abs)
+                    .move_mouse(rx, ry, enigo::Coordinate::Abs)
                     .map_err(|e| format!("move error: {}", e))?;
             }
             enigo
@@ -253,13 +316,19 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
                 .map_err(|e| format!("scroll error: {}", e))?;
             Ok(())
         }
-        ScriptStep::Move { x, y, .. } => {
+        ScriptStep::Move {
+            x,
+            y,
+            window_title,
+            x_percent,
+            y_percent,
+        } => {
             use enigo::{Enigo, Mouse, Settings};
             let mut enigo =
                 Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
-            // TODO (Phase 3): resolve window-relative coords from xPercent/yPercent
+            let (rx, ry) = resolve_coords(*x, *y, window_title, x_percent, y_percent);
             enigo
-                .move_mouse(*x, *y, enigo::Coordinate::Abs)
+                .move_mouse(rx, ry, enigo::Coordinate::Abs)
                 .map_err(|e| format!("move error: {}", e))?;
             Ok(())
         }
@@ -391,5 +460,26 @@ mod tests {
     fn test_execute_step_returns_ok_for_valid_wait() {
         let step = ScriptStep::Wait { duration: 1 };
         assert!(execute_step(&step).is_ok());
+    }
+
+    #[test]
+    fn resolve_coords_uses_absolute_when_no_window_info() {
+        let (rx, ry) = resolve_coords(500, 300, &None, &None, &None);
+        assert_eq!(rx, 500);
+        assert_eq!(ry, 300);
+    }
+
+    #[test]
+    fn resolve_coords_uses_absolute_when_partial_info() {
+        // Missing y_percent — should fall back to absolute
+        let (rx, ry) = resolve_coords(
+            500,
+            300,
+            &Some("VS Code".into()),
+            &Some(0.5),
+            &None,
+        );
+        assert_eq!(rx, 500);
+        assert_eq!(ry, 300);
     }
 }

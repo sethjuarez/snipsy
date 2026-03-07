@@ -550,14 +550,6 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
 mod tests {
     use super::*;
 
-    fn make_event(offset_ms: u64, kind: RawEventKind) -> RawEvent {
-        let base = Instant::now();
-        RawEvent {
-            timestamp: base + Duration::from_millis(offset_ms),
-            kind,
-        }
-    }
-
     #[test]
     fn consolidate_empty_events() {
         let steps = consolidate_events(&[]);

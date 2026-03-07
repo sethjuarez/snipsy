@@ -181,6 +181,16 @@ function App() {
     }
   }, [projectPath, loadScripts]);
 
+  const handleRunScript = useCallback(async (scriptId: string) => {
+    if (!projectPath) return;
+    try {
+      const outputVideo = await backend.runScript(projectPath, scriptId);
+      alert(`Script completed! Output saved to: ${outputVideo}`);
+    } catch (e) {
+      alert(`Script execution failed: ${e}`);
+    }
+  }, [projectPath]);
+
   const handleToggleDemo = () => {
     if (demoMode) exitDemoMode();
     else enterDemoMode();
@@ -363,7 +373,7 @@ function App() {
                     <ScriptForm script={editingScript} onSave={handleScriptSave} onCancel={handleScriptCancel} />
                   </div>
                 ) : (
-                  <ScriptList scripts={scripts} onEdit={handleScriptEdit} onDelete={handleScriptDelete} />
+                  <ScriptList scripts={scripts} onEdit={handleScriptEdit} onDelete={handleScriptDelete} onRun={handleRunScript} />
                 )}
               </>
             )}
