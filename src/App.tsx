@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useProjectStore } from "./stores/projectStore";
+import { useUpdateStore } from "./stores/updateStore";
 import { Plus, AlertTriangle, X as XIcon, Circle, Square } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
@@ -55,6 +56,8 @@ function App() {
   // Auto-open last project on startup
   useEffect(() => {
     autoOpenLastProject();
+    // Silent update check on startup
+    useUpdateStore.getState().checkForUpdate();
   }, [autoOpenLastProject]);
 
   // Listen for tray "Exit Demo Mode" event

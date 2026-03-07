@@ -3,6 +3,7 @@ import { useTheme } from "../hooks/useTheme";
 import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert } from "lucide-react";
 import { getBackend } from "../services";
 import appIcon from "../assets/icon.png";
+import UpdateIndicator from "./UpdateIndicator";
 
 interface TitleBarProps {
   projectName: string | null;
@@ -127,6 +128,9 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           >
             {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
           </button>
+
+          {/* Update indicator */}
+          <UpdateIndicator />
         </div>
 
         {/* Separator */}
