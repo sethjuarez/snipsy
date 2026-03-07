@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/sethjuarez/snipsy/compare/v0.4.0...v0.5.0) (2026-03-07)
+
+
+### Features
+
+* add hide cursor option to video clips ([77c744a](https://github.com/sethjuarez/snipsy/commit/77c744a009d4a0d75fea7b47b2c76d2e109767b3))
+* cursor visibility indicator on video snippet list ([3d442eb](https://github.com/sethjuarez/snipsy/commit/3d442eb95666566b43a5121d81003c0be39f2c9b))
+* drag-and-drop reordering for text snippets ([ce802a0](https://github.com/sethjuarez/snipsy/commit/ce802a02ff2a593619e5c1b7c8fa8f8dc467094a))
+* show version badge in status bar with -dev suffix in dev mode ([21562f7](https://github.com/sethjuarez/snipsy/commit/21562f73daac3b690a4931e19a4c7200f7d9dfdd))
+
+
+### Bug Fixes
+
+* recorder captures window context at click time, fixes scroll coalescing ([9ec7f71](https://github.com/sethjuarez/snipsy/commit/9ec7f71dc489f73f18bff0c5ebdc0e4ed3c9a22f))
+
 ## [0.4.0](https://github.com/sethjuarez/snipsy/compare/v0.3.0...v0.4.0) (2026-03-07)
 
 
