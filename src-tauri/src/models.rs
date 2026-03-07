@@ -64,10 +64,16 @@ pub struct Script {
     pub description: String,
     pub steps: Vec<ScriptStep>,
     pub output_video: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_screenshot: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "action", rename_all = "camelCase")]
+#[serde(tag = "action")]
 pub enum ScriptStep {
     #[serde(rename = "launch")]
     Launch { target: String },
@@ -79,17 +85,61 @@ pub enum ScriptStep {
     },
     #[serde(rename = "keypress")]
     Keypress { key: String },
-    #[serde(rename = "click")]
-    Click { x: i32, y: i32 },
+    #[serde(rename = "click", rename_all = "camelCase")]
+    Click {
+        x: i32,
+        y: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window_title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window_class: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        x_percent: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        y_percent: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        button: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        automation_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        control_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        control_type: Option<String>,
+    },
     #[serde(rename = "wait")]
     Wait { duration: u64 },
-    #[serde(rename = "scroll")]
+    #[serde(rename = "scroll", rename_all = "camelCase")]
     Scroll {
+        delta: i32,
         #[serde(skip_serializing_if = "Option::is_none")]
         x: Option<i32>,
         #[serde(skip_serializing_if = "Option::is_none")]
         y: Option<i32>,
-        delta: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window_title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window_class: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        x_percent: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        y_percent: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        automation_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        control_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        control_type: Option<String>,
+    },
+    #[serde(rename = "move", rename_all = "camelCase")]
+    Move {
+        x: i32,
+        y: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        window_title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        x_percent: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        y_percent: Option<f64>,
     },
 }
 
@@ -226,5 +276,73 @@ mod tests {
         let re_json = serde_json::to_string(&script).unwrap();
         let re_script: Script = serde_json::from_str(&re_json).unwrap();
         assert_eq!(script, re_script);
+    }
+
+    #[test]
+    fn script_with_platform_and_window_context() {
+        let json = r#"{
+            "id": "recorded-1",
+            "title": "Recorded Demo",
+            "description": "A recorded script",
+            "platform": "windows",
+            "startScreenshot": "screenshots/start.png",
+            "recordedAt": "2026-03-07T02:00:00Z",
+            "steps": [
+                { "action": "click", "x": 500, "y": 300, "windowTitle": "VS Code", "windowClass": "Chrome_WidgetWin_1", "xPercent": 0.35, "yPercent": 0.42, "button": "left" },
+                { "action": "type", "text": "hello", "delay": 30 },
+                { "action": "scroll", "delta": -3, "x": 400, "y": 200, "windowTitle": "VS Code", "xPercent": 0.28, "yPercent": 0.28 },
+                { "action": "move", "x": 600, "y": 400, "windowTitle": "Terminal", "xPercent": 0.5, "yPercent": 0.6 }
+            ],
+            "outputVideo": "videos/recorded.mp4"
+        }"#;
+        let script: Script = serde_json::from_str(json).unwrap();
+        assert_eq!(script.platform.as_deref(), Some("windows"));
+        assert_eq!(script.start_screenshot.as_deref(), Some("screenshots/start.png"));
+        assert_eq!(script.recorded_at.as_deref(), Some("2026-03-07T02:00:00Z"));
+        assert_eq!(script.steps.len(), 4);
+
+        // Verify click has window context
+        if let ScriptStep::Click { x, y, window_title, x_percent, button, .. } = &script.steps[0] {
+            assert_eq!(*x, 500);
+            assert_eq!(*y, 300);
+            assert_eq!(window_title.as_deref(), Some("VS Code"));
+            assert!((x_percent.unwrap() - 0.35).abs() < 0.001);
+            assert_eq!(button.as_deref(), Some("left"));
+        } else {
+            panic!("Expected Click step");
+        }
+
+        // Verify move step
+        if let ScriptStep::Move { x, y, window_title, x_percent, .. } = &script.steps[3] {
+            assert_eq!(*x, 600);
+            assert_eq!(*y, 400);
+            assert_eq!(window_title.as_deref(), Some("Terminal"));
+            assert!((x_percent.unwrap() - 0.5).abs() < 0.001);
+        } else {
+            panic!("Expected Move step");
+        }
+
+        // Round trip
+        let re_json = serde_json::to_string(&script).unwrap();
+        let re_script: Script = serde_json::from_str(&re_json).unwrap();
+        assert_eq!(script, re_script);
+    }
+
+    #[test]
+    fn legacy_script_without_platform_deserializes() {
+        let json = r#"{
+            "id": "old-1",
+            "title": "Old Script",
+            "description": "No platform field",
+            "steps": [
+                { "action": "click", "x": 100, "y": 200 },
+                { "action": "scroll", "delta": 5 }
+            ],
+            "outputVideo": "videos/old.mp4"
+        }"#;
+        let script: Script = serde_json::from_str(json).unwrap();
+        assert!(script.platform.is_none());
+        assert!(script.start_screenshot.is_none());
+        assert_eq!(script.steps.len(), 2);
     }
 }

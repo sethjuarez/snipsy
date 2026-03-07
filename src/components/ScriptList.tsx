@@ -1,5 +1,11 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Monitor } from "lucide-react";
 import type { Script } from "../types";
+
+const PLATFORM_LABELS: Record<string, string> = {
+  windows: "Windows",
+  macos: "macOS",
+  linux: "Linux",
+};
 
 interface ScriptListProps {
   scripts: Script[];
@@ -40,6 +46,12 @@ function ScriptList({ scripts, onEdit, onDelete }: ScriptListProps) {
               <span className="text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-warning)" }}>
                 {script.steps.length} step{script.steps.length !== 1 && "s"}
               </span>
+              {script.platform && (
+                <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid={`script-platform-${script.id}`}>
+                  <Monitor size={10} />
+                  {PLATFORM_LABELS[script.platform] ?? script.platform}
+                </span>
+              )}
             </div>
             {script.description && (
               <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>

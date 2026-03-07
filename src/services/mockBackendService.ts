@@ -65,6 +65,8 @@ export class MockBackendService implements BackendService {
         { action: "keypress", key: "Enter" },
       ],
       outputVideo: "videos/build-demo.mp4",
+      platform: "windows",
+      recordedAt: "2026-03-01T12:00:00Z",
     },
   ];
 

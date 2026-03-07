@@ -202,15 +202,21 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
                 .map_err(|e| format!("keypress error: {}", e))?;
             Ok(())
         }
-        ScriptStep::Click { x, y } => {
+        ScriptStep::Click { x, y, button, .. } => {
             use enigo::{Enigo, Mouse, Settings};
             let mut enigo =
                 Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
+            // TODO (Phase 3): resolve window-relative coords from xPercent/yPercent
             enigo
                 .move_mouse(*x, *y, enigo::Coordinate::Abs)
                 .map_err(|e| format!("move error: {}", e))?;
+            let btn = match button.as_deref() {
+                Some("right") => enigo::Button::Right,
+                Some("middle") => enigo::Button::Middle,
+                _ => enigo::Button::Left,
+            };
             enigo
-                .button(enigo::Button::Left, enigo::Direction::Click)
+                .button(btn, enigo::Direction::Click)
                 .map_err(|e| format!("click error: {}", e))?;
             Ok(())
         }
@@ -232,10 +238,11 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
                 .map_err(|e| format!("launch error: {}", e))?;
             Ok(())
         }
-        ScriptStep::Scroll { x, y, delta } => {
+        ScriptStep::Scroll { x, y, delta, .. } => {
             use enigo::{Enigo, Mouse, Settings};
             let mut enigo =
                 Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
+            // TODO (Phase 3): resolve window-relative coords from xPercent/yPercent
             if x.is_some() || y.is_some() {
                 enigo
                     .move_mouse(x.unwrap_or(0), y.unwrap_or(0), enigo::Coordinate::Abs)
@@ -244,6 +251,16 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
             enigo
                 .scroll(*delta, enigo::Axis::Vertical)
                 .map_err(|e| format!("scroll error: {}", e))?;
+            Ok(())
+        }
+        ScriptStep::Move { x, y, .. } => {
+            use enigo::{Enigo, Mouse, Settings};
+            let mut enigo =
+                Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
+            // TODO (Phase 3): resolve window-relative coords from xPercent/yPercent
+            enigo
+                .move_mouse(*x, *y, enigo::Coordinate::Abs)
+                .map_err(|e| format!("move error: {}", e))?;
             Ok(())
         }
     }
@@ -258,6 +275,22 @@ pub async fn run_script(project_path: String, script_id: String) -> Result<Strin
         .map_err(|e| format!("Failed to read script: {}", e))?;
     let script: Script =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse script: {}", e))?;
+
+    // Platform guard: refuse to run scripts recorded on a different OS
+    if let Some(ref platform) = script.platform {
+        let current = match std::env::consts::OS {
+            "windows" => "windows",
+            "macos" => "macos",
+            "linux" => "linux",
+            other => other,
+        };
+        if platform != current {
+            return Err(format!(
+                "This script was recorded on {} and cannot run on {}. Scripts are OS-specific.",
+                platform, current
+            ));
+        }
+    }
 
     let output_path = PathBuf::from(&project_path).join(&script.output_video);
     if let Some(parent) = output_path.parent() {

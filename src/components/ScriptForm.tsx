@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Monitor } from "lucide-react";
 import type { Script, ScriptStep } from "../types";
 
 interface ScriptFormProps {
@@ -70,6 +71,9 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       description: description.trim(),
       steps,
       outputVideo: outputVideo.trim(),
+      platform: script?.platform,
+      startScreenshot: script?.startScreenshot,
+      recordedAt: script?.recordedAt,
     });
   };
 
@@ -79,6 +83,19 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       className="space-y-4"
       data-testid="script-form"
     >
+      {script?.platform && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid="script-platform-badge">
+            <Monitor size={10} />
+            {script.platform}
+          </span>
+          {script.recordedAt && (
+            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+              Recorded {new Date(script.recordedAt).toLocaleDateString()}
+            </span>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>

@@ -47,13 +47,55 @@ export interface VideoSnippet {
   transitionActions?: TransitionAction[];
 }
 
+export type ScriptPlatform = "windows" | "macos" | "linux";
+
+export type MouseButton = "left" | "right" | "middle";
+
 export type ScriptStep =
   | { action: "launch"; target: string }
   | { action: "type"; text: string; delay?: number }
   | { action: "keypress"; key: string }
-  | { action: "click"; x: number; y: number }
+  | {
+      action: "click";
+      // Legacy absolute coords (always present for backward compat)
+      x: number;
+      y: number;
+      // Window-relative context (present on newly recorded scripts)
+      windowTitle?: string;
+      windowClass?: string;
+      xPercent?: number;
+      yPercent?: number;
+      button?: MouseButton;
+      // L3-forward fields (reserved for future UI Automation)
+      automationId?: string;
+      controlName?: string;
+      controlType?: string;
+    }
   | { action: "wait"; duration: number }
-  | { action: "scroll"; x?: number; y?: number; delta: number };
+  | {
+      action: "scroll";
+      delta: number;
+      // Legacy absolute coords
+      x?: number;
+      y?: number;
+      // Window-relative context
+      windowTitle?: string;
+      windowClass?: string;
+      xPercent?: number;
+      yPercent?: number;
+      // L3-forward fields
+      automationId?: string;
+      controlName?: string;
+      controlType?: string;
+    }
+  | {
+      action: "move";
+      windowTitle?: string;
+      xPercent?: number;
+      yPercent?: number;
+      x: number;
+      y: number;
+    };
 
 export interface Script {
   id: string;
@@ -61,6 +103,9 @@ export interface Script {
   description: string;
   steps: ScriptStep[];
   outputVideo: string;
+  platform?: ScriptPlatform;
+  startScreenshot?: string;
+  recordedAt?: string;
 }
 
 export interface ImportedVideo {

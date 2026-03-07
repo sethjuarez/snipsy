@@ -648,6 +648,9 @@ mod tests {
                 },
             ],
             output_video: "videos/build-demo.mp4".into(),
+            platform: Some("windows".into()),
+            start_screenshot: None,
+            recorded_at: None,
         };
 
         save_script(
@@ -680,6 +683,9 @@ mod tests {
             description: "Will be deleted".into(),
             steps: vec![],
             output_video: "videos/output.mp4".into(),
+            platform: None,
+            start_screenshot: None,
+            recorded_at: None,
         };
 
         save_script(
