@@ -156,7 +156,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
     setCurrentTime(t);
   }, [getTimeFromMouseEvent]);
 
-  const nudgeHandle = useCallback((handle: "start" | "end", direction: 1 | -1) => {
+  const nudgeHandle = (handle: "start" | "end", direction: 1 | -1) => {
     const step = frameDuration * direction;
     if (handle === "start") {
       const val = Math.max(0, Math.min(startTime + step, endTime - frameDuration));
@@ -167,9 +167,9 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
       setEndTime(val);
       if (videoRef.current) videoRef.current.currentTime = val;
     }
-  }, [frameDuration, startTime, endTime, duration]);
+  };
 
-  const handleTimelineKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleTimelineKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowLeft") {
       e.preventDefault();
       nudgeHandle(activeHandle, -1);
@@ -177,7 +177,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
       e.preventDefault();
       nudgeHandle(activeHandle, 1);
     }
-  }, [activeHandle, nudgeHandle]);
+  };
 
   const handlePreview = useCallback(() => {
     const vid = videoRef.current;
