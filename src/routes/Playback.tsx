@@ -101,7 +101,7 @@ function Playback() {
   return (
     <div
       className="bg-black flex items-center justify-center"
-      style={{ position: "fixed", inset: 0 }}
+      style={{ position: "fixed", inset: 0, cursor: "none" }}
       data-testid="playback-container"
     >
       <video
