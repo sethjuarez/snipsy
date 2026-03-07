@@ -61,31 +61,28 @@ pub async fn play_video(
         .skip_taskbar(true);
 
     // Position on selected monitor, or default to fullscreen on primary
-    let mut positioned = false;
     if let Some(ref mon_name) = target_monitor {
         if let Ok(monitors) = xcap::Monitor::all() {
             if let Some(mon) = monitors.iter().find(|m| m.name().unwrap_or_default() == *mon_name) {
-                let w = mon.width().unwrap_or(1920);
-                let h = mon.height().unwrap_or(1080);
                 let x = mon.x().unwrap_or(0);
                 let y = mon.y().unwrap_or(0);
                 let scale = mon.scale_factor().unwrap_or(1.0) as f64;
 
-                // Convert physical to logical coordinates for Tauri
-                let logical_w = w as f64 / scale;
-                let logical_h = h as f64 / scale;
+                // xcap returns physical coords; Tauri position() takes logical coords
                 let logical_x = x as f64 / scale;
                 let logical_y = y as f64 / scale;
 
+                // Place window on the target monitor, then fullscreen it there
                 builder = builder
-                    .inner_size(logical_w, logical_h)
-                    .position(logical_x, logical_y);
-                positioned = true;
+                    .position(logical_x, logical_y)
+                    .fullscreen(true);
+            } else {
+                builder = builder.fullscreen(true);
             }
+        } else {
+            builder = builder.fullscreen(true);
         }
-    }
-
-    if !positioned {
+    } else {
         builder = builder.fullscreen(true);
     }
 

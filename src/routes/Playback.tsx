@@ -100,7 +100,8 @@ function Playback() {
 
   return (
     <div
-      className="min-h-screen bg-black flex items-center justify-center"
+      className="bg-black flex items-center justify-center"
+      style={{ position: "fixed", inset: 0 }}
       data-testid="playback-container"
     >
       <video
@@ -113,8 +114,8 @@ function Playback() {
         data-end={end}
         data-speed={speed}
         data-end-behavior={endBehavior}
-        className="w-full h-full object-contain"
-        style={{ maxWidth: "100vw", maxHeight: "100vh" }}
+        className="object-contain"
+        style={{ width: "100%", height: "100%" }}
       />
     </div>
   );
