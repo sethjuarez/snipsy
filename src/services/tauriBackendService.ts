@@ -68,6 +68,7 @@ export class TauriBackendService implements BackendService {
     speed: number,
     transitionActions?: import("../types").TransitionAction[],
     targetMonitor?: string,
+    endBehavior?: string,
   ): Promise<void> {
     return invoke("play_video", {
       projectPath: projectPath ?? null,
@@ -77,6 +78,7 @@ export class TauriBackendService implements BackendService {
       speed,
       transitionActions: transitionActions ?? null,
       targetMonitor: targetMonitor ?? null,
+      endBehavior: endBehavior ?? null,
     });
   }
 

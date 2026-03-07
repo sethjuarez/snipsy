@@ -31,6 +31,8 @@ export interface MonitorInfo {
   scaleFactor: number;
 }
 
+export type EndBehavior = "close" | "freeze";
+
 export interface VideoSnippet {
   id: string;
   title: string;
@@ -41,6 +43,7 @@ export interface VideoSnippet {
   hotkey: string;
   speed: number;
   targetMonitor?: string;
+  endBehavior?: EndBehavior;
   transitionActions?: TransitionAction[];
 }
 

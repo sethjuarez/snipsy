@@ -9,6 +9,7 @@ function Playback() {
   const start = parseFloat(searchParams.get("start") ?? "0");
   const end = parseFloat(searchParams.get("end") ?? "0");
   const speed = parseFloat(searchParams.get("speed") ?? "1");
+  const endBehavior = searchParams.get("endBehavior") ?? "close";
 
   const [videoSrc, setVideoSrc] = useState<string>("");
 
@@ -47,12 +48,17 @@ function Playback() {
     const handleTimeUpdate = () => {
       if (end > 0 && video.currentTime >= end) {
         video.pause();
-        closeWindow();
+        video.currentTime = end;
+        if (endBehavior !== "freeze") {
+          closeWindow();
+        }
       }
     };
 
     const handleEnded = () => {
-      closeWindow();
+      if (endBehavior !== "freeze") {
+        closeWindow();
+      }
     };
 
     video.addEventListener("loadeddata", startPlayback);
@@ -69,7 +75,7 @@ function Playback() {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [videoSrc, start, end, speed, closeWindow]);
+  }, [videoSrc, start, end, speed, endBehavior, closeWindow]);
 
   // Handle Escape key to close playback
   useEffect(() => {
@@ -106,6 +112,7 @@ function Playback() {
         data-start={start}
         data-end={end}
         data-speed={speed}
+        data-end-behavior={endBehavior}
         className="w-full h-full object-contain"
         style={{ maxWidth: "100vw", maxHeight: "100vh" }}
       />

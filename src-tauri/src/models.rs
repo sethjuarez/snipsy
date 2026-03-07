@@ -40,6 +40,8 @@ pub struct VideoSnippet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_monitor: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_behavior: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transition_actions: Option<Vec<TransitionAction>>,
 }
 

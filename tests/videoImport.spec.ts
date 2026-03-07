@@ -61,6 +61,17 @@ test.describe("Video Import", () => {
     await expect(options.nth(1)).toContainText("Secondary Monitor");
   });
 
+  test("clip editor shows end behavior selector defaulting to close", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    const select = page.getByTestId("clip-end-behavior");
+    await expect(select).toBeVisible();
+    await expect(select).toHaveValue("close");
+    // Can switch to freeze
+    await select.selectOption("freeze");
+    await expect(select).toHaveValue("freeze");
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();

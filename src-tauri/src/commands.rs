@@ -490,6 +490,7 @@ mod tests {
             hotkey: "Ctrl+Shift+2".into(),
             speed: 2.0,
             target_monitor: Some("Primary Monitor".into()),
+            end_behavior: None,
             transition_actions: None,
         }];
 

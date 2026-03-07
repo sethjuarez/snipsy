@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw } from "lucide-react";
 import { createBackendService } from "../services";
-import type { ImportedVideo, MonitorInfo, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, VideoSnippet } from "../types";
 
 const backend = createBackendService();
 
@@ -105,6 +105,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [targetMonitor, setTargetMonitor] = useState(existingClip?.targetMonitor ?? "");
+  const [endBehavior, setEndBehavior] = useState<EndBehavior>(existingClip?.endBehavior ?? "close");
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
 
@@ -296,6 +297,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       speed: effectiveSpeed,
       hotkey,
       targetMonitor: targetMonitor || undefined,
+      endBehavior,
     });
   };
 
@@ -576,6 +578,23 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               </button>
             </div>
           )}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>When done:</span>
+            <select
+              value={endBehavior}
+              onChange={(e) => setEndBehavior(e.target.value as EndBehavior)}
+              className="px-2 py-1 rounded text-[11px]"
+              style={{
+                backgroundColor: "var(--color-surface-inset)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+              }}
+              data-testid="clip-end-behavior"
+            >
+              <option value="close">Close window</option>
+              <option value="freeze">Freeze last frame</option>
+            </select>
+          </div>
           <button
             onClick={handleSave}
             disabled={!canSave}
