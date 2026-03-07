@@ -54,4 +54,5 @@ export interface BackendService {
   isElevated(): Promise<boolean>;
   relaunchAsAdmin(): Promise<void>;
   selectVideoFile(): Promise<string | null>;
+  deleteVideo(projectPath: string, relativePath: string): Promise<void>;
 }

@@ -22,6 +22,7 @@ pub fn run() {
             commands::save_video_snippets,
             commands::import_video,
             commands::list_imported_videos,
+            commands::delete_video,
             commands::save_script,
             commands::load_scripts,
             commands::delete_script,

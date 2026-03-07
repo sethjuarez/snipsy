@@ -224,6 +224,10 @@ function App() {
                   projectPath={projectPath}
                   videoSnippets={videoSnippets}
                   onCreateClip={(video) => setClipEditingVideo(video)}
+                  onDeleteVideo={(video) => {
+                    // Remove all clips associated with this video
+                    setVideoSnippets(videoSnippets.filter((s) => s.videoFile !== video.relativePath));
+                  }}
                 />
               )
             )}

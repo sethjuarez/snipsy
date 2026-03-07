@@ -211,6 +211,29 @@ pub fn list_imported_videos(project_path: String) -> Result<Vec<ImportedVideoInf
     Ok(videos)
 }
 
+/// Delete an imported video file and its thumbnail from the project.
+#[tauri::command]
+pub fn delete_video(project_path: String, relative_path: String) -> Result<(), String> {
+    let project_dir = PathBuf::from(&project_path);
+    let video_path = project_dir.join(&relative_path);
+
+    if !video_path.exists() {
+        return Err(format!("Video file not found: {relative_path}"));
+    }
+
+    // Delete the video file
+    fs::remove_file(&video_path)
+        .map_err(|e| format!("Failed to delete video: {e}"))?;
+
+    // Delete the thumbnail (best-effort)
+    if let Some(stem) = video_path.file_stem().and_then(|s| s.to_str()) {
+        let thumb = project_dir.join("videos").join("thumbnails").join(format!("{stem}.jpg"));
+        let _ = fs::remove_file(thumb);
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn save_script(project_path: String, script: Script) -> Result<(), String> {
     let scripts_dir = PathBuf::from(&project_path).join("scripts");
@@ -411,6 +434,75 @@ mod tests {
         let result = import_video(
             project_path.to_string_lossy().into_owned(),
             "/nonexistent/video.mp4".into(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn delete_video_removes_file() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        // Create a fake video file
+        let video_file = project_path.join("videos").join("test.mp4");
+        fs::write(&video_file, b"fake video").unwrap();
+        assert!(video_file.exists());
+
+        let result = delete_video(
+            project_path.to_string_lossy().into_owned(),
+            "videos/test.mp4".into(),
+        );
+        assert!(result.is_ok());
+        assert!(!video_file.exists());
+    }
+
+    #[test]
+    fn delete_video_removes_thumbnail() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        let thumbs_dir = project_path.join("videos").join("thumbnails");
+        fs::create_dir_all(&thumbs_dir).unwrap();
+        let video_file = project_path.join("videos").join("demo.mp4");
+        let thumb_file = thumbs_dir.join("demo.jpg");
+        fs::write(&video_file, b"fake video").unwrap();
+        fs::write(&thumb_file, b"fake thumb").unwrap();
+
+        let result = delete_video(
+            project_path.to_string_lossy().into_owned(),
+            "videos/demo.mp4".into(),
+        );
+        assert!(result.is_ok());
+        assert!(!video_file.exists());
+        assert!(!thumb_file.exists());
+    }
+
+    #[test]
+    fn delete_video_nonexistent_errors() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+        )
+        .unwrap();
+
+        let result = delete_video(
+            project_path.to_string_lossy().into_owned(),
+            "videos/nonexistent.mp4".into(),
         );
         assert!(result.is_err());
     }

@@ -136,4 +136,8 @@ export class TauriBackendService implements BackendService {
     if (Array.isArray(result)) return result[0] ?? null;
     return result;
   }
+
+  async deleteVideo(projectPath: string, relativePath: string): Promise<void> {
+    return invoke("delete_video", { projectPath, relativePath });
+  }
 }

@@ -56,4 +56,40 @@ test.describe("Video Import", () => {
     await expect(page.getByTestId("clip-editor")).not.toBeVisible();
     await expect(page.getByTestId("video-list")).toBeVisible();
   });
+
+  test("shows delete button on each video card", async ({ page }) => {
+    await expect(page.getByTestId("delete-video-0")).toBeVisible();
+    await expect(page.getByTestId("delete-video-1")).toBeVisible();
+  });
+
+  test("clicking delete shows confirmation dialog", async ({ page }) => {
+    await page.getByTestId("delete-video-0").click();
+    await expect(page.getByTestId("delete-video-dialog")).toBeVisible();
+    await expect(page.getByTestId("delete-video-dialog")).toContainText("Remove Video?");
+    await expect(page.getByTestId("delete-video-dialog")).toContainText("build-process.mp4");
+    await expect(page.getByTestId("confirm-delete-video")).toBeVisible();
+    await expect(page.getByTestId("cancel-delete-video")).toBeVisible();
+  });
+
+  test("confirmation dialog shows associated clip count", async ({ page }) => {
+    // build-process.mp4 has 1 video snippet (vs-1) in mock data
+    await page.getByTestId("delete-video-0").click();
+    await expect(page.getByTestId("delete-video-dialog")).toContainText("1 associated clip");
+  });
+
+  test("cancelling delete keeps video", async ({ page }) => {
+    const initialCount = await page.getByTestId("video-list").locator("[data-testid^='video-item-']").count();
+    await page.getByTestId("delete-video-0").click();
+    await page.getByTestId("cancel-delete-video").click();
+    await expect(page.getByTestId("delete-video-dialog")).not.toBeVisible();
+    await expect(page.getByTestId("video-list").locator("[data-testid^='video-item-']")).toHaveCount(initialCount);
+  });
+
+  test("confirming delete removes video", async ({ page }) => {
+    const initialCount = await page.getByTestId("video-list").locator("[data-testid^='video-item-']").count();
+    await page.getByTestId("delete-video-1").click();
+    await page.getByTestId("confirm-delete-video").click();
+    await expect(page.getByTestId("delete-video-dialog")).not.toBeVisible();
+    await expect(page.getByTestId("video-list").locator("[data-testid^='video-item-']")).toHaveCount(initialCount - 1);
+  });
 });

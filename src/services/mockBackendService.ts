@@ -208,4 +208,8 @@ export class MockBackendService implements BackendService {
     this._importCounter++;
     return `/mock/videos/mock-video-${this._importCounter}.mp4`;
   }
+
+  async deleteVideo(_projectPath: string, relativePath: string): Promise<void> {
+    this._importedVideos = this._importedVideos.filter((v) => v.relativePath !== relativePath);
+  }
 }
