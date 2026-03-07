@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useSearchParams } from "react-router";
 
 function Playback() {
@@ -10,6 +10,22 @@ function Playback() {
   const end = parseFloat(searchParams.get("end") ?? "0");
   const speed = parseFloat(searchParams.get("speed") ?? "1");
 
+  const [videoSrc, setVideoSrc] = useState<string>("");
+
+  // Resolve file path to a webview-loadable URL
+  useEffect(() => {
+    if (!file) return;
+    import("@tauri-apps/api/core")
+      .then((mod) => {
+        if (mod?.isTauri?.()) {
+          setVideoSrc(mod.convertFileSrc(file));
+        } else {
+          setVideoSrc(file);
+        }
+      })
+      .catch(() => setVideoSrc(file));
+  }, [file]);
+
   const closeWindow = useCallback(async () => {
     // In Tauri, invoke close_playback_window command
     if (window.__TAURI_INTERNALS__) {
@@ -20,10 +36,13 @@ function Playback() {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !file) return;
+    if (!video || !videoSrc) return;
 
-    video.playbackRate = speed;
-    video.currentTime = start;
+    const startPlayback = () => {
+      video.playbackRate = speed;
+      video.currentTime = start;
+      video.play().catch(() => {});
+    };
 
     const handleTimeUpdate = () => {
       if (end > 0 && video.currentTime >= end) {
@@ -36,18 +55,21 @@ function Playback() {
       closeWindow();
     };
 
+    video.addEventListener("loadeddata", startPlayback);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
 
-    video.play().catch(() => {
-      // Autoplay may be blocked in some environments
-    });
+    // If already loaded (e.g., cached), start immediately
+    if (video.readyState >= 2) {
+      startPlayback();
+    }
 
     return () => {
+      video.removeEventListener("loadeddata", startPlayback);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, closeWindow]);
+  }, [videoSrc, start, end, speed, closeWindow]);
 
   // Handle Escape key to close playback
   useEffect(() => {
@@ -77,6 +99,8 @@ function Playback() {
     >
       <video
         ref={videoRef}
+        src={videoSrc || undefined}
+        preload="auto"
         data-testid="playback-video"
         data-file={file}
         data-start={start}
@@ -84,9 +108,7 @@ function Playback() {
         data-speed={speed}
         className="w-full h-full object-contain"
         style={{ maxWidth: "100vw", maxHeight: "100vh" }}
-      >
-        <source src={file} />
-      </video>
+      />
     </div>
   );
 }

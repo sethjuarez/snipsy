@@ -61,6 +61,7 @@ export class TauriBackendService implements BackendService {
   }
 
   async playVideo(
+    projectPath: string | null,
     videoFile: string,
     startTime: number,
     endTime: number,
@@ -69,6 +70,7 @@ export class TauriBackendService implements BackendService {
     targetMonitor?: string,
   ): Promise<void> {
     return invoke("play_video", {
+      projectPath: projectPath ?? null,
       videoFile,
       startTime,
       endTime,

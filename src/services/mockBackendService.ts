@@ -143,6 +143,7 @@ export class MockBackendService implements BackendService {
   }
 
   async playVideo(
+    _projectPath: string | null,
     _videoFile: string,
     _startTime: number,
     _endTime: number,

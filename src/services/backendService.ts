@@ -37,6 +37,7 @@ export interface BackendService {
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;
   playVideo(
+    projectPath: string | null,
     videoFile: string,
     startTime: number,
     endTime: number,

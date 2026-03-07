@@ -16,6 +16,7 @@ pub struct PlayVideoParams {
 #[tauri::command]
 pub async fn play_video(
     app: AppHandle,
+    project_path: Option<String>,
     video_file: String,
     start_time: f64,
     end_time: f64,
@@ -29,9 +30,19 @@ pub async fn play_video(
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
+    // Resolve to absolute path so the webview can load it via asset protocol
+    let abs_path = if std::path::Path::new(&video_file).is_absolute() {
+        video_file.clone()
+    } else if let Some(ref pp) = project_path {
+        let resolved = std::path::PathBuf::from(pp).join(&video_file);
+        resolved.to_string_lossy().into_owned()
+    } else {
+        video_file.clone()
+    };
+
     let url = format!(
         "/playback?file={}&start={}&end={}&speed={}",
-        urlencoded(&video_file),
+        urlencoded(&abs_path),
         start_time,
         end_time,
         speed

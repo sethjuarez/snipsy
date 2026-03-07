@@ -268,7 +268,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   playVideo: async (snippet) => {
+    const { projectPath } = get();
     await backend.playVideo(
+      projectPath,
       snippet.videoFile,
       snippet.startTime,
       snippet.endTime,
