@@ -25,6 +25,7 @@ enum RawEventKind {
         x: f64,
         y: f64,
         button: rdev::Button,
+        window_ctx: Option<WindowContext>,
     },
     MouseRelease {
         #[allow(dead_code)]
@@ -35,13 +36,16 @@ enum RawEventKind {
         button: rdev::Button,
     },
     MouseMove {
+        #[allow(dead_code)]
         x: f64,
+        #[allow(dead_code)]
         y: f64,
     },
     Scroll {
         x: f64,
         y: f64,
         delta_y: i64,
+        window_ctx: Option<WindowContext>,
     },
 }
 
@@ -148,12 +152,20 @@ pub fn start_recording_script(
     let stop_flag = state.stop_flag.clone();
     let events_clone = events.clone();
 
+    // Track last known mouse position to avoid scanning the event list
+    let last_mouse_x = Arc::new(Mutex::new(0.0_f64));
+    let last_mouse_y = Arc::new(Mutex::new(0.0_f64));
+    let lmx = last_mouse_x.clone();
+    let lmy = last_mouse_y.clone();
+
     // Spawn listener thread
     std::thread::spawn(move || {
         let events_inner = events_clone;
         let stop = stop_flag;
 
-        // rdev::listen is blocking — it calls our callback for every event
+        // rdev::listen is blocking — it calls our callback for every event.
+        // When stop_flag is set, the callback returns immediately (no-op).
+        // The thread stays alive but idle until process exit.
         let _ = rdev::listen(move |event| {
             if stop.load(Ordering::SeqCst) {
                 return;
@@ -168,47 +180,28 @@ pub fn start_recording_script(
                     Some(RawEventKind::KeyRelease { key })
                 }
                 rdev::EventType::ButtonPress(button) => {
-                    // Get mouse position from the last known move or use (0,0)
-                    let events = events_inner.lock().unwrap();
-                    let (x, y) = events
-                        .iter()
-                        .rev()
-                        .find_map(|e| match &e.kind {
-                            RawEventKind::MouseMove { x, y } => Some((*x, *y)),
-                            _ => None,
-                        })
-                        .unwrap_or((0.0, 0.0));
-                    drop(events);
-                    Some(RawEventKind::MouseClick { x, y, button })
+                    let x = *lmx.lock().unwrap();
+                    let y = *lmy.lock().unwrap();
+                    // Capture window context NOW, at click time
+                    let window_ctx = capture_window_context();
+                    Some(RawEventKind::MouseClick { x, y, button, window_ctx })
                 }
                 rdev::EventType::ButtonRelease(button) => {
-                    let events = events_inner.lock().unwrap();
-                    let (x, y) = events
-                        .iter()
-                        .rev()
-                        .find_map(|e| match &e.kind {
-                            RawEventKind::MouseMove { x, y } => Some((*x, *y)),
-                            _ => None,
-                        })
-                        .unwrap_or((0.0, 0.0));
-                    drop(events);
+                    let x = *lmx.lock().unwrap();
+                    let y = *lmy.lock().unwrap();
                     Some(RawEventKind::MouseRelease { x, y, button })
                 }
                 rdev::EventType::MouseMove { x, y } => {
+                    *lmx.lock().unwrap() = x;
+                    *lmy.lock().unwrap() = y;
                     Some(RawEventKind::MouseMove { x, y })
                 }
                 rdev::EventType::Wheel { delta_x: _, delta_y } => {
-                    let events = events_inner.lock().unwrap();
-                    let (x, y) = events
-                        .iter()
-                        .rev()
-                        .find_map(|e| match &e.kind {
-                            RawEventKind::MouseMove { x, y } => Some((*x, *y)),
-                            _ => None,
-                        })
-                        .unwrap_or((0.0, 0.0));
-                    drop(events);
-                    Some(RawEventKind::Scroll { x, y, delta_y })
+                    let x = *lmx.lock().unwrap();
+                    let y = *lmy.lock().unwrap();
+                    // Capture window context NOW, at scroll time
+                    let window_ctx = capture_window_context();
+                    Some(RawEventKind::Scroll { x, y, delta_y, window_ctx })
                 }
             };
 
@@ -466,18 +459,17 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
                 }
                 // Key releases are not recorded as steps
             }
-            RawEventKind::MouseClick { x, y, button } => {
+            RawEventKind::MouseClick { x, y, button, window_ctx } => {
                 flush_chars(&mut char_buffer, &mut steps);
                 char_start = None;
-                let ctx = capture_window_context();
-                let (xp, yp) = ctx
+                let (xp, yp) = window_ctx
                     .as_ref()
                     .map(|c| to_percent(*x, *y, c))
                     .unwrap_or((0.5, 0.5));
                 steps.push(ScriptStep::Click {
                     x: *x as i32,
                     y: *y as i32,
-                    window_title: ctx.as_ref().map(|c| c.title.clone()),
+                    window_title: window_ctx.as_ref().map(|c| c.title.clone()),
                     window_class: None,
                     x_percent: Some(xp),
                     y_percent: Some(yp),
@@ -495,21 +487,25 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
                 // and part of a drag. For now, skip standalone moves.
                 // Phase 3 can add drag detection.
             }
-            RawEventKind::Scroll { x, y, delta_y } => {
+            RawEventKind::Scroll { x, y, delta_y, window_ctx } => {
                 flush_chars(&mut char_buffer, &mut steps);
                 char_start = None;
 
-                // Coalesce with previous scroll if within 100ms and same position area
-                let coalesced = if let Some(ScriptStep::Scroll { delta, .. }) = steps.last_mut() {
-                    *delta += *delta_y as i32;
-                    true
+                // Only coalesce with previous scroll if gap was small (no Wait inserted)
+                let gap = event.timestamp.duration_since(last_event_time);
+                let coalesced = if gap <= Duration::from_millis(200) {
+                    if let Some(ScriptStep::Scroll { delta, .. }) = steps.last_mut() {
+                        *delta += *delta_y as i32;
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 };
 
                 if !coalesced {
-                    let ctx = capture_window_context();
-                    let (xp, yp) = ctx
+                    let (xp, yp) = window_ctx
                         .as_ref()
                         .map(|c| to_percent(*x, *y, c))
                         .unwrap_or((0.5, 0.5));
@@ -517,7 +513,7 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
                         delta: *delta_y as i32,
                         x: Some(*x as i32),
                         y: Some(*y as i32),
-                        window_title: ctx.as_ref().map(|c| c.title.clone()),
+                        window_title: window_ctx.as_ref().map(|c| c.title.clone()),
                         window_class: None,
                         x_percent: Some(xp),
                         y_percent: Some(yp),
@@ -690,6 +686,7 @@ mod tests {
                     x: 500.0,
                     y: 300.0,
                     button: rdev::Button::Left,
+                    window_ctx: None,
                 },
             },
             RawEvent {
@@ -722,11 +719,11 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(10),
-                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -3 },
+                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -3, window_ctx: None },
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(30),
-                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -2 },
+                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -2, window_ctx: None },
             },
         ];
         let steps = consolidate_events(&events);
@@ -735,6 +732,67 @@ mod tests {
             assert_eq!(*delta, -5); // coalesced
         } else {
             panic!("Expected Scroll step");
+        }
+    }
+
+    #[test]
+    fn scroll_not_coalesced_across_time_gap() {
+        let base = Instant::now();
+        let events = vec![
+            RawEvent {
+                timestamp: base,
+                kind: RawEventKind::MouseMove { x: 400.0, y: 200.0 },
+            },
+            RawEvent {
+                timestamp: base + Duration::from_millis(10),
+                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -3, window_ctx: None },
+            },
+            // 500ms gap — should NOT coalesce
+            RawEvent {
+                timestamp: base + Duration::from_millis(510),
+                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -2, window_ctx: None },
+            },
+        ];
+        let steps = consolidate_events(&events);
+        // Should be: Scroll(-3), Wait(~500), Scroll(-2)
+        assert_eq!(steps.len(), 3);
+        assert!(matches!(&steps[0], ScriptStep::Scroll { delta, .. } if *delta == -3));
+        assert!(matches!(&steps[1], ScriptStep::Wait { duration } if *duration >= 400));
+        assert!(matches!(&steps[2], ScriptStep::Scroll { delta, .. } if *delta == -2));
+    }
+
+    #[test]
+    fn mouse_click_captures_window_context() {
+        let base = Instant::now();
+        let ctx = WindowContext {
+            title: "VS Code".into(),
+            class: None,
+            x: 100.0,
+            y: 50.0,
+            width: 800.0,
+            height: 600.0,
+        };
+        let events = vec![
+            RawEvent {
+                timestamp: base,
+                kind: RawEventKind::MouseClick {
+                    x: 500.0,
+                    y: 350.0,
+                    button: rdev::Button::Left,
+                    window_ctx: Some(ctx),
+                },
+            },
+        ];
+        let steps = consolidate_events(&events);
+        assert_eq!(steps.len(), 1);
+        if let ScriptStep::Click { x, y, window_title, x_percent, y_percent, .. } = &steps[0] {
+            assert_eq!(*x, 500);
+            assert_eq!(*y, 350);
+            assert_eq!(window_title.as_deref(), Some("VS Code"));
+            assert!((x_percent.unwrap() - 0.5).abs() < 0.001);
+            assert!((y_percent.unwrap() - 0.5).abs() < 0.001);
+        } else {
+            panic!("Expected Click step");
         }
     }
 
