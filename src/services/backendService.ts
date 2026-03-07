@@ -58,6 +58,7 @@ export interface BackendService {
     endBehavior?: string,
     hideCursor?: boolean,
   ): Promise<void>;
+  showPlaybackWindow(): Promise<void>;
   closePlaybackWindow(): Promise<void>;
   saveScript(projectPath: string, script: Script): Promise<void>;
   loadScripts(projectPath: string): Promise<Script[]>;

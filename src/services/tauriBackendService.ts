@@ -84,6 +84,10 @@ export class TauriBackendService implements BackendService {
     });
   }
 
+  async showPlaybackWindow(): Promise<void> {
+    return invoke("show_playback_window");
+  }
+
   async closePlaybackWindow(): Promise<void> {
     return invoke("close_playback_window");
   }

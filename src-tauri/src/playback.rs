@@ -50,7 +50,8 @@ pub async fn play_video(
         .always_on_top(true)
         .resizable(false)
         .focused(true)
-        .skip_taskbar(true);
+        .skip_taskbar(true)
+        .visible(false);
 
     // Position on selected monitor, or default to fullscreen on primary
     if let Some(ref mon_name) = target_monitor {
@@ -95,6 +96,16 @@ pub async fn play_video(
         schedule_transition_actions(actions, video_duration);
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn show_playback_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("playback") {
+        window
+            .show()
+            .map_err(|e| format!("Failed to show playback window: {}", e))?;
+    }
     Ok(())
 }
 

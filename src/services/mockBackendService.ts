@@ -158,6 +158,10 @@ export class MockBackendService implements BackendService {
     // Mock: no-op in test mode
   }
 
+  async showPlaybackWindow(): Promise<void> {
+    // Mock: no-op in test mode
+  }
+
   async closePlaybackWindow(): Promise<void> {
     // Mock: no-op in test mode
   }

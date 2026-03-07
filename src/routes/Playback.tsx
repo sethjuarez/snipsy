@@ -36,6 +36,13 @@ function Playback() {
     }
   }, []);
 
+  const showWindow = useCallback(async () => {
+    if (window.__TAURI_INTERNALS__) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("show_playback_window");
+    }
+  }, []);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoSrc) return;
@@ -43,6 +50,12 @@ function Playback() {
     const startPlayback = () => {
       video.playbackRate = speed;
       video.currentTime = start;
+    };
+
+    const handleSeeked = async () => {
+      // Video has loaded and seeked to the start frame — safe to show
+      video.removeEventListener("seeked", handleSeeked);
+      await showWindow();
       video.play().catch(() => {});
     };
 
@@ -63,6 +76,7 @@ function Playback() {
     };
 
     video.addEventListener("loadeddata", startPlayback);
+    video.addEventListener("seeked", handleSeeked);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
 
@@ -73,10 +87,11 @@ function Playback() {
 
     return () => {
       video.removeEventListener("loadeddata", startPlayback);
+      video.removeEventListener("seeked", handleSeeked);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [videoSrc, start, end, speed, endBehavior, closeWindow]);
+  }, [videoSrc, start, end, speed, endBehavior, closeWindow, showWindow]);
 
   // Handle Escape key to close playback
   useEffect(() => {
