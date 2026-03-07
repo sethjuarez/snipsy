@@ -1,17 +1,6 @@
-use serde::Deserialize;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::models::TransitionAction;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlayVideoParams {
-    pub video_file: String,
-    pub start_time: f64,
-    pub end_time: f64,
-    pub speed: f64,
-    pub transition_actions: Option<Vec<TransitionAction>>,
-}
 
 #[tauri::command]
 pub async fn play_video(
@@ -185,6 +174,17 @@ fn urlencoded(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct PlayVideoParams {
+        video_file: String,
+        start_time: f64,
+        end_time: f64,
+        speed: f64,
+        transition_actions: Option<Vec<TransitionAction>>,
+    }
 
     #[test]
     fn test_urlencoded() {
