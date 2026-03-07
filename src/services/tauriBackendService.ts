@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { availableMonitors } from "@tauri-apps/api/window";
 import type { BackendService, SnippetHotkey } from "./backendService";
-import type { ProjectData, TextSnippet, VideoSnippet } from "../types";
+import type { ProjectData, MonitorInfo, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -143,5 +144,17 @@ export class TauriBackendService implements BackendService {
 
   async getVideoFps(videoPath: string): Promise<number> {
     return invoke<number>("get_video_fps", { videoPath });
+  }
+
+  async listMonitors(): Promise<MonitorInfo[]> {
+    const monitors = await availableMonitors();
+    return monitors.map((m, i) => ({
+      name: m.name ?? `Monitor ${i + 1}`,
+      width: m.size.width,
+      height: m.size.height,
+      x: m.position.x,
+      y: m.position.y,
+      scaleFactor: m.scaleFactor,
+    }));
   }
 }

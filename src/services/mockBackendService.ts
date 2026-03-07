@@ -216,4 +216,11 @@ export class MockBackendService implements BackendService {
   async getVideoFps(_videoPath: string): Promise<number> {
     return 30;
   }
+
+  async listMonitors(): Promise<import("../types").MonitorInfo[]> {
+    return [
+      { name: "Primary Monitor", width: 1920, height: 1080, x: 0, y: 0, scaleFactor: 1 },
+      { name: "Secondary Monitor", width: 2560, height: 1440, x: 1920, y: 0, scaleFactor: 1 },
+    ];
+  }
 }

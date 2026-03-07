@@ -1,6 +1,7 @@
 import type {
   ProjectData,
   ImportedVideo,
+  MonitorInfo,
   Script,
   TextSnippet,
   TransitionAction,
@@ -56,4 +57,5 @@ export interface BackendService {
   selectVideoFile(): Promise<string | null>;
   deleteVideo(projectPath: string, relativePath: string): Promise<void>;
   getVideoFps(videoPath: string): Promise<number>;
+  listMonitors(): Promise<MonitorInfo[]>;
 }

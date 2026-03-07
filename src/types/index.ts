@@ -22,6 +22,15 @@ export interface TransitionAction {
   y?: number;
 }
 
+export interface MonitorInfo {
+  name: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  scaleFactor: number;
+}
+
 export interface VideoSnippet {
   id: string;
   title: string;
@@ -31,6 +40,7 @@ export interface VideoSnippet {
   endTime: number;
   hotkey: string;
   speed: number;
+  targetMonitor?: string;
   transitionActions?: TransitionAction[];
 }
 

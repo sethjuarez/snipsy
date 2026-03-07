@@ -49,6 +49,18 @@ test.describe("Video Import", () => {
     await expect(page.getByTestId("clip-save")).toBeVisible();
   });
 
+  test("clip editor shows monitor selector with available monitors", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    const select = page.getByTestId("clip-monitor");
+    await expect(select).toBeVisible();
+    // Mock provides 2 monitors
+    const options = select.locator("option");
+    await expect(options).toHaveCount(2);
+    await expect(options.first()).toContainText("Primary Monitor");
+    await expect(options.nth(1)).toContainText("Secondary Monitor");
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();

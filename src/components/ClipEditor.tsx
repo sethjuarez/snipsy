@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight } from "lucide-react";
+import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor } from "lucide-react";
 import { createBackendService } from "../services";
-import type { ImportedVideo, VideoSnippet } from "../types";
+import type { ImportedVideo, MonitorInfo, VideoSnippet } from "../types";
 
 const backend = createBackendService();
 
@@ -103,10 +103,23 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [description, setDescription] = useState(existingClip?.description ?? "");
   const [hotkey, setHotkey] = useState(existingClip?.hotkey ?? "");
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  const [targetMonitor, setTargetMonitor] = useState(existingClip?.targetMonitor ?? "");
 
   const videoSrc = video.absolutePath && convertFileSrc
     ? convertFileSrc(video.absolutePath)
     : video.absolutePath;
+
+  // Load available monitors
+  useEffect(() => {
+    backend.listMonitors()
+      .then((mons) => {
+        setMonitors(mons);
+        // Default to first monitor if none selected
+        if (!targetMonitor && mons.length > 0) setTargetMonitor(mons[0].name);
+      })
+      .catch(() => {});
+  }, []);
 
   // Detect FPS for frame-stepping
   useEffect(() => {
@@ -273,6 +286,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       endTime,
       speed: effectiveSpeed,
       hotkey,
+      targetMonitor: targetMonitor || undefined,
     });
   };
 
@@ -495,7 +509,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           </div>
         </div>
 
-        {/* Row 3: Save / Cancel */}
+        {/* Row 3: Monitor selector + Save / Cancel */}
         <div className="flex items-center justify-between pt-1">
           <button
             onClick={onCancel}
@@ -505,6 +519,28 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           >
             <X size={12} /> Cancel
           </button>
+          {monitors.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Monitor size={12} style={{ color: "var(--color-text-secondary)" }} />
+              <select
+                value={targetMonitor}
+                onChange={(e) => setTargetMonitor(e.target.value)}
+                className="px-2 py-1 rounded text-[11px]"
+                style={{
+                  backgroundColor: "var(--color-surface-inset)",
+                  color: "var(--color-text)",
+                  border: "1px solid var(--color-border)",
+                }}
+                data-testid="clip-monitor"
+              >
+                {monitors.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name} ({m.width}×{m.height})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button
             onClick={handleSave}
             disabled={!canSave}
