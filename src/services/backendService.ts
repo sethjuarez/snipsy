@@ -25,6 +25,7 @@ export interface SnippetHotkey {
   transitionActions?: TransitionAction[];
   targetMonitor?: string;
   endBehavior?: string;
+  hideCursor?: boolean;
 }
 
 export interface BackendService {

@@ -230,6 +230,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         transitionActions: s.transitionActions,
         targetMonitor: s.targetMonitor,
         endBehavior: s.endBehavior,
+        hideCursor: s.hideCursor,
       })),
     ];
     try {

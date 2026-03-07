@@ -116,7 +116,7 @@ function Playback() {
         data-speed={speed}
         data-end-behavior={endBehavior}
         className="object-contain"
-        style={{ width: "100%", height: "100%" }}
+        style={{ width: "100%", height: "100%", cursor: "inherit" }}
       />
     </div>
   );

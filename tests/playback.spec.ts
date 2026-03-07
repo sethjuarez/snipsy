@@ -30,4 +30,20 @@ test.describe("Playback Window", () => {
     await expect(video).toHaveAttribute("data-end", "0");
     await expect(video).toHaveAttribute("data-speed", "1");
   });
+
+  test("hides cursor by default", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4");
+    const container = page.getByTestId("playback-container");
+    await expect(container).toHaveCSS("cursor", "none");
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveCSS("cursor", "none");
+  });
+
+  test("shows cursor when hideCursor is false", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4&hideCursor=false");
+    const container = page.getByTestId("playback-container");
+    await expect(container).toHaveCSS("cursor", "auto");
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveCSS("cursor", "auto");
+  });
 });
