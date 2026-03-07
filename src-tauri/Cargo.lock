@@ -3645,6 +3645,7 @@ dependencies = [
  "tempfile",
  "uuid",
  "windows 0.61.3",
+ "winreg",
 ]
 
 [[package]]

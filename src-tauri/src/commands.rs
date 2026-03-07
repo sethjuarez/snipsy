@@ -127,6 +127,9 @@ pub fn import_video(project_path: String, source_file_path: String) -> Result<St
 
 /// Generate a thumbnail for a video using ffmpeg (first frame at 1s).
 fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path) -> Result<(), String> {
+    let ffmpeg = crate::scripting::resolve_ffmpeg_path()
+        .ok_or_else(|| "ffmpeg not available".to_string())?;
+
     let thumbs_dir = videos_dir.join("thumbnails");
     fs::create_dir_all(&thumbs_dir)
         .map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
@@ -137,13 +140,13 @@ fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path
         .to_string_lossy();
     let thumb_path = thumbs_dir.join(format!("{stem}.jpg"));
 
-    let output = std::process::Command::new("ffmpeg")
+    let output = std::process::Command::new(ffmpeg)
         .args([
             "-i", &video_path.to_string_lossy(),
             "-ss", "00:00:01",
             "-vframes", "1",
             "-q:v", "2",
-            "-y", // overwrite if exists
+            "-y",
             &thumb_path.to_string_lossy(),
         ])
         .output()

@@ -3,21 +3,70 @@ use std::process::{Child, Command};
 
 use crate::models::{Script, ScriptStep};
 
-/// Check if FFmpeg is available on PATH.
-pub fn detect_ffmpeg() -> bool {
-    Command::new("ffmpeg")
+/// Resolve the full path to the ffmpeg binary.
+/// First checks the current process PATH. On Windows, if that fails, also
+/// searches the user PATH from the registry — elevated processes inherit only
+/// the system PATH, so user-installed ffmpeg wouldn't be found otherwise.
+pub fn resolve_ffmpeg_path() -> Option<String> {
+    // Try the normal PATH first
+    if Command::new("ffmpeg")
         .arg("-version")
-        .output()
-        .map(|o| o.status.success())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
         .unwrap_or(false)
+    {
+        return Some("ffmpeg".into());
+    }
+
+    // On Windows, check the user PATH from the registry
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(path) = resolve_ffmpeg_from_user_path() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+/// Read the user PATH from the Windows registry and search for ffmpeg.exe.
+#[cfg(target_os = "windows")]
+fn resolve_ffmpeg_from_user_path() -> Option<String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let env = hkcu.open_subkey("Environment").ok()?;
+    let user_path: String = env.get_value("Path").ok()?;
+
+    for dir in user_path.split(';') {
+        let dir = dir.trim();
+        if dir.is_empty() {
+            continue;
+        }
+        let candidate = PathBuf::from(dir).join("ffmpeg.exe");
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
+/// Check if FFmpeg is available (on PATH or user PATH).
+pub fn detect_ffmpeg() -> bool {
+    resolve_ffmpeg_path().is_some()
 }
 
 /// Start FFmpeg screen recording.
 /// Returns the child process handle so we can stop it later.
 fn start_recording(output_path: &str) -> Result<Child, String> {
+    let ffmpeg = resolve_ffmpeg_path().ok_or("FFmpeg not found")?;
+
     // Use GDI grab on Windows for screen capture
     #[cfg(target_os = "windows")]
-    let child = Command::new("ffmpeg")
+    let child = Command::new(&ffmpeg)
         .args([
             "-y",
             "-f",
@@ -39,7 +88,7 @@ fn start_recording(output_path: &str) -> Result<Child, String> {
         .map_err(|e| format!("Failed to start FFmpeg: {}", e))?;
 
     #[cfg(target_os = "macos")]
-    let child = Command::new("ffmpeg")
+    let child = Command::new(&ffmpeg)
         .args([
             "-y",
             "-f",
@@ -61,7 +110,7 @@ fn start_recording(output_path: &str) -> Result<Child, String> {
         .map_err(|e| format!("Failed to start FFmpeg: {}", e))?;
 
     #[cfg(target_os = "linux")]
-    let child = Command::new("ffmpeg")
+    let child = Command::new(&ffmpeg)
         .args([
             "-y",
             "-f",
