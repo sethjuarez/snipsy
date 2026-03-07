@@ -269,6 +269,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   playVideo: async (snippet) => {
     const { projectPath } = get();
+    // If the saved monitor doesn't exist on this machine, fall back to the first available
+    let monitor = snippet.targetMonitor;
+    try {
+      const monitors = await backend.listMonitors();
+      if (monitor && !monitors.some((m) => m.name === monitor)) {
+        monitor = monitors.length > 0 ? monitors[0].name : undefined;
+      } else if (!monitor && monitors.length > 0) {
+        monitor = monitors[0].name;
+      }
+    } catch {
+      // listMonitors failed — proceed with whatever we have
+    }
     await backend.playVideo(
       projectPath,
       snippet.videoFile,
@@ -276,7 +288,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       snippet.endTime,
       snippet.speed,
       snippet.transitionActions,
-      snippet.targetMonitor,
+      monitor,
     );
   },
 }));

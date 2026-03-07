@@ -244,6 +244,7 @@ function App() {
                       }
                       setClipEditingVideo(null);
                       setEditingVideoSnippet(undefined);
+                      setActiveView("video-snippets");
                     }}
                     onCancel={() => {
                       setClipEditingVideo(null);
