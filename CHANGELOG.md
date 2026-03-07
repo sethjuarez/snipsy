@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/sethjuarez/snipsy/compare/v0.5.0...v0.5.1) (2026-03-07)
+
+
+### CI/CD
+
+* add libgbm-dev for Linux build ([1e54fcf](https://github.com/sethjuarez/snipsy/commit/1e54fcf09b7ddc5ed74c2948c4492b5ec0eb4187))
+
 ## [0.5.0](https://github.com/sethjuarez/snipsy/compare/v0.4.0...v0.5.0) (2026-03-07)
 
 
