@@ -188,7 +188,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
   return (
     <div className="flex flex-col h-full" data-testid="clip-editor">
       {/* Video — fills all available space */}
-      <div className="flex-1 min-h-0 rounded-lg overflow-hidden" style={{ backgroundColor: "#000" }}>
+      <div className="flex-1 min-h-0 rounded-lg overflow-hidden" style={{ backgroundColor: "transparent" }}>
         <video
           ref={videoRef}
           src={videoSrc}
