@@ -191,8 +191,8 @@ function App() {
             }}
           />
 
-          {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* Scrollable content — use overflow-hidden when clip editor is active */}
+          <div className={`flex-1 p-4 ${activeView === "videos" && clipEditingVideo ? "overflow-hidden" : "overflow-y-auto"}`}>
             {activeView === "text-snippets" && (
               showForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
@@ -205,7 +205,7 @@ function App() {
 
             {activeView === "videos" && projectPath && (
               clipEditingVideo ? (
-                <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
+                <div className="h-full rounded-lg p-4" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                   <ClipEditor
                     video={clipEditingVideo}
                     onSave={(clip) => {
