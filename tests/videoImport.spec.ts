@@ -11,7 +11,7 @@ test.describe("Video Import", () => {
     await page.getByTestId("nav-videos").click();
   });
 
-  test("shows video list from mock data", async ({ page }) => {
+  test("shows video cards from mock data", async ({ page }) => {
     await expect(page.getByTestId("video-list")).toBeVisible();
     await expect(page.getByTestId("video-item-0")).toContainText(
       "build-process.mp4",
@@ -29,14 +29,31 @@ test.describe("Video Import", () => {
   });
 
   test("can import a video", async ({ page }) => {
-    // Get initial count
-    const initialItems = await page.getByTestId("video-list").locator("li").count();
-
+    const initialItems = await page.getByTestId("video-list").locator("[data-testid^='video-item-']").count();
     await page.getByTestId("import-video").click();
-
-    // Wait for the new item to appear
     await expect(
-      page.getByTestId("video-list").locator("li"),
+      page.getByTestId("video-list").locator("[data-testid^='video-item-']"),
     ).toHaveCount(initialItems + 1);
+  });
+
+  test("shows create clip button on each video card", async ({ page }) => {
+    await expect(page.getByTestId("create-clip-0")).toBeVisible();
+    await expect(page.getByTestId("create-clip-0")).toContainText("Create Clip");
+  });
+
+  test("clicking create clip opens clip editor", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    await expect(page.getByTestId("clip-title")).toBeVisible();
+    await expect(page.getByTestId("clip-hotkey")).toBeVisible();
+    await expect(page.getByTestId("clip-save")).toBeVisible();
+  });
+
+  test("can cancel clip editor", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    await page.getByTestId("clip-cancel").click();
+    await expect(page.getByTestId("clip-editor")).not.toBeVisible();
+    await expect(page.getByTestId("video-list")).toBeVisible();
   });
 });

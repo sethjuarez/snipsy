@@ -1,5 +1,6 @@
 import type {
   ProjectData,
+  ImportedVideo,
   Script,
   TextSnippet,
   TransitionAction,
@@ -33,7 +34,7 @@ export interface BackendService {
     typeDelay?: number,
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
-  getImportedVideos(projectPath: string): Promise<string[]>;
+  getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;
   playVideo(
     videoFile: string,
     startTime: number,

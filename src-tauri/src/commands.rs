@@ -119,15 +119,62 @@ pub fn import_video(project_path: String, source_file_path: String) -> Result<St
     fs::copy(&source, &dest)
         .map_err(|e| format!("Failed to copy video file: {e}"))?;
 
+    // Generate thumbnail (best-effort — don't fail import if ffmpeg missing)
+    let _ = generate_thumbnail(&dest, &videos_dir);
+
     Ok(format!("videos/{file_name}"))
 }
 
+/// Generate a thumbnail for a video using ffmpeg (first frame at 1s).
+fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path) -> Result<(), String> {
+    let thumbs_dir = videos_dir.join("thumbnails");
+    fs::create_dir_all(&thumbs_dir)
+        .map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
+
+    let stem = video_path
+        .file_stem()
+        .ok_or("No file stem")?
+        .to_string_lossy();
+    let thumb_path = thumbs_dir.join(format!("{stem}.jpg"));
+
+    let output = std::process::Command::new("ffmpeg")
+        .args([
+            "-i", &video_path.to_string_lossy(),
+            "-ss", "00:00:01",
+            "-vframes", "1",
+            "-q:v", "2",
+            "-y", // overwrite if exists
+            &thumb_path.to_string_lossy(),
+        ])
+        .output()
+        .map_err(|e| format!("ffmpeg not available: {e}"))?;
+
+    if !output.status.success() {
+        return Err("ffmpeg thumbnail generation failed".into());
+    }
+    Ok(())
+}
+
+/// Imported video metadata returned to the frontend.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedVideoInfo {
+    pub name: String,
+    pub relative_path: String,
+    pub absolute_path: String,
+    pub thumbnail_path: Option<String>,
+}
+
 #[tauri::command]
-pub fn list_imported_videos(project_path: String) -> Result<Vec<String>, String> {
-    let videos_dir = PathBuf::from(&project_path).join("videos");
+pub fn list_imported_videos(project_path: String) -> Result<Vec<ImportedVideoInfo>, String> {
+    let project_dir = PathBuf::from(&project_path);
+    let videos_dir = project_dir.join("videos");
     if !videos_dir.exists() {
         return Ok(vec![]);
     }
+
+    let thumbs_dir = videos_dir.join("thumbnails");
+    let video_extensions = ["mp4", "mkv", "avi", "mov", "webm", "wmv"];
 
     let mut videos = Vec::new();
     let entries = fs::read_dir(&videos_dir)
@@ -136,14 +183,31 @@ pub fn list_imported_videos(project_path: String) -> Result<Vec<String>, String>
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
-        if path.is_file() {
-            if let Some(name) = path.file_name() {
-                videos.push(format!("videos/{}", name.to_string_lossy()));
-            }
+        if !path.is_file() {
+            continue;
         }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if !video_extensions.contains(&ext.as_str()) {
+            continue;
+        }
+
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let thumb = thumbs_dir.join(format!("{stem}.jpg"));
+
+        videos.push(ImportedVideoInfo {
+            name: name.clone(),
+            relative_path: format!("videos/{name}"),
+            absolute_path: path.to_string_lossy().to_string(),
+            thumbnail_path: if thumb.exists() {
+                Some(thumb.to_string_lossy().to_string())
+            } else {
+                None
+            },
+        });
     }
 
-    videos.sort();
+    videos.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(videos)
 }
 

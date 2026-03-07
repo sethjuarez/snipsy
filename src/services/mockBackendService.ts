@@ -119,15 +119,27 @@ export class MockBackendService implements BackendService {
     // Mock: no-op in test mode
   }
 
+  private _importedVideos: import("../types").ImportedVideo[] = [
+    { name: "build-process.mp4", relativePath: "videos/build-process.mp4", absolutePath: "/mock/project/videos/build-process.mp4", thumbnailPath: null },
+    { name: "deploy-demo.mp4", relativePath: "videos/deploy-demo.mp4", absolutePath: "/mock/project/videos/deploy-demo.mp4", thumbnailPath: null },
+  ];
+
   async importVideo(
     _projectPath: string,
     _sourceFilePath: string,
   ): Promise<string> {
-    return "videos/mock-video.mp4";
+    const name = `mock-video-${this._importedVideos.length + 1}.mp4`;
+    this._importedVideos.push({
+      name,
+      relativePath: `videos/${name}`,
+      absolutePath: `/mock/project/videos/${name}`,
+      thumbnailPath: null,
+    });
+    return `videos/${name}`;
   }
 
-  async getImportedVideos(_projectPath: string): Promise<string[]> {
-    return ["videos/build-process.mp4", "videos/deploy-demo.mp4"];
+  async getImportedVideos(_projectPath: string): Promise<import("../types").ImportedVideo[]> {
+    return structuredClone(this._importedVideos);
   }
 
   async playVideo(

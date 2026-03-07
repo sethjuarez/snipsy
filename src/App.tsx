@@ -9,11 +9,12 @@ import FFmpegHelper from "./components/FFmpegHelper";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList from "./components/VideoList";
+import ClipEditor from "./components/ClipEditor";
 import VideoSnippetList from "./components/VideoSnippetList";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
-import type { TextSnippet, VideoSnippet, Script } from "./types";
+import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
   const [showScriptForm, setShowScriptForm] = useState(false);
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
   const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
+  const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
   const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
 
   // Auto-open last project on startup
@@ -166,6 +168,7 @@ function App() {
             showForm={
               (activeView === "text-snippets" && showForm) ||
               (activeView === "video-snippets" && showVideoForm) ||
+              (activeView === "videos" && clipEditingVideo !== null) ||
               (activeView === "scripts" && showScriptForm)
             }
             onAdd={() => {
@@ -184,6 +187,7 @@ function App() {
               handleCancel();
               handleVideoCancel();
               handleScriptCancel();
+              setClipEditingVideo(null);
             }}
           />
 
@@ -200,7 +204,28 @@ function App() {
             )}
 
             {activeView === "videos" && projectPath && (
-              <VideoList projectPath={projectPath} />
+              clipEditingVideo ? (
+                <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
+                  <ClipEditor
+                    video={clipEditingVideo}
+                    onSave={(clip) => {
+                      const newSnippet: VideoSnippet = {
+                        id: crypto.randomUUID(),
+                        ...clip,
+                      };
+                      setVideoSnippets([...videoSnippets, newSnippet]);
+                      setClipEditingVideo(null);
+                    }}
+                    onCancel={() => setClipEditingVideo(null)}
+                  />
+                </div>
+              ) : (
+                <VideoList
+                  projectPath={projectPath}
+                  videoSnippets={videoSnippets}
+                  onCreateClip={(video) => setClipEditingVideo(video)}
+                />
+              )
             )}
 
             {activeView === "video-snippets" && (

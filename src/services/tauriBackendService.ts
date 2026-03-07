@@ -56,8 +56,8 @@ export class TauriBackendService implements BackendService {
     return invoke<string>("import_video", { projectPath, sourceFilePath });
   }
 
-  async getImportedVideos(projectPath: string): Promise<string[]> {
-    return invoke<string[]>("list_imported_videos", { projectPath });
+  async getImportedVideos(projectPath: string): Promise<import("../types").ImportedVideo[]> {
+    return invoke<import("../types").ImportedVideo[]>("list_imported_videos", { projectPath });
   }
 
   async playVideo(

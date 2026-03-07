@@ -50,6 +50,13 @@ export interface Script {
   outputVideo: string;
 }
 
+export interface ImportedVideo {
+  name: string;
+  relativePath: string;
+  absolutePath: string;
+  thumbnailPath: string | null;
+}
+
 export interface ProjectData {
   project: Project;
   textSnippets: TextSnippet[];
