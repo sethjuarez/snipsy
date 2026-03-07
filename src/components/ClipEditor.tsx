@@ -310,8 +310,9 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title *"
-            className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[12px]"
+            className="min-w-0 px-2.5 py-1.5 rounded text-[12px]"
             style={{
+              width: "25%",
               backgroundColor: "var(--color-surface-inset)",
               color: "var(--color-text)",
               border: "1px solid var(--color-border)",
@@ -335,7 +336,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
             tabIndex={0}
             onClick={() => setCapturingHotkey(true)}
             onKeyDown={capturingHotkey ? handleHotkeyCapture : undefined}
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] w-48"
+            className="flex-1 min-w-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px]"
             style={{
               backgroundColor: "var(--color-surface-inset)",
               color: hotkey ? "var(--color-text)" : "var(--color-text-secondary)",
