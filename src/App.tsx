@@ -275,7 +275,6 @@ function App() {
                   onEdit={handleVideoEdit}
                   onDelete={handleVideoDelete}
                   onPlay={playVideo}
-                  demoMode={demoMode}
                 />
               )
             )}

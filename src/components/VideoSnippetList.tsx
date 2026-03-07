@@ -6,10 +6,9 @@ interface VideoSnippetListProps {
   onEdit: (snippet: VideoSnippet) => void;
   onDelete: (id: string) => void;
   onPlay?: (snippet: VideoSnippet) => void;
-  demoMode?: boolean;
 }
 
-function VideoSnippetList({ snippets, onEdit, onDelete, onPlay, demoMode }: VideoSnippetListProps) {
+function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetListProps) {
   if (snippets.length === 0) {
     return (
       <div className="text-center py-8" style={{ color: "var(--color-text-secondary)" }} data-testid="video-empty-state">
@@ -24,10 +23,23 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay, demoMode }: Vide
       {snippets.map((snippet) => (
         <div
           key={snippet.id}
-          className="flex items-center justify-between rounded-lg px-4 py-3"
+          className="flex items-center rounded-lg px-4 py-3 gap-4"
           style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
           data-testid={`video-snippet-${snippet.id}`}
         >
+          {/* Big play button */}
+          {onPlay && (
+            <button
+              onClick={() => onPlay(snippet)}
+              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity"
+              style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+              data-testid={`video-preview-${snippet.id}`}
+              title="Preview clip"
+            >
+              <Play size={18} fill="currentColor" />
+            </button>
+          )}
+          {/* Clip info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
               <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
@@ -51,17 +63,8 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay, demoMode }: Vide
               {snippet.endTime.toFixed(1)}s)
             </p>
           </div>
+          {/* Actions */}
           <div className="flex items-center gap-2 ml-4">
-            {demoMode && onPlay && (
-              <button
-                onClick={() => onPlay(snippet)}
-                className="flex items-center gap-1 text-[12px] font-medium"
-                style={{ color: "var(--color-success)" }}
-                data-testid={`video-play-${snippet.id}`}
-              >
-                <Play size={12} /> Play
-              </button>
-            )}
             <button
               onClick={() => onEdit(snippet)}
               className="flex items-center gap-1 text-[12px]"

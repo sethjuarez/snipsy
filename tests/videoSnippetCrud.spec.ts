@@ -59,4 +59,9 @@ test.describe("Video Snippet CRUD", () => {
     await expect(page.getByTestId("video-snippet-vs-1")).not.toBeVisible();
     await expect(page.getByTestId("video-empty-state")).toBeVisible();
   });
+
+  test("shows preview button on each clip", async ({ page }) => {
+    const previewBtn = page.getByTestId("video-preview-vs-1");
+    await expect(previewBtn).toBeVisible();
+  });
 });
