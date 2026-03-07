@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Folder, AlertTriangle, Radio } from "lucide-react";
 
 interface StatusBarProps {
@@ -8,6 +9,19 @@ interface StatusBarProps {
 }
 
 function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: StatusBarProps) {
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    if ((window as any).__TAURI_INTERNALS__) {
+      import("@tauri-apps/api/app")
+        .then(({ getVersion }) => getVersion())
+        .then((v) => setVersion(import.meta.env.DEV ? `${v}-dev` : v))
+        .catch(() => setVersion("dev"));
+    } else {
+      setVersion("dev");
+    }
+  }, []);
+
   return (
     <div
       className="no-select flex items-center justify-between px-3 shrink-0"
@@ -42,6 +56,9 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
           >
             <AlertTriangle size={11} /> FFmpeg missing — click to fix
           </button>
+        )}
+        {version && (
+          <span className="opacity-60" data-testid="version-badge">v{version}</span>
         )}
       </div>
     </div>

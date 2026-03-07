@@ -204,6 +204,7 @@ function App() {
         <div className="flex-1 flex items-center justify-center">
           <Welcome />
         </div>
+        <StatusBar projectPath={null} ffmpegAvailable={null} demoMode={false} />
       </div>
     );
   }

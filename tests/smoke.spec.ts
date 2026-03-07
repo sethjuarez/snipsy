@@ -10,3 +10,10 @@ test("welcome screen shows open and create buttons", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Open Project" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New Project" })).toBeVisible();
 });
+
+test("status bar shows version badge", async ({ page }) => {
+  await page.goto("/");
+  const badge = page.getByTestId("version-badge");
+  await expect(badge).toBeVisible();
+  await expect(badge).toContainText("vdev");
+});
