@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/sethjuarez/snipsy/compare/v0.5.1...v0.6.0) (2026-03-07)
+
+
+### Features
+
+* add auto-updater UI with update indicator in title bar ([713c976](https://github.com/sethjuarez/snipsy/commit/713c9762b9f6ee22cd48f81e78caaed087d9f685))
+
+
+### Documentation
+
+* update AUTO-UPDATER.md to reflect active status ([b1ef295](https://github.com/sethjuarez/snipsy/commit/b1ef2950345258081813e816c2fd8e9cf8afbd96))
+
 ## [0.5.1](https://github.com/sethjuarez/snipsy/compare/v0.5.0...v0.5.1) (2026-03-07)
 
 
