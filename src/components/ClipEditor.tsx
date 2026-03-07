@@ -5,6 +5,33 @@ import type { ImportedVideo, VideoSnippet } from "../types";
 
 const backend = createBackendService();
 
+// Hold-to-repeat: fires callback on mousedown, then repeats with acceleration.
+// Uses a ref so the interval always calls the latest callback (avoids stale closures).
+function useHoldRepeat(callback: () => void) {
+  const cbRef = useRef(callback);
+  cbRef.current = callback;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stop = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  }, []);
+
+  const start = useCallback(() => {
+    stop();
+    cbRef.current();
+    // After 400ms delay, repeat every 80ms
+    timerRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(() => cbRef.current(), 80);
+    }, 400);
+  }, [stop]);
+
+  useEffect(() => stop, [stop]);
+
+  return { onMouseDown: start, onMouseUp: stop, onMouseLeave: stop };
+}
+
 // Convert local file path to a URL the webview can load (only in Tauri context)
 let convertFileSrc: ((path: string) => string) | null = null;
 import("@tauri-apps/api/core")
@@ -192,6 +219,12 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
     }
   };
 
+  // Hold-to-repeat bindings for each frame-step button
+  const holdStartBack = useHoldRepeat(() => { setActiveHandle("start"); nudgeHandle("start", -1); });
+  const holdStartFwd  = useHoldRepeat(() => { setActiveHandle("start"); nudgeHandle("start", 1); });
+  const holdEndBack   = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", -1); });
+  const holdEndFwd    = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", 1); });
+
   const handlePreview = useCallback(() => {
     const vid = videoRef.current;
     if (!vid) return;
@@ -253,7 +286,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
         <div className="flex items-center gap-1.5">
           {/* Start frame-step buttons */}
           <button
-            onClick={() => { setActiveHandle("start"); nudgeHandle("start", -1); }}
+            {...holdStartBack}
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="Start − 1 frame"
@@ -262,7 +295,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
             <ChevronLeft size={12} />
           </button>
           <button
-            onClick={() => { setActiveHandle("start"); nudgeHandle("start", 1); }}
+            {...holdStartFwd}
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="Start + 1 frame"
@@ -336,7 +369,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
 
           {/* End frame-step buttons */}
           <button
-            onClick={() => { setActiveHandle("end"); nudgeHandle("end", -1); }}
+            {...holdEndBack}
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="End − 1 frame"
@@ -345,7 +378,7 @@ function ClipEditor({ video, onSave, onCancel }: ClipEditorProps) {
             <ChevronLeft size={12} />
           </button>
           <button
-            onClick={() => { setActiveHandle("end"); nudgeHandle("end", 1); }}
+            {...holdEndFwd}
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="End + 1 frame"
