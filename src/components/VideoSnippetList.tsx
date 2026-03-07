@@ -1,4 +1,4 @@
-import { Pencil, Trash2, Play, Keyboard } from "lucide-react";
+import { Pencil, Trash2, Play, Keyboard, Monitor } from "lucide-react";
 import type { VideoSnippet } from "../types";
 
 interface VideoSnippetListProps {
@@ -50,8 +50,14 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                 {snippet.hotkey}
               </span>
               <span className="text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
-                {snippet.speed}x
+                ~{parseFloat(snippet.speed.toPrecision(3))}×
               </span>
+              {snippet.targetMonitor && (
+                <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+                  <Monitor size={10} />
+                  {snippet.targetMonitor}
+                </span>
+              )}
             </div>
             {snippet.description && (
               <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
