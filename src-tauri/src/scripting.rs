@@ -149,6 +149,50 @@ fn stop_recording(mut child: Child) -> Result<(), String> {
     }
 }
 
+/// Parse a key name string into an enigo Key.
+fn parse_key(name: &str) -> Result<enigo::Key, String> {
+    use enigo::Key;
+    Ok(match name.trim() {
+        "Enter" | "Return" => Key::Return,
+        "Tab" => Key::Tab,
+        "Escape" | "Esc" => Key::Escape,
+        "Backspace" => Key::Backspace,
+        "Delete" => Key::Delete,
+        "Space" | " " => Key::Space,
+        "Up" | "ArrowUp" => Key::UpArrow,
+        "Down" | "ArrowDown" => Key::DownArrow,
+        "Left" | "ArrowLeft" => Key::LeftArrow,
+        "Right" | "ArrowRight" => Key::RightArrow,
+        "Home" => Key::Home,
+        "End" => Key::End,
+        "PageUp" => Key::PageUp,
+        "PageDown" => Key::PageDown,
+        "Shift" => Key::Shift,
+        "Ctrl" | "Control" => Key::Control,
+        "Alt" => Key::Alt,
+        "Meta" | "Cmd" | "Win" | "Super" => Key::Meta,
+        "F1" => Key::F1,
+        "F2" => Key::F2,
+        "F3" => Key::F3,
+        "F4" => Key::F4,
+        "F5" => Key::F5,
+        "F6" => Key::F6,
+        "F7" => Key::F7,
+        "F8" => Key::F8,
+        "F9" => Key::F9,
+        "F10" => Key::F10,
+        "F11" => Key::F11,
+        "F12" => Key::F12,
+        other => {
+            let ch = other
+                .chars()
+                .next()
+                .ok_or_else(|| format!("Empty key name: {}", other))?;
+            Key::Other(ch as u32)
+        }
+    })
+}
+
 /// Find a window by title pattern and return its position + size.
 /// Uses active-win-pos-rs to enumerate — if the active window matches, use it.
 /// Falls back to a substring match via platform APIs.
@@ -213,34 +257,40 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
             Ok(())
         }
         ScriptStep::Keypress { key } => {
-            use enigo::{Enigo, Key, Keyboard, Settings};
+            use enigo::{Enigo, Keyboard, Settings};
             let mut enigo =
                 Enigo::new(&Settings::default()).map_err(|e| format!("enigo error: {}", e))?;
-            let enigo_key = match key.as_str() {
-                "Enter" | "Return" => Key::Return,
-                "Tab" => Key::Tab,
-                "Escape" => Key::Escape,
-                "Backspace" => Key::Backspace,
-                "Delete" => Key::Delete,
-                "Space" => Key::Space,
-                "Up" | "ArrowUp" => Key::UpArrow,
-                "Down" | "ArrowDown" => Key::DownArrow,
-                "Left" | "ArrowLeft" => Key::LeftArrow,
-                "Right" | "ArrowRight" => Key::RightArrow,
-                "Home" => Key::Home,
-                "End" => Key::End,
-                "PageUp" => Key::PageUp,
-                "PageDown" => Key::PageDown,
-                other => Key::Other(
-                    other
-                        .chars()
-                        .next()
-                        .ok_or_else(|| format!("Empty key name: {}", other))? as u32,
-                ),
-            };
-            enigo
-                .key(enigo_key, enigo::Direction::Click)
-                .map_err(|e| format!("keypress error: {}", e))?;
+
+            // Handle modifier combos like "Ctrl+S", "Shift+Enter", etc.
+            let parts: Vec<&str> = key.split('+').collect();
+            if parts.len() > 1 {
+                // Press modifier keys down
+                let modifiers = &parts[..parts.len() - 1];
+                let main_key = parts[parts.len() - 1];
+                for m in modifiers {
+                    let mod_key = parse_key(m)?;
+                    enigo
+                        .key(mod_key, enigo::Direction::Press)
+                        .map_err(|e| format!("modifier press error: {}", e))?;
+                }
+                // Click the main key
+                let mk = parse_key(main_key)?;
+                enigo
+                    .key(mk, enigo::Direction::Click)
+                    .map_err(|e| format!("keypress error: {}", e))?;
+                // Release modifier keys
+                for m in modifiers.iter().rev() {
+                    let mod_key = parse_key(m)?;
+                    enigo
+                        .key(mod_key, enigo::Direction::Release)
+                        .map_err(|e| format!("modifier release error: {}", e))?;
+                }
+            } else {
+                let enigo_key = parse_key(key)?;
+                enigo
+                    .key(enigo_key, enigo::Direction::Click)
+                    .map_err(|e| format!("keypress error: {}", e))?;
+            }
             Ok(())
         }
         ScriptStep::Click {
@@ -359,6 +409,14 @@ pub async fn run_script(project_path: String, script_id: String) -> Result<Strin
                 platform, current
             ));
         }
+    }
+
+    // Verify FFmpeg is available before proceeding
+    if !detect_ffmpeg() {
+        return Err(
+            "FFmpeg is not installed or not found on PATH. Please install FFmpeg to run scripts."
+                .to_string(),
+        );
     }
 
     let output_path = PathBuf::from(&project_path).join(&script.output_video);
