@@ -14,6 +14,15 @@ pub struct SnippetHotkey {
     pub text: Option<String>,
     pub delivery: Option<String>,
     pub type_delay: Option<u32>,
+    // Video snippet playback data
+    pub project_path: Option<String>,
+    pub video_file: Option<String>,
+    pub start_time: Option<f64>,
+    pub end_time: Option<f64>,
+    pub speed: Option<f64>,
+    pub transition_actions: Option<Vec<crate::models::TransitionAction>>,
+    pub target_monitor: Option<String>,
+    pub end_behavior: Option<String>,
 }
 
 /// State tracking for demo mode
@@ -78,8 +87,46 @@ pub fn enter_demo_mode(
             }) {
                 eprintln!("Warning: could not register hotkey '{}': {e}", hk.hotkey);
             }
+        } else if hk.snippet_type == "video" {
+            let project_path = hk.project_path.clone();
+            let video_file = hk.video_file.clone().unwrap_or_default();
+            let start_time = hk.start_time.unwrap_or(0.0);
+            let end_time = hk.end_time.unwrap_or(0.0);
+            let speed = hk.speed.unwrap_or(1.0);
+            let transition_actions = hk.transition_actions.clone();
+            let target_monitor = hk.target_monitor.clone();
+            let end_behavior = hk.end_behavior.clone();
+
+            if let Err(e) = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let app = app.clone();
+                    let project_path = project_path.clone();
+                    let video_file = video_file.clone();
+                    let transition_actions = transition_actions.clone();
+                    let target_monitor = target_monitor.clone();
+                    let end_behavior = end_behavior.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = crate::playback::play_video(
+                            app,
+                            project_path,
+                            video_file,
+                            start_time,
+                            end_time,
+                            speed,
+                            transition_actions,
+                            target_monitor,
+                            end_behavior,
+                        )
+                        .await
+                        {
+                            eprintln!("Video playback error: {e}");
+                        }
+                    });
+                }
+            }) {
+                eprintln!("Warning: could not register hotkey '{}': {e}", hk.hotkey);
+            }
         }
-        // Video snippets will emit events to the frontend
     }
 
     Ok(())
@@ -128,11 +175,46 @@ mod tests {
             text: Some("hello world".into()),
             delivery: Some("fast-type".into()),
             type_delay: Some(30),
+            project_path: None,
+            video_file: None,
+            start_time: None,
+            end_time: None,
+            speed: None,
+            transition_actions: None,
+            target_monitor: None,
+            end_behavior: None,
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, "ts-1");
         assert_eq!(deserialized.snippet_type, "text");
         assert_eq!(deserialized.text.unwrap(), "hello world");
+    }
+
+    #[test]
+    fn video_hotkey_serialization() {
+        let hotkey = SnippetHotkey {
+            id: "vs-1".into(),
+            hotkey: "CmdOrControl+Shift+2".into(),
+            snippet_type: "video".into(),
+            text: None,
+            delivery: None,
+            type_delay: None,
+            project_path: Some("/path/to/project".into()),
+            video_file: Some("videos/demo.mp4".into()),
+            start_time: Some(5.0),
+            end_time: Some(30.0),
+            speed: Some(2.0),
+            transition_actions: None,
+            target_monitor: Some("Primary Monitor".into()),
+            end_behavior: Some("freeze".into()),
+        };
+        let json = serde_json::to_string(&hotkey).unwrap();
+        let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, "vs-1");
+        assert_eq!(deserialized.snippet_type, "video");
+        assert_eq!(deserialized.video_file.unwrap(), "videos/demo.mp4");
+        assert_eq!(deserialized.speed.unwrap(), 2.0);
+        assert_eq!(deserialized.end_behavior.unwrap(), "freeze");
     }
 }

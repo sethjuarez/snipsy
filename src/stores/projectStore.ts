@@ -208,7 +208,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   enterDemoMode: async () => {
-    const { textSnippets, videoSnippets } = get();
+    const { textSnippets, videoSnippets, projectPath } = get();
     const hotkeys = [
       ...textSnippets.map((s) => ({
         id: s.id,
@@ -222,6 +222,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         id: s.id,
         hotkey: s.hotkey,
         snippetType: "video",
+        projectPath: projectPath ?? undefined,
+        videoFile: s.videoFile,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        speed: s.speed,
+        transitionActions: s.transitionActions,
+        targetMonitor: s.targetMonitor,
+        endBehavior: s.endBehavior,
       })),
     ];
     try {

@@ -12,9 +12,19 @@ export interface SnippetHotkey {
   id: string;
   hotkey: string;
   snippetType: string;
+  // Text snippet fields
   text?: string;
   delivery?: string;
   typeDelay?: number;
+  // Video snippet fields
+  projectPath?: string;
+  videoFile?: string;
+  startTime?: number;
+  endTime?: number;
+  speed?: number;
+  transitionActions?: TransitionAction[];
+  targetMonitor?: string;
+  endBehavior?: string;
 }
 
 export interface BackendService {
