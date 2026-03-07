@@ -1,46 +1,47 @@
 # Auto-Updater — Snipsy
 
-## Status: Deferred
+## Status: Active
 
-The Tauri v2 built-in updater (`tauri-plugin-updater`) supports over-the-air updates via a static JSON manifest.
+The auto-updater is fully wired end-to-end using `tauri-plugin-updater`.
 
-### When to Enable
+### How It Works
 
-Enable auto-updates when:
-- Snipsy has a public user base requiring seamless updates.
-- A hosting endpoint is set up for the update manifest (e.g., snipsy.dev or CrabNebula Cloud).
+1. **On startup**, the app silently checks the GitHub Releases endpoint for a newer version.
+2. If an update is available, a **download icon with a pulsing dot** appears in the title bar.
+3. Clicking the icon opens a dropdown showing the **version number** and **release notes**.
+4. The user clicks **"Download & Install"** to start the update — progress is shown inline (MB downloaded).
+5. After installation completes, the app **automatically relaunches**.
 
-### How to Enable
+### Architecture
 
-1. Add `tauri-plugin-updater` to `Cargo.toml`:
-   ```toml
-   tauri-plugin-updater = "2"
-   ```
+| Layer | Component | Purpose |
+|-------|-----------|---------|
+| Rust | `tauri-plugin-updater` in `lib.rs` | Plugin initialization |
+| Config | `tauri.conf.json` → `plugins.updater` | Endpoint, public key, install mode |
+| Store | `src/stores/updateStore.ts` | Zustand store — check, track, dismiss |
+| UI | `src/components/UpdateIndicator.tsx` | Title bar icon + dropdown |
+| Startup | `src/App.tsx` | Calls `checkForUpdate()` on mount |
+| CI | Release workflows | Signs artifacts with `TAURI_SIGNING_PRIVATE_KEY` |
 
-2. Register the plugin in `lib.rs`:
-   ```rust
-   .plugin(tauri_plugin_updater::Builder::new().build())
-   ```
+### Configuration
 
-3. Add updater config to `tauri.conf.json`:
-   ```json
-   {
-     "plugins": {
-       "updater": {
-         "endpoints": ["https://snipsy.dev/updates/{{target}}/{{arch}}/{{current_version}}"],
-         "pubkey": "YOUR_PUBLIC_KEY_HERE"
-       }
-     }
-   }
-   ```
+The updater endpoint points to GitHub Releases:
+```
+https://github.com/sethjuarez/snipsy/releases/latest/download/latest.json
+```
 
-4. Generate signing keys:
-   ```
-   npx @tauri-apps/cli signer generate -w ~/.tauri/snipsy.key
-   ```
+The `latest.json` manifest is generated automatically by `tauri-apps/tauri-action` during CI releases (with `createUpdaterArtifacts: true`).
 
-5. Host the update manifest JSON at the configured endpoint.
+### Signing
 
-### Current Approach
+- **Public key** is stored in `tauri.conf.json`.
+- **Private key** is stored as a GitHub Actions secret (`TAURI_SIGNING_PRIVATE_KEY`).
+- Local builds do not require the signing key — use `npm run tauri dev` for development.
 
-Users download new versions manually from GitHub Releases. The CI/CD pipeline (see `.github/workflows/release.yml`) attaches installers to each release.
+### Testing
+
+Playwright tests cover the update indicator UI in `tests/updateIndicator.spec.ts`:
+- Hidden when no update available
+- Visible with correct version/notes when update exists
+- Dropdown opens/closes correctly
+- Install progress display
