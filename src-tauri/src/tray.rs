@@ -41,7 +41,7 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
         .tooltip("Snipsy")
         .icon(icon)
         .menu(&menu)
-        .menu_on_left_click(false)
+        .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| match event.id.as_ref() {
             "exit_demo" => {
                 let _ = app_handle.emit("exit-demo-mode", ());
