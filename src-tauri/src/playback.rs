@@ -92,10 +92,6 @@ pub async fn play_video(
         .build()
         .map_err(|e| format!("Failed to create playback window: {}", e))?;
 
-    // Disable Windows 11 automatic rounded corners on the frameless window
-    #[cfg(target_os = "windows")]
-    disable_rounded_corners(&window);
-
     // Use native cursor visibility so the OS hides/shows the cursor reliably
     let _ = window.set_cursor_visible(!hide_cursor.unwrap_or(true));
 
@@ -111,11 +107,6 @@ pub async fn play_video(
 #[tauri::command]
 pub async fn show_playback_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("playback") {
-        // Re-apply square corners right before showing — the DWM may reset
-        // the preference when the window transitions from hidden to visible.
-        #[cfg(target_os = "windows")]
-        disable_rounded_corners(&window);
-
         window
             .show()
             .map_err(|e| format!("Failed to show playback window: {}", e))?;
@@ -195,29 +186,6 @@ fn schedule_transition_actions(actions: Vec<TransitionAction>, video_duration_se
             }
         }
     });
-}
-
-/// Removes the automatic rounded corners that Windows 11 applies to frameless windows.
-#[cfg(target_os = "windows")]
-fn disable_rounded_corners(window: &tauri::WebviewWindow) {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
-    };
-
-    let Ok(tauri_hwnd) = window.hwnd() else {
-        return;
-    };
-    let hwnd = HWND(tauri_hwnd.0 as *mut _);
-    let preference = DWMWCP_DONOTROUND;
-    unsafe {
-        let _ = DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_WINDOW_CORNER_PREFERENCE,
-            std::ptr::addr_of!(preference).cast(),
-            std::mem::size_of_val(&preference) as u32,
-        );
-    }
 }
 
 fn urlencoded(s: &str) -> String {

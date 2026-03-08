@@ -60,14 +60,11 @@ function Playback() {
     };
 
     const handlePlaying = () => {
-      // Video is actively rendering frames — wait a couple of paint cycles
-      // so the compositor has a decoded frame on screen before we reveal.
+      // Video is actively rendering frames — reveal the window.
+      // Use setTimeout instead of rAF because rAF is throttled in hidden
+      // windows and would delay the show by 1-2 seconds.
       video.removeEventListener("playing", handlePlaying);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          showWindow();
-        });
-      });
+      setTimeout(() => showWindow(), 30);
     };
 
     const handleTimeUpdate = () => {
