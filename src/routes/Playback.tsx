@@ -52,11 +52,16 @@ function Playback() {
       video.currentTime = start;
     };
 
-    const handleSeeked = async () => {
-      // Video has loaded and seeked to the start frame — safe to show
+    const handleSeeked = () => {
+      // Video has seeked to start frame — begin playing while still hidden
       video.removeEventListener("seeked", handleSeeked);
-      await showWindow();
       video.play().catch(() => {});
+    };
+
+    const handlePlaying = async () => {
+      // Video is actively rendering frames — now safe to reveal the window
+      video.removeEventListener("playing", handlePlaying);
+      await showWindow();
     };
 
     const handleTimeUpdate = () => {
@@ -77,6 +82,7 @@ function Playback() {
 
     video.addEventListener("loadeddata", startPlayback);
     video.addEventListener("seeked", handleSeeked);
+    video.addEventListener("playing", handlePlaying);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
 
@@ -88,6 +94,7 @@ function Playback() {
     return () => {
       video.removeEventListener("loadeddata", startPlayback);
       video.removeEventListener("seeked", handleSeeked);
+      video.removeEventListener("playing", handlePlaying);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };

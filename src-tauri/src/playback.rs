@@ -44,7 +44,11 @@ pub async fn play_video(
     );
 
     let mut builder = WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))
-        .initialization_script("window.__IS_PLAYBACK = true;")
+        .initialization_script(
+            "window.__IS_PLAYBACK = true;\
+             document.documentElement.style.background = '#000';\
+             document.body.style.background = '#000';",
+        )
         .title("Snipsy Playback")
         .decorations(false)
         .always_on_top(true)
@@ -102,6 +106,11 @@ pub async fn play_video(
 #[tauri::command]
 pub async fn show_playback_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("playback") {
+        // Re-apply square corners right before showing — the DWM may reset
+        // the preference when the window transitions from hidden to visible.
+        #[cfg(target_os = "windows")]
+        disable_rounded_corners(&window);
+
         window
             .show()
             .map_err(|e| format!("Failed to show playback window: {}", e))?;
