@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router";
 
 function Playback() {
@@ -13,23 +13,6 @@ function Playback() {
   const hideCursor = searchParams.get("hideCursor") !== "false";
   const backgroundColor = searchParams.get("bg") ?? "#000000";
 
-  const [videoSrc, setVideoSrc] = useState<string>("");
-  const [videoReady, setVideoReady] = useState(false);
-
-  // Resolve file path to a webview-loadable URL
-  useEffect(() => {
-    if (!file) return;
-    import("@tauri-apps/api/core")
-      .then((mod) => {
-        if (mod?.isTauri?.()) {
-          setVideoSrc(mod.convertFileSrc(file));
-        } else {
-          setVideoSrc(file);
-        }
-      })
-      .catch(() => setVideoSrc(file));
-  }, [file]);
-
   const closeWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -37,67 +20,85 @@ function Playback() {
     }
   }, []);
 
+  const showWindow = useCallback(async () => {
+    if (window.__TAURI_INTERNALS__) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("show_playback_window");
+    }
+  }, []);
+
+  // Single effect: resolve src, load, seek, play, show — zero React re-renders
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !videoSrc) return;
+    if (!video || !file) return;
 
-    const startPlayback = () => {
+    let cancelled = false;
+
+    (async () => {
+      // 1. Resolve file path to asset URL — set src directly on the DOM element
+      let src = file;
+      try {
+        const mod = await import("@tauri-apps/api/core");
+        if (mod?.isTauri?.()) src = mod.convertFileSrc(file);
+      } catch { /* use raw path */ }
+
+      if (cancelled) return;
+      video.src = src;
+
+      // 2. Wait for enough data to seek
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 2) return resolve();
+        video.addEventListener("loadeddata", () => resolve(), { once: true });
+      });
+      if (cancelled) return;
+
+      // 3. Seek to start and wait
       video.playbackRate = speed;
       video.currentTime = start;
-    };
+      await new Promise<void>((resolve) => {
+        video.addEventListener("seeked", () => resolve(), { once: true });
+      });
+      if (cancelled) return;
 
-    const handleSeeked = () => {
-      video.removeEventListener("seeked", handleSeeked);
+      // 4. Start playback and wait for decoder to be actively rendering
       video.play().catch(() => {});
-    };
+      await new Promise<void>((resolve) => {
+        video.addEventListener("playing", () => resolve(), { once: true });
+      });
+      if (cancelled) return;
 
-    const handlePlaying = () => {
-      // Video is actively rendering frames — reveal it
-      video.removeEventListener("playing", handlePlaying);
-      setVideoReady(true);
-    };
+      // 5. Reveal video (direct DOM mutation — no React re-render)
+      video.style.opacity = "1";
+      // Show the window (it was created hidden to avoid any flash)
+      await showWindow();
+    })();
 
+    // Timeupdate for end-time clipping
     const handleTimeUpdate = () => {
       if (end > 0 && video.currentTime >= end) {
         video.pause();
         video.currentTime = end;
-        if (endBehavior !== "freeze") {
-          closeWindow();
-        }
+        if (endBehavior !== "freeze") closeWindow();
       }
     };
-
     const handleEnded = () => {
-      if (endBehavior !== "freeze") {
-        closeWindow();
-      }
+      if (endBehavior !== "freeze") closeWindow();
     };
 
-    video.addEventListener("loadeddata", startPlayback);
-    video.addEventListener("seeked", handleSeeked);
-    video.addEventListener("playing", handlePlaying);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
 
-    if (video.readyState >= 2) {
-      startPlayback();
-    }
-
     return () => {
-      video.removeEventListener("loadeddata", startPlayback);
-      video.removeEventListener("seeked", handleSeeked);
-      video.removeEventListener("playing", handlePlaying);
+      cancelled = true;
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [videoSrc, start, end, speed, endBehavior, closeWindow]);
+  }, [file, start, end, speed, endBehavior, closeWindow, showWindow]);
 
-  // Handle Escape key to close playback
+  // Escape to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        closeWindow();
-      }
+      if (e.key === "Escape") closeWindow();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -116,12 +117,16 @@ function Playback() {
   return (
     <div
       className="flex items-center justify-center"
-      style={{ position: "fixed", inset: 0, cursor: hideCursor ? "none" : "auto", backgroundColor }}
+      style={{
+        position: "fixed", inset: 0,
+        cursor: hideCursor ? "none" : "auto",
+        backgroundColor,
+        willChange: "contents",
+      }}
       data-testid="playback-container"
     >
       <video
         ref={videoRef}
-        src={videoSrc || undefined}
         preload="auto"
         data-testid="playback-video"
         data-file={file}
@@ -130,7 +135,12 @@ function Playback() {
         data-speed={speed}
         data-end-behavior={endBehavior}
         className="object-contain"
-        style={{ width: "100%", height: "100%", cursor: "inherit", opacity: videoReady ? 1 : 0 }}
+        style={{
+          width: "100%", height: "100%",
+          cursor: "inherit",
+          opacity: 0,
+          willChange: "opacity",
+        }}
       />
     </div>
   );
