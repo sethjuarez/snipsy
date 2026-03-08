@@ -3,7 +3,7 @@ import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, us
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
-import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical } from "lucide-react";
+import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
 
 interface HotkeyOverviewProps {
@@ -192,6 +192,12 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
               <MousePointerClick size={10} style={{ color: "var(--color-text-secondary)" }} />
             </span>
           )}
+          <span title={snippet.muted !== false ? "Audio muted" : "Audio enabled"}>
+            {snippet.muted !== false
+              ? <VolumeOff size={10} style={{ color: "var(--color-text-secondary)" }} />
+              : <Volume2 size={10} style={{ color: "var(--color-text-secondary)" }} />
+            }
+          </span>
         </div>
       </div>
     </div>
