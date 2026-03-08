@@ -63,6 +63,23 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
       className="rounded-lg overflow-hidden flex flex-col h-full"
       style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
     >
+      {/* Title bar */}
+      <div className="px-3 py-2 flex items-center gap-2">
+        <button
+          className="shrink-0 cursor-grab active:cursor-grabbing"
+          style={{ color: "var(--color-text-secondary)" }}
+          {...dragProps.attributes}
+          {...(dragProps.listeners ?? {})}
+          data-testid="drag-handle"
+        >
+          <GripVertical size={12} />
+        </button>
+        <FileText size={12} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+        <span className="text-[12px] font-medium truncate" style={{ color: "var(--color-text)" }}>
+          {snippet.title}
+        </span>
+      </div>
+      {/* Text preview */}
       <div
         className="px-3 py-3 overflow-hidden flex-1"
         style={{ backgroundColor: "var(--color-surface-inset)" }}
@@ -74,26 +91,14 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
           {snippet.text}
         </pre>
       </div>
+      {/* Footer: hotkey + delivery method */}
       <div className="px-3 py-2 flex items-center gap-2">
-        <button
-          className="shrink-0 cursor-grab active:cursor-grabbing"
-          style={{ color: "var(--color-text-secondary)" }}
-          {...dragProps.attributes}
-          {...(dragProps.listeners ?? {})}
-          data-testid="drag-handle"
-        >
-          <GripVertical size={12} />
-        </button>
         <span
           className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded font-mono shrink-0"
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
         >
           <Keyboard size={10} />
           {snippet.hotkey}
-        </span>
-        <FileText size={12} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
-        <span className="text-[12px] font-medium truncate" style={{ color: "var(--color-text)" }}>
-          {snippet.title}
         </span>
         <span className="text-[10px] ml-auto shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
           {snippet.delivery === "paste" ? "Paste" : "Fast-type"}
@@ -111,6 +116,23 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
       className="rounded-lg overflow-hidden flex flex-col h-full"
       style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
     >
+      {/* Title bar */}
+      <div className="px-3 py-2 flex items-center gap-2">
+        <button
+          className="shrink-0 cursor-grab active:cursor-grabbing"
+          style={{ color: "var(--color-text-secondary)" }}
+          {...dragProps.attributes}
+          {...(dragProps.listeners ?? {})}
+          data-testid="drag-handle"
+        >
+          <GripVertical size={12} />
+        </button>
+        <Film size={12} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
+        <span className="text-[12px] font-medium truncate" style={{ color: "var(--color-text)" }}>
+          {snippet.title}
+        </span>
+      </div>
+      {/* Video preview */}
       <div
         className="relative flex items-center justify-center flex-1"
         style={{ backgroundColor: snippet.backgroundColor || "#000000" }}
@@ -132,16 +154,8 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
           </span>
         </div>
       </div>
+      {/* Footer: hotkey + extras */}
       <div className="px-3 py-2 flex items-center gap-2">
-        <button
-          className="shrink-0 cursor-grab active:cursor-grabbing"
-          style={{ color: "var(--color-text-secondary)" }}
-          {...dragProps.attributes}
-          {...(dragProps.listeners ?? {})}
-          data-testid="drag-handle"
-        >
-          <GripVertical size={12} />
-        </button>
         <span
           className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded font-mono shrink-0"
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
@@ -149,11 +163,6 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
           <Keyboard size={10} />
           {snippet.hotkey}
         </span>
-        <Film size={12} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
-        <span className="text-[12px] font-medium truncate" style={{ color: "var(--color-text)" }}>
-          {snippet.title}
-        </span>
-        {/* Extras: bg swatch, cursor, click-to-play */}
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <span
             className="inline-block w-3.5 h-3.5 rounded-sm border"
