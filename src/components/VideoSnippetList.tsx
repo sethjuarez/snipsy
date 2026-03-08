@@ -66,6 +66,15 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
               >
                 {snippet.hideCursor !== false ? <MousePointer2Off size={10} /> : <MousePointer size={10} />}
               </span>
+              <span
+                className="inline-block w-4 h-4 rounded-sm border"
+                style={{
+                  backgroundColor: snippet.backgroundColor || "#000000",
+                  borderColor: "var(--color-border)",
+                }}
+                title={`Background: ${snippet.backgroundColor || "#000000"}`}
+                data-testid={`bg-color-swatch-${snippet.id}`}
+              />
             </div>
             {snippet.description && (
               <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
