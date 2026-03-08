@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1](https://github.com/sethjuarez/snipsy/compare/v0.8.0...v0.8.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* close button quits with confirmation, minimize hides to tray ([9e4cd3e](https://github.com/sethjuarez/snipsy/commit/9e4cd3e1dacaaafb4e8d3346d6bbec3c27a34f64))
+
+
+### Miscellaneous
+
+* fix deprecated menu_on_left_click warning ([33b418b](https://github.com/sethjuarez/snipsy/commit/33b418b1d597b711646afba5deeee2baeaa11815))
+
 ## [0.8.0](https://github.com/sethjuarez/snipsy/compare/v0.7.0...v0.8.0) (2026-03-08)
 
 
