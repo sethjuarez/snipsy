@@ -3,7 +3,7 @@ import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, us
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
-import { Keyboard, Play, Film, FileText, MousePointerClick, MousePointer, MousePointer2Off, GripVertical } from "lucide-react";
+import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
 
 interface HotkeyOverviewProps {
@@ -100,8 +100,17 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
           <Keyboard size={11} />
           {snippet.hotkey}
         </span>
-        <span className="text-[10px] ml-auto shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
-          {snippet.delivery === "paste" ? "paste" : "fast-type"}
+        <span
+          className="text-[10px] ml-auto shrink-0 px-1.5 py-0.5 rounded flex items-center gap-1"
+          style={snippet.delivery === "fast-type"
+            ? { backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }
+            : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-success)" }}
+        >
+          {snippet.delivery === "fast-type" ? (
+            <><Keyboard size={9} /> fast-type</>
+          ) : (
+            <><Clipboard size={9} /> paste</>
+          )}
         </span>
       </div>
     </div>
