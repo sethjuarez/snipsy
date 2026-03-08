@@ -116,6 +116,8 @@ pub async fn show_playback_window(app: AppHandle) -> Result<(), String> {
         window
             .show()
             .map_err(|e| format!("Failed to show playback window: {}", e))?;
+        // Ensure the window has keyboard focus so Escape and other keys work
+        let _ = window.set_focus();
     }
     Ok(())
 }
