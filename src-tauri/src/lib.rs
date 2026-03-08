@@ -49,8 +49,35 @@ pub fn run() {
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                cleanup_on_exit(app_handle);
+            }
+        });
+}
+
+fn cleanup_on_exit(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    // Unregister all demo-mode hotkeys
+    if let Some(state) = app.try_state::<demo::AppState>() {
+        if let Ok(mut demo) = state.demo.lock() {
+            let gs = app.global_shortcut();
+            for hk in &demo.registered_hotkeys {
+                let _ = gs.unregister(hk.hotkey.as_str());
+            }
+            demo.registered_hotkeys.clear();
+            demo.active = false;
+        }
+    }
+
+    // Close the playback window if it's still open
+    if let Some(window) = app.get_webview_window("playback") {
+        let _ = window.destroy();
+    }
 }
 
 #[cfg(test)]
