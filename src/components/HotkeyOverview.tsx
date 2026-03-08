@@ -150,7 +150,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
         )}
         <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
           <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>
-            {duration.toFixed(1)}s @ {snippet.speed}×
+            {duration.toFixed(1)}s @ ~{parseFloat(snippet.speed.toPrecision(3))}×
           </span>
         </div>
       </div>
