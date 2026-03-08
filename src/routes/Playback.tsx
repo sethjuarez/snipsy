@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 function Playback() {
   const [searchParams] = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const file = searchParams.get("file") ?? "";
   const start = parseFloat(searchParams.get("start") ?? "0");
@@ -62,7 +63,10 @@ function Playback() {
       if (cancelled) return;
 
       if (clickToPlay) {
-        // Show the window with the first frame frozen, cursor visible for clicking
+        // Show the window with the first frame frozen, cursor visible for clicking.
+        // Remove the compositor-guard overlay so the user sees the still frame.
+        if (overlayRef.current) overlayRef.current.style.display = "none";
+
         const container = video.parentElement;
         if (container) container.style.cursor = "pointer";
         await showWindow();
@@ -80,16 +84,40 @@ function Playback() {
 
         // Restore cursor setting after click
         if (container) container.style.cursor = hideCursor ? "none" : "auto";
-      } else {
-        // Show the window with the still first frame before starting the
-        // decoder. The video uses translateZ(0) to stay in a regular
-        // compositing layer, avoiding hardware-overlay blips.
-        await showWindow();
-      }
-      if (cancelled) return;
 
-      // 4. Start playback
-      video.play().catch(() => {});
+        // 4. Start playback — no overlay needed; compositor has settled
+        // during the click-wait interval.
+        video.play().catch(() => {});
+      } else {
+        // Auto-play: the compositor-guard overlay is still visible (same
+        // color as the letterbox bars) so any brief compositor
+        // reconfiguration when play() activates the hardware decoder is
+        // hidden behind it.
+        await showWindow();
+        if (cancelled) return;
+
+        // 4. Start playback behind the overlay
+        video.play().catch(() => {});
+
+        // Wait until the decoder has produced and composited at least one
+        // frame, then remove the overlay.  requestVideoFrameCallback fires
+        // after decode; the extra requestAnimationFrame ensures the
+        // compositor has flushed the frame to screen.
+        await new Promise<void>((resolve) => {
+          if ("requestVideoFrameCallback" in video) {
+            (video as unknown as HTMLVideoElement & {
+              requestVideoFrameCallback: (cb: () => void) => void;
+            }).requestVideoFrameCallback(() => {
+              requestAnimationFrame(() => resolve());
+            });
+          } else {
+            // Fallback for engines without requestVideoFrameCallback
+            setTimeout(resolve, 100);
+          }
+        });
+        if (cancelled) return;
+        if (overlayRef.current) overlayRef.current.style.display = "none";
+      }
     })();
 
     // Timeupdate for end-time clipping
@@ -163,6 +191,21 @@ function Playback() {
           // transparent hole through the letterbox bars when play() activates
           // the hardware decoder.
           transform: "translateZ(0)",
+        }}
+      />
+      {/* Compositor-guard overlay: a solid div the same color as the
+          letterbox bars. It sits above the video so any brief compositor
+          reconfiguration during play() start is invisible.  Removed via ref
+          once the decoder has produced its first frame. */}
+      <div
+        ref={overlayRef}
+        data-testid="playback-overlay"
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundColor,
+          pointerEvents: "none",
+          zIndex: 1,
         }}
       />
     </div>
