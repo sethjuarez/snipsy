@@ -67,9 +67,7 @@ function Playback() {
       });
       if (cancelled) return;
 
-      // 5. Reveal video (direct DOM mutation — no React re-render)
-      video.style.opacity = "1";
-      // Show the window (it was created hidden to avoid any flash)
+      // 5. Show the window (it was created hidden to avoid any flash)
       await showWindow();
     })();
 
@@ -121,7 +119,6 @@ function Playback() {
         position: "fixed", inset: 0,
         cursor: hideCursor ? "none" : "auto",
         backgroundColor,
-        willChange: "contents",
       }}
       data-testid="playback-container"
     >
@@ -138,8 +135,6 @@ function Playback() {
         style={{
           width: "100%", height: "100%",
           cursor: "inherit",
-          opacity: 0,
-          willChange: "opacity",
         }}
       />
     </div>
