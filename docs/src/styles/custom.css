@@ -1,0 +1,51 @@
+/* Snipsy docs — custom Starlight theme */
+
+:root {
+  --sl-color-accent-low: #e8e0f3;
+  --sl-color-accent: #7c5cbf;
+  --sl-color-accent-high: #4a2d8a;
+  --sl-color-white: #1a1a2e;
+  --sl-color-gray-1: #3a3a4e;
+  --sl-color-gray-2: #5a5a6e;
+  --sl-color-gray-3: #8a8a9e;
+  --sl-color-gray-4: #c0c0d0;
+  --sl-color-gray-5: #e8e8f0;
+  --sl-color-gray-6: #f4f4f8;
+  --sl-color-black: #ffffff;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #2d1f4e;
+  --sl-color-accent: #9b7dd4;
+  --sl-color-accent-high: #d4c5f0;
+  --sl-color-white: #f0f0f4;
+  --sl-color-gray-1: #e0e0e8;
+  --sl-color-gray-2: #b0b0c0;
+  --sl-color-gray-3: #7a7a8e;
+  --sl-color-gray-4: #4a4a5e;
+  --sl-color-gray-5: #2a2a3e;
+  --sl-color-gray-6: #1a1a2e;
+  --sl-color-black: #12121e;
+}
+
+/* Screenshot styling */
+.screenshot {
+  border: 1px solid var(--sl-color-gray-4);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  margin: 1.5rem 0;
+}
+
+.screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.screenshot figcaption {
+  font-size: 0.85rem;
+  color: var(--sl-color-gray-3);
+  text-align: center;
+  padding: 0.5rem;
+}

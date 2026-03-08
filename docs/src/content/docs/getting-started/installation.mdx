@@ -1,0 +1,46 @@
+---
+title: Installation
+description: Download and install Snipsy on Windows, macOS, or Linux.
+sidebar:
+  order: 1
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Download
+
+Snipsy is available for **Windows**, **macOS**, and **Linux**. Download the latest release from the [GitHub Releases page](https://github.com/sethjuarez/snipsy/releases).
+
+| Platform | Format |
+|----------|--------|
+| Windows | `.msi` installer or `.exe` (NSIS) |
+| macOS | `.dmg` |
+| Linux | `.AppImage` or `.deb` |
+
+## Install
+
+<Steps>
+
+1. **Download** the appropriate installer for your platform from the releases page.
+2. **Run the installer** and follow the prompts.
+3. **Launch Snipsy** — you'll see the welcome screen.
+
+</Steps>
+
+<Aside type="tip">
+Snipsy auto-updates! Once installed, you'll see an update indicator in the status bar when new versions are available.
+</Aside>
+
+## System Requirements
+
+- **Windows** 10 or later (x64 or ARM64)
+- **macOS** 12 Monterey or later
+- **Linux** with WebKit2GTK support
+
+## Running as Administrator (Windows)
+
+For text delivery (fast-type mode) to work reliably with elevated applications, Snipsy may need to run as Administrator. If you see a shield icon in the title bar, click it to relaunch with elevated permissions.
+
+<Aside type="note">
+This is only needed if you're delivering text to applications running as Administrator (e.g., an elevated terminal).
+</Aside>

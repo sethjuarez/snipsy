@@ -1,0 +1,69 @@
+---
+title: Projects
+description: How Snipsy projects are organized on disk.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## What is a Project?
+
+A Snipsy project is a **folder on disk** containing all your demo assets: text snippets, video clips, scripts, and configuration. Everything is stored as plain JSON files, so projects are easy to version control and share.
+
+## Folder Structure
+
+```
+my-demo-project/
+├── project.json           # Project metadata + all snippets
+├── scripts/               # Automation scripts (JSON)
+│   └── build-demo.json
+└── videos/                # Imported video files
+    ├── build-process.mp4
+    └── deploy-demo.mp4
+```
+
+## project.json
+
+The main project file contains:
+
+```json
+{
+  "name": "My Demo",
+  "description": "A demo for the conference talk",
+  "textSnippets": [
+    {
+      "id": "uuid-here",
+      "title": "React Import",
+      "text": "import React from 'react';",
+      "hotkey": "CmdOrControl+Shift+1",
+      "delivery": "fast-type",
+      "typeDelay": 30
+    }
+  ],
+  "videoSnippets": [
+    {
+      "id": "uuid-here",
+      "title": "Build Process",
+      "videoFile": "videos/build-process.mp4",
+      "startTime": 0,
+      "endTime": 30,
+      "hotkey": "CmdOrControl+Shift+4",
+      "speed": 2,
+      "muted": true
+    }
+  ]
+}
+```
+
+## Recent Projects
+
+Snipsy remembers your recently opened projects. They appear on the welcome screen for quick access. Click a recent project to open it, or use the **×** button to remove it from the list.
+
+<Aside type="tip">
+Since projects are just folders with JSON files, you can store them in Git, OneDrive, or any sync service to share demo setups across machines.
+</Aside>
+
+## Opening Existing Projects
+
+Click **Open Project** on the welcome screen and select the folder containing `project.json`. Snipsy detects the project file and loads everything automatically.

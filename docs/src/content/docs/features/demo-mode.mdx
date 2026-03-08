@@ -1,0 +1,49 @@
+---
+title: Demo Mode
+description: Activate global hotkeys and present seamlessly.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Demo mode is where Snipsy shines — it activates all your configured hotkeys as **system-wide shortcuts**, so they work no matter which application is focused.
+
+## Entering Demo Mode
+
+Click the **green play button** in the title bar. Snipsy will:
+
+1. Register all snippet hotkeys as global shortcuts
+2. Minimize the app to the **system tray**
+3. Switch the tray icon to a bright green indicator
+
+Your audience never sees Snipsy — they just see text appearing and videos playing as if by magic.
+
+## During Demo Mode
+
+- Press any configured hotkey to trigger its snippet
+- **Text snippets** deliver to the currently focused window
+- **Video clips** open as fullscreen overlays (press **Escape** to dismiss early)
+- Snipsy is invisible — only the tray icon shows it's active
+
+## Exiting Demo Mode
+
+Three ways to exit:
+
+1. **Right-click the tray icon** → "Exit Demo Mode"
+2. **Click the tray icon** to show Snipsy, then click the **red stop button**
+3. The `exit-demo-mode` event from the tray menu
+
+All global hotkeys are unregistered and the tray icon returns to its idle (purple) state.
+
+<Aside type="tip">
+Practice your demo flow before going live! Enter demo mode and run through all your hotkeys to make sure the order feels natural.
+</Aside>
+
+## Hotkey Conflicts
+
+If a hotkey conflicts with another application's shortcut, Snipsy includes a **low-level keyboard hook fallback** on Windows that can intercept keys even when the standard global shortcut registration fails.
+
+<Aside type="caution">
+Some security software may flag low-level keyboard hooks. If your hotkeys aren't working, check that Snipsy is allowed through your security settings.
+</Aside>

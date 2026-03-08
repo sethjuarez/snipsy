@@ -1,0 +1,56 @@
+---
+title: System Tray
+description: Always-on tray icon with demo mode indicator.
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Snipsy lives in your system tray — always accessible, never in the way.
+
+## Always-On Tray Icon
+
+The tray icon appears as soon as Snipsy launches and stays visible the entire time the app is running. It serves two purposes:
+
+1. **Quick access** — left-click the icon to show/focus the main window
+2. **Status indicator** — the icon changes color based on the current state
+
+## Icon States
+
+| State | Icon | Tooltip |
+|-------|------|---------|
+| **Idle** | Purple Snipsy logo | "Snipsy" |
+| **Demo Mode** | Green logo with red recording dot | "Snipsy — Demo Mode Active" |
+
+## Tray Menu
+
+Right-click the tray icon to access the context menu:
+
+**Idle mode:**
+- **Show Snipsy** — bring the main window to focus
+- **Quit** — exit the application
+
+**Demo mode:**
+- **Exit Demo Mode** — stop all hotkeys and return to normal
+- **Show Snipsy** — bring the main window to focus
+- **Quit** — exit the application
+
+## Minimize to Tray
+
+When you click the **minimize button**, Snipsy hides to the system tray instead of minimizing to the taskbar. Left-click the tray icon to bring it back.
+
+The **close button (X)** will quit the application (with a confirmation dialog).
+
+## Pinning the Tray Icon
+
+<Aside type="tip" title="Windows Users">
+By default, Windows may hide new tray icons in the overflow area. To always see Snipsy's tray icon:
+
+1. Right-click the taskbar
+2. Select **Taskbar settings**
+3. Scroll to **Other system tray icons**
+4. Toggle **Snipsy** to on
+
+This way you'll always see whether demo mode is active at a glance.
+</Aside>

@@ -1,0 +1,58 @@
+---
+title: Scripts
+description: Automate desktop interactions and record screen captures.
+sidebar:
+  order: 7
+  badge:
+    text: Experimental
+    variant: caution
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
+
+<Aside type="caution" title="Experimental Feature">
+Script recording and playback is experimental and still under active development. The functionality may change, and edge cases may not be fully handled yet.
+</Aside>
+
+Scripts let you automate desktop interactions — launching apps, typing text, pressing keys, clicking, and scrolling — and optionally record the screen while the script runs.
+
+<Screenshot src="/images/script-list.png" alt="Script list" caption="The scripts view showing automation scripts" />
+
+## Script Steps
+
+A script is a sequence of steps, each performing a specific action:
+
+| Step Type | Description | Parameters |
+|-----------|-------------|------------|
+| **launch** | Open an application or URL | `target` |
+| **type** | Type text into the active window | `text`, `delay` (ms) |
+| **keypress** | Press a keyboard shortcut | `keys` |
+| **click** | Click at screen coordinates | `x`, `y`, `relative` |
+| **scroll** | Scroll in the active window | `direction`, `amount` |
+| **move** | Move the cursor | `x`, `y` |
+
+## Creating a Script
+
+Navigate to the **Scripts** view and click **+**. Add steps in order — they'll execute sequentially when you run the script.
+
+## Recording Scripts
+
+Snipsy can **record your interactions** as you perform them:
+
+1. Click the **record button** to start capturing
+2. Perform your actions normally — Snipsy records mouse clicks, keystrokes, and cursor movement
+3. Click **stop** to finish recording
+4. The recorded steps appear as a script you can edit and replay
+
+## Screen Capture
+
+When running a script, you can enable **screen recording** via FFmpeg. The script actions play out while the screen is captured to a video file.
+
+<Aside type="note">
+Screen capture requires **FFmpeg** to be installed. Snipsy can help install it — look for the "FFmpeg missing" indicator in the status bar.
+</Aside>
+
+## Platform Notes
+
+Scripts include a `platform` field indicating which OS they were recorded on. Since screen coordinates and application paths differ between platforms, scripts are generally platform-specific.

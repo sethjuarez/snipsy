@@ -1,0 +1,34 @@
+---
+title: Auto-Updater
+description: Snipsy keeps itself up to date automatically.
+sidebar:
+  order: 9
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Snipsy includes a built-in auto-updater that checks for new versions on startup.
+
+## How It Works
+
+1. **On launch**, Snipsy silently checks for updates in the background
+2. If an update is available, a **download icon** appears in the status bar (bottom-right, next to the version number)
+3. Click the icon to see **release notes** and the new version number
+4. Click **Download & Install** to update — progress is shown inline
+5. Once downloaded, Snipsy **relaunches** with the new version
+
+## Update Indicator
+
+The update indicator appears as a small download icon with a pulsing accent dot. It's intentionally subtle — it won't interrupt your workflow or your demo.
+
+## What Gets Updated
+
+The updater replaces the entire application binary. Your **projects and data are untouched** — they live in your project folders, not inside the app.
+
+<Aside type="note">
+Updates are signed and verified before installation. The update mechanism uses Tauri's built-in updater plugin with code signing to ensure authenticity.
+</Aside>
+
+## Disabling Updates
+
+The updater runs automatically on startup. There's no setting to disable it, but it only checks — it never downloads or installs without your explicit click.

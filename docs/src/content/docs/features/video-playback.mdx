@@ -1,0 +1,45 @@
+---
+title: Video Playback
+description: How fullscreen video overlays work during demos.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+When you trigger a video clip hotkey, Snipsy opens a **frameless, fullscreen, always-on-top window** that plays your video. The audience sees only the video — no window chrome, no title bar, no Snipsy UI.
+
+## Playback Behavior
+
+1. **Window created** — positioned on the target monitor, fullscreen
+2. **Video seeks** to the configured start time
+3. **Playback starts** at the configured speed
+4. **Video ends** — window closes automatically (or freezes, per your setting)
+
+## Controls During Playback
+
+| Key | Action |
+|-----|--------|
+| **Escape** | Close the playback window immediately |
+| **Click** | If click-to-play is enabled, starts playback |
+
+<Aside type="note">
+There are intentionally very few controls during playback — the video is meant to run uninterrupted while you narrate.
+</Aside>
+
+## Click-to-Play Mode
+
+When enabled, the video window appears with the **first frame frozen**. The cursor is visible so you can point at things on screen. Click anywhere to start playback — useful when you want to set up context before the video runs.
+
+## End Behavior
+
+- **Close** (default) — the window disappears when the video reaches the end time
+- **Freeze** — the last frame stays on screen until you press Escape
+
+## Compositor Guard
+
+Snipsy includes a **compositor guard overlay** — a solid-color layer that covers the video during the initial play() call. This prevents a brief flash that can occur when hardware video decoding activates. The overlay is removed once the first frame is decoded and composited.
+
+## Speed Control
+
+Set playback speed from **0.25×** (slow motion) to **4×** (fast forward). Higher speeds are great for build processes or installations where the audience just needs to see the output, not every line scrolling by.

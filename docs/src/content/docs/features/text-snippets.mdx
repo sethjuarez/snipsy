@@ -1,0 +1,63 @@
+---
+title: Text Snippets
+description: Create text snippets with global hotkeys for instant delivery during demos.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Text snippets are the core of Snipsy — pre-loaded text that gets delivered to the active window when you press a hotkey.
+
+<Screenshot src="/images/text-list.png" alt="Text snippet list" caption="The text snippets list showing all configured snippets" />
+
+## Creating a Snippet
+
+Click the **+** button in the Text Snippets view header. Fill in:
+
+| Field | Description |
+|-------|-------------|
+| **Title** | A short label for the snippet |
+| **Description** | Optional notes for yourself |
+| **Hotkey** | Click the capture field and press your shortcut |
+| **Text** | The content to deliver |
+| **Delivery** | `fast-type` or `paste` (see below) |
+| **Type Delay** | Milliseconds between keystrokes (fast-type only) |
+
+<Screenshot src="/images/text-form.png" alt="Text snippet editing form" caption="Editing a text snippet — configure hotkey, text, and delivery method" />
+
+## Delivery Modes
+
+### Fast-Type
+
+Simulates individual keystrokes as if you're typing. This looks natural to your audience — they see text appearing character by character.
+
+- **Type Delay** controls speed (default: 30ms between keys)
+- Works with any application that accepts keyboard input
+- Best for: code demos, terminal commands, live coding
+
+### Paste
+
+Inserts the full text via the clipboard (`Ctrl+V`). Instant delivery — the entire text appears at once.
+
+- Fastest delivery method
+- Best for: large blocks of text, URLs, configuration snippets
+
+<Aside type="tip">
+Use **fast-type** for lines your audience should watch being "typed" (like code), and **paste** for boilerplate they don't need to see character by character.
+</Aside>
+
+## Hotkey Format
+
+Hotkeys use the Tauri accelerator format:
+
+- `CmdOrControl+Shift+1` — works as Cmd on macOS, Ctrl on Windows/Linux
+- `Alt+Shift+A` — modifier combinations
+- Single keys like `F5` are also supported
+
+The hotkey capture widget records exactly what you press — no need to memorize the format.
+
+<Aside type="caution">
+Avoid hotkeys that conflict with the application you're demoing. Common safe choices are `Ctrl+Shift+[number]` combinations.
+</Aside>

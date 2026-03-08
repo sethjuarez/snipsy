@@ -1,0 +1,63 @@
+---
+title: Quick Start
+description: Create your first project and trigger a snippet in under 2 minutes.
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
+
+Get from zero to your first hotkey trigger in under 2 minutes.
+
+## Create a Project
+
+<Steps>
+
+1. **Launch Snipsy** — the welcome screen appears.
+
+   <Screenshot src="/images/welcome.png" alt="Snipsy welcome screen" caption="The welcome screen — create or open a project" />
+
+2. **Click "New Project"** — enter a name and choose a folder. Snipsy creates a project directory with a `project.json` file.
+
+3. **You're in!** The hotkey overview dashboard is now visible (empty for now).
+
+</Steps>
+
+## Add a Text Snippet
+
+<Steps>
+
+1. Click **Text** in the sidebar to go to the text snippets view.
+2. Click the **+** button in the header.
+3. Fill in the form:
+   - **Title**: `Hello World`
+   - **Hotkey**: Click the capture field and press your desired shortcut (e.g., `Ctrl+Shift+1`)
+   - **Text**: `console.log('Hello, world!');`
+   - **Delivery**: Choose `fast-type` or `paste`
+4. Click **Save**.
+
+</Steps>
+
+<Screenshot src="/images/text-form.png" alt="Text snippet form" caption="Editing a text snippet with hotkey assignment" />
+
+## Enter Demo Mode
+
+<Steps>
+
+1. Click the **green play button** in the title bar.
+2. Snipsy minimizes to the **system tray** — your audience can't see it.
+3. Open any text editor and press your hotkey — the text appears!
+4. Right-click the **tray icon** → **Exit Demo Mode** to return.
+
+</Steps>
+
+<Aside type="tip">
+Pin Snipsy's tray icon so you can always see whether demo mode is active. Right-click the taskbar → Taskbar settings → Other system tray icons → toggle **Snipsy** on.
+</Aside>
+
+## Next Steps
+
+- [Text Snippets](/features/text-snippets/) — delivery modes, type delays
+- [Video Clips](/features/video-clips/) — import and trim video
+- [Demo Mode](/features/demo-mode/) — hotkey behavior and tray integration

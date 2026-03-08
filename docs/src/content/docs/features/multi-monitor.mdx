@@ -1,0 +1,42 @@
+---
+title: Multi-Monitor
+description: Target specific displays for video playback and use transition actions.
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Target Monitor
+
+If you have multiple displays connected, you can choose which monitor a video clip plays on. This is configured per-clip in the video snippet settings.
+
+Snipsy detects all connected monitors and lists them by name. Select the target monitor and the playback window will open fullscreen on that display.
+
+<Aside type="tip">
+This is perfect for setups where you present on one screen while controlling from another — your video plays on the projector while you work on your laptop.
+</Aside>
+
+## Transition Actions
+
+Transition actions let you **automate desktop interactions** during video playback. For example, you can schedule a mouse click at a specific screen coordinate to happen at a certain point in the video.
+
+### Supported Actions
+
+| Action | Parameters | Description |
+|--------|-----------|-------------|
+| **click** | `x`, `y` | Moves cursor to coordinates and clicks |
+
+### Timing
+
+Each transition action has a `triggerAt` value:
+- A **number** (e.g., `15.5`) — triggers at that many seconds into the video
+- `"end"` — triggers when the video reaches its end time
+
+### Use Case
+
+Imagine you're demoing a build process. The video shows the build running, and at the end you want to automatically click a button in your IDE. Set up a transition action with `triggerAt: "end"` and the screen coordinates of that button.
+
+<Aside type="caution">
+Transition actions use absolute screen coordinates. If your display layout changes between rehearsal and presentation, the coordinates may need updating.
+</Aside>

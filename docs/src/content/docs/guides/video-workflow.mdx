@@ -1,0 +1,71 @@
+---
+title: Video Workflow
+description: Import, trim, configure, and present video clips.
+sidebar:
+  order: 2
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+This guide covers the complete workflow for adding video content to your demos.
+
+## Step 1: Record Your Content
+
+Record the screen content you want to show during your demo. Common tools:
+
+- **OBS Studio** — free, cross-platform screen recording
+- **Windows Game Bar** (`Win+G`) — quick capture on Windows
+- **macOS Screenshot** (`Cmd+Shift+5`) — built-in screen recording
+
+<Aside type="tip">
+Record at your screen's native resolution for the sharpest playback. Snipsy handles aspect ratio differences with letterboxing.
+</Aside>
+
+## Step 2: Import into Snipsy
+
+<Steps>
+
+1. Open your project and navigate to the **Videos** view
+2. Click **+** to import — select your video file
+3. The file is copied into your project's `videos/` directory
+4. It now appears in the video library
+
+</Steps>
+
+## Step 3: Create a Clip
+
+<Steps>
+
+1. Navigate to the **Clips** view
+2. Click **+** to create a new video snippet
+3. Select your imported video as the source
+4. Use the **clip editor** to set:
+   - **Start time** — where playback begins
+   - **End time** — where playback stops
+   - **Preview** the trimmed range
+5. Configure settings:
+   - **Speed** — 2× for builds, 1× for detail work
+   - **Muted** — on by default, toggle off if audio matters
+   - **End behavior** — close the window or freeze on the last frame
+   - **Click to play** — show the first frame and wait for a click
+6. **Assign a hotkey**
+7. **Save**
+
+</Steps>
+
+## Step 4: Fine-Tune
+
+After creating your clip:
+
+- **Test playback** from the clips list using the play button
+- **Adjust timing** if the start/end points need tweaking
+- **Try different speeds** — sometimes 1.5× feels more natural than 2×
+- **Check on your target monitor** if using multi-monitor setup
+
+## Step 5: Present
+
+Enter demo mode and trigger your video clips with their assigned hotkeys. The video plays fullscreen, your audience sees a polished recording, and you narrate over it.
+
+<Aside type="note">
+Press **Escape** at any time during playback to dismiss the video early — useful if you need to move on faster than expected.
+</Aside>
