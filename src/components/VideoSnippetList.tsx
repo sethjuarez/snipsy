@@ -59,14 +59,6 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                 </span>
               )}
               <span
-                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
-                title={snippet.hideCursor !== false ? "Cursor hidden during playback" : "Cursor visible during playback"}
-                data-testid={`cursor-indicator-${snippet.id}`}
-              >
-                {snippet.hideCursor !== false ? <MousePointer2Off size={10} /> : <MousePointer size={10} />}
-              </span>
-              <span
                 className="inline-block w-4 h-4 rounded-sm border"
                 style={{
                   backgroundColor: snippet.backgroundColor || "#000000",
@@ -75,6 +67,14 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                 title={`Background: ${snippet.backgroundColor || "#000000"}`}
                 data-testid={`bg-color-swatch-${snippet.id}`}
               />
+              <span
+                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+                title={snippet.hideCursor !== false ? "Cursor hidden during playback" : "Cursor visible during playback"}
+                data-testid={`cursor-indicator-${snippet.id}`}
+              >
+                {snippet.hideCursor !== false ? <MousePointer2Off size={10} /> : <MousePointer size={10} />}
+              </span>
               {snippet.clickToPlay && (
                 <span
                   className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
