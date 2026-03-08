@@ -6,6 +6,7 @@ import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
+import TrayHint from "./components/TrayHint";
 import FFmpegHelper from "./components/FFmpegHelper";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
@@ -208,6 +209,7 @@ function App() {
         <div className="flex-1 flex items-center justify-center">
           <Welcome />
         </div>
+        <TrayHint />
         <StatusBar projectPath={null} ffmpegAvailable={null} demoMode={false} />
       </div>
     );
@@ -390,6 +392,7 @@ function App() {
         </main>
       </div>
 
+      <TrayHint />
       <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} onFfmpegClick={() => setShowFfmpegHelper(true)} />
 
       {showFfmpegHelper && (

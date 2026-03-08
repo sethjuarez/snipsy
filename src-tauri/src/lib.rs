@@ -19,13 +19,26 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            // Set the window icon explicitly so it shows in the taskbar during dev
             use tauri::Manager;
+            // Set the window icon explicitly so it shows in the taskbar during dev
             if let Some(main_window) = app.get_webview_window("main") {
                 if let Some(icon) = app.default_window_icon() {
                     let _ = main_window.set_icon(icon.clone());
                 }
+
+                // Intercept close (Alt+F4, etc.) — hide to tray instead of quitting
+                let w = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = w.hide();
+                    }
+                });
             }
+
+            // Always-on system tray icon
+            tray::init_tray(app.handle())?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

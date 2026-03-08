@@ -42,16 +42,13 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
     return () => unlisten?.();
   }, [appWindow]);
 
-  // In demo mode, minimize hides to tray instead
+  // Minimize always hides to tray
   const minimize = useCallback(() => {
-    if (demoMode && appWindow) {
-      appWindow.hide();
-    } else {
-      appWindow?.minimize();
-    }
-  }, [appWindow, demoMode]);
+    appWindow?.hide();
+  }, [appWindow]);
   const toggleMaximize = useCallback(() => appWindow?.toggleMaximize(), [appWindow]);
-  const close = useCallback(() => appWindow?.close(), [appWindow]);
+  // Close hides to tray; actual quit is via tray menu
+  const close = useCallback(() => appWindow?.hide(), [appWindow]);
 
   const handleRelaunchAsAdmin = useCallback(() => {
     getBackend().relaunchAsAdmin().catch(() => {});
