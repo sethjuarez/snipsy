@@ -41,7 +41,7 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
           </span>
         )}
         {projectPath && !demoMode && (
-          <span className="flex items-center gap-1.5 truncate max-w-xs">
+          <span className="flex items-center gap-1.5 truncate">
             <Folder size={11} />
             {projectPath}
           </span>
