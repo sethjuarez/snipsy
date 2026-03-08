@@ -62,13 +62,13 @@ export default function UpdateIndicator() {
       style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
     >
       <button
-        className="relative w-7 h-7 flex items-center justify-center rounded"
+        className="relative w-5 h-5 flex items-center justify-center rounded"
         onClick={() => setOpen(!open)}
         title={`Update available: v${update.version}`}
         data-testid="update-indicator"
         style={{ color: "var(--color-accent, #6366f1)" }}
       >
-        <Download size={14} />
+        <Download size={11} />
         {/* Pulsing notification dot */}
         <span
           className="absolute top-1 right-1 w-2 h-2 rounded-full animate-pulse"
@@ -78,7 +78,7 @@ export default function UpdateIndicator() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 z-[100] w-[240px] py-2.5 px-3 rounded-lg shadow-lg"
+          className="absolute right-0 bottom-full mb-1 z-[100] w-[240px] py-2.5 px-3 rounded-lg shadow-lg"
           style={{
             backgroundColor: "var(--color-surface)",
             border: "1px solid var(--color-border)",

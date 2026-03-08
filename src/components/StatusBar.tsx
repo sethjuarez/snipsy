@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Folder, AlertTriangle, Radio } from "lucide-react";
+import UpdateIndicator from "./UpdateIndicator";
 
 interface StatusBarProps {
   projectPath: string | null;
@@ -60,6 +61,7 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
         {version && (
           <span className="opacity-60" data-testid="version-badge">v{version}</span>
         )}
+        <UpdateIndicator />
       </div>
     </div>
   );
