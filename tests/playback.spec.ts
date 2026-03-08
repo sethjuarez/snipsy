@@ -70,4 +70,16 @@ test.describe("Playback Window", () => {
     const video = page.getByTestId("playback-video");
     await expect(video).toHaveAttribute("data-click-to-play", "true");
   });
+
+  test("muted defaults to true", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4");
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveAttribute("data-muted", "true");
+  });
+
+  test("muted can be set to false", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4&muted=false");
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveAttribute("data-muted", "false");
+  });
 });

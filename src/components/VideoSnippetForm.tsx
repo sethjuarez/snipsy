@@ -41,6 +41,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   const [transitionActions, setTransitionActions] = useState<TransitionAction[]>(
     snippet?.transitionActions ?? [],
   );
+  const [muted, setMuted] = useState(snippet?.muted !== false);
 
   const addTransitionAction = () => {
     setTransitionActions([
@@ -89,6 +90,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       endTime,
       hotkey,
       speed,
+      muted,
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
     });
@@ -200,6 +202,20 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
           }
           data-testid="video-snippet-hotkey"
         />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="muted"
+          checked={muted}
+          onChange={(e) => setMuted(e.target.checked)}
+          className="rounded"
+          data-testid="video-snippet-muted"
+        />
+        <label htmlFor="muted" className="font-medium text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+          Mute audio during playback
+        </label>
       </div>
 
       <div data-testid="transition-actions-section">

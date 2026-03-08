@@ -47,6 +47,7 @@ export interface VideoSnippet {
   hideCursor?: boolean;
   backgroundColor?: string;
   clickToPlay?: boolean;
+  muted?: boolean;
   transitionActions?: TransitionAction[];
 }
 

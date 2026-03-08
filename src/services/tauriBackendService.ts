@@ -72,6 +72,7 @@ export class TauriBackendService implements BackendService {
     hideCursor?: boolean,
     backgroundColor?: string,
     clickToPlay?: boolean,
+    muted?: boolean,
   ): Promise<void> {
     return invoke("play_video", {
       projectPath: projectPath ?? null,
@@ -85,6 +86,7 @@ export class TauriBackendService implements BackendService {
       hideCursor: hideCursor ?? null,
       backgroundColor: backgroundColor ?? null,
       clickToPlay: clickToPlay ?? null,
+      muted: muted ?? null,
     });
   }
 

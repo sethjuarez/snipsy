@@ -109,6 +109,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [hideCursor, setHideCursor] = useState(existingClip?.hideCursor ?? true);
   const [backgroundColor, setBackgroundColor] = useState(existingClip?.backgroundColor ?? "#000000");
   const [clickToPlay, setClickToPlay] = useState(existingClip?.clickToPlay ?? false);
+  const [muted, setMuted] = useState(existingClip?.muted !== false);
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
 
@@ -304,6 +305,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       hideCursor,
       backgroundColor,
       clickToPlay,
+      muted,
     });
   };
 
@@ -620,6 +622,16 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               data-testid="clip-click-to-play"
             />
             Click to play
+          </label>
+          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={muted}
+              onChange={(e) => setMuted(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+              data-testid="clip-muted"
+            />
+            Mute audio
           </label>
           <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
             Background:

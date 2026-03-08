@@ -48,6 +48,8 @@ pub struct VideoSnippet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub click_to_play: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub muted: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transition_actions: Option<Vec<TransitionAction>>,
 }
 

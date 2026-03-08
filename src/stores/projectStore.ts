@@ -233,6 +233,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         hideCursor: s.hideCursor,
         backgroundColor: s.backgroundColor,
         clickToPlay: s.clickToPlay,
+        muted: s.muted,
       })),
     ];
     try {
@@ -304,6 +305,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       snippet.hideCursor,
       snippet.backgroundColor,
       snippet.clickToPlay,
+      snippet.muted,
     );
   },
 }));

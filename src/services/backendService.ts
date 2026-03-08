@@ -28,6 +28,7 @@ export interface SnippetHotkey {
   hideCursor?: boolean;
   backgroundColor?: string;
   clickToPlay?: boolean;
+  muted?: boolean;
 }
 
 export interface BackendService {
@@ -61,6 +62,7 @@ export interface BackendService {
     hideCursor?: boolean,
     backgroundColor?: string,
     clickToPlay?: boolean,
+    muted?: boolean,
   ): Promise<void>;
   showPlaybackWindow(): Promise<void>;
   closePlaybackWindow(): Promise<void>;

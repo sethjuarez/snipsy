@@ -14,6 +14,7 @@ function Playback() {
   const hideCursor = searchParams.get("hideCursor") !== "false";
   const backgroundColor = searchParams.get("bg") ?? "#000000";
   const clickToPlay = searchParams.get("clickToPlay") === "true";
+  const muted = searchParams.get("muted") !== "false";
 
   const closeWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
@@ -56,6 +57,7 @@ function Playback() {
 
       // 3. Seek to start and wait
       video.playbackRate = speed;
+      video.muted = muted;
       video.currentTime = start;
       await new Promise<void>((resolve) => {
         video.addEventListener("seeked", () => resolve(), { once: true });
@@ -140,7 +142,7 @@ function Playback() {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, endBehavior, hideCursor, clickToPlay, closeWindow, showWindow]);
+  }, [file, start, end, speed, endBehavior, hideCursor, clickToPlay, muted, closeWindow, showWindow]);
 
   // Escape to close
   useEffect(() => {
@@ -181,6 +183,7 @@ function Playback() {
         data-speed={speed}
         data-end-behavior={endBehavior}
         data-click-to-play={clickToPlay}
+        data-muted={muted}
         className="object-contain"
         style={{
           width: "100%", height: "100%",

@@ -1,4 +1,4 @@
-import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off, MousePointerClick } from "lucide-react";
+import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off, MousePointerClick, Volume2, VolumeOff } from "lucide-react";
 import type { VideoSnippet } from "../types";
 
 interface VideoSnippetListProps {
@@ -85,6 +85,14 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                   <MousePointerClick size={10} />
                 </span>
               )}
+              <span
+                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+                title={snippet.muted !== false ? "Audio muted during playback" : "Audio enabled during playback"}
+                data-testid={`muted-indicator-${snippet.id}`}
+              >
+                {snippet.muted !== false ? <VolumeOff size={10} /> : <Volume2 size={10} />}
+              </span>
             </div>
             {snippet.description && (
               <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>

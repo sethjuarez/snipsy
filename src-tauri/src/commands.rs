@@ -494,6 +494,7 @@ mod tests {
             hide_cursor: None,
             background_color: None,
             click_to_play: None,
+            muted: None,
             transition_actions: None,
         }];
 

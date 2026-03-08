@@ -16,6 +16,7 @@ pub async fn play_video(
     hide_cursor: Option<bool>,
     background_color: Option<String>,
     click_to_play: Option<bool>,
+    muted: Option<bool>,
 ) -> Result<(), String> {
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
@@ -37,8 +38,9 @@ pub async fn play_video(
     let hc = if hide_cursor.unwrap_or(true) { "true" } else { "false" };
     let bg = background_color.as_deref().unwrap_or("#000000");
     let ctp = if click_to_play.unwrap_or(false) { "true" } else { "false" };
+    let mute = if muted.unwrap_or(true) { "true" } else { "false" };
     let url = format!(
-        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}&clickToPlay={}",
+        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}&clickToPlay={}&muted={}",
         urlencoded(&abs_path),
         start_time,
         end_time,
@@ -46,7 +48,8 @@ pub async fn play_video(
         eb,
         hc,
         urlencoded(bg),
-        ctp
+        ctp,
+        mute
     );
 
     let init_script = format!(

@@ -94,6 +94,17 @@ test.describe("Video Import", () => {
     await expect(checkbox).toBeChecked();
   });
 
+  test("clip editor shows mute audio checkbox defaulting to checked", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    const checkbox = page.getByTestId("clip-muted");
+    await expect(checkbox).toBeVisible();
+    await expect(checkbox).toBeChecked();
+    // Can uncheck
+    await checkbox.uncheck();
+    await expect(checkbox).not.toBeChecked();
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();
