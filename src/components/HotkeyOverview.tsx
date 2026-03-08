@@ -94,14 +94,14 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
       {/* Footer: hotkey + delivery method */}
       <div className="px-3 py-2 flex items-center gap-2">
         <span
-          className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded font-mono shrink-0"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono font-semibold shrink-0"
+          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
         >
-          <Keyboard size={10} />
+          <Keyboard size={11} />
           {snippet.hotkey}
         </span>
         <span className="text-[10px] ml-auto shrink-0 px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
-          {snippet.delivery === "paste" ? "Paste" : "Fast-type"}
+          {snippet.delivery === "paste" ? "paste" : "fast-type"}
         </span>
       </div>
     </div>
@@ -157,10 +157,10 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
       {/* Footer: hotkey + extras */}
       <div className="px-3 py-2 flex items-center gap-2">
         <span
-          className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded font-mono shrink-0"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono font-semibold shrink-0"
+          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
         >
-          <Keyboard size={10} />
+          <Keyboard size={11} />
           {snippet.hotkey}
         </span>
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
