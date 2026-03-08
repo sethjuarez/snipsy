@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.7.0](https://github.com/sethjuarez/snipsy/compare/v0.6.0...v0.7.0) (2026-03-08)
+
+
+### Features
+
+* add Hotkey Overview as the default landing tab ([0c576a1](https://github.com/sethjuarez/snipsy/commit/0c576a1ee842d0b242a13b026f912b540f727e21))
+* click-to-play option for video clips ([5962da5](https://github.com/sethjuarez/snipsy/commit/5962da5e5c19875446f6c71dd79f42858e6d992d))
+* low-level keyboard hook fallback for conflicting hotkeys ([c55f64c](https://github.com/sethjuarez/snipsy/commit/c55f64ce1477412f18e5975f6e7b24d5ee3a0993))
+* overview cards with fixed height, drag-to-reorder, and clip extras ([5003809](https://github.com/sethjuarez/snipsy/commit/50038099ccee614eb4340e6d3188b3a23c9cbdff))
+* per-clip background color for playback letterboxing ([f9009b6](https://github.com/sethjuarez/snipsy/commit/f9009b6c8609bab44f14b642503173c68dcd86f5))
+* preview background color in clip editor video container ([722172a](https://github.com/sethjuarez/snipsy/commit/722172a19fd84e2aab5425e90d51ae717bf1ddb8))
+* redesign hotkey overview as rich preview cards ([a87fda7](https://github.com/sethjuarez/snipsy/commit/a87fda720106e14889fa12dc21a3f1a1c768ac65))
+* replace app icon with minimal scissors (snip) design ([2577155](https://github.com/sethjuarez/snipsy/commit/2577155baf33af031870175c1dfad12cbb7fc819))
+* seamless video playback — hide window until video is ready ([9096ed4](https://github.com/sethjuarez/snipsy/commit/9096ed4fe5741ab0f6875efc79e0ac2d000131a0))
+* show background color swatch in clip list ([f69108b](https://github.com/sethjuarez/snipsy/commit/f69108b1efe8ac3947d7b57e8caf19b757bbc465))
+* show click-to-play indicator in clip list ([e9bffbb](https://github.com/sethjuarez/snipsy/commit/e9bffbb3eb52fe03f1e30480b939a5468e7840c1))
+
+
+### Bug Fixes
+
+* apply background color directly on video element for letterbox bars ([31c586d](https://github.com/sethjuarez/snipsy/commit/31c586dc75542c246d7deeebde277abfd8b070d6))
+* clean up hotkeys and playback window on app exit ([a61cf81](https://github.com/sethjuarez/snipsy/commit/a61cf815c3df647ddbb787ec6a10b9b2d3ba1317))
+* eliminate auto-play blip by showing window before starting playback ([689b98a](https://github.com/sethjuarez/snipsy/commit/689b98ab2afe513edbaa275171703b8bb1740eb7))
+* eliminate playback blip and residual rounded corners ([b746129](https://github.com/sethjuarez/snipsy/commit/b7461296646a68c2d749e86703071b1873d7345e))
+* eliminate playback blip by avoiding hidden-to-visible transition ([5f5a679](https://github.com/sethjuarez/snipsy/commit/5f5a679c4289c8f92b0ff1ef5e52a0c5842bcc35))
+* explicitly set window icon in taskbar during dev ([64d917a](https://github.com/sethjuarez/snipsy/commit/64d917a657c941e7c4da588afeab448d0d8c53c5))
+* pass hideCursor to hotkey playback and remove rounded corners ([fe9f1a5](https://github.com/sethjuarez/snipsy/commit/fe9f1a55b43fbf7312499c595fb0ed960c82e7d6))
+* prevent letterbox blip by forcing regular compositing layer ([f358c58](https://github.com/sethjuarez/snipsy/commit/f358c58d5456127d8821d68a63035b688e0f55df))
+* prevent letterbox blip during auto-play video start ([ee717d9](https://github.com/sethjuarez/snipsy/commit/ee717d907a33db4ad2cbb79fc1e7ec031af371be))
+* remove DWM rounded corners workaround and fix rAF throttling ([b27cd77](https://github.com/sethjuarez/snipsy/commit/b27cd77848fbc1bc6f1fe44f6cb7322e115d2282))
+* remove opacity and will-change from playback video element ([0914f36](https://github.com/sethjuarez/snipsy/commit/0914f364ab655d2bfe5dd486e8a83d279e19c5be))
+* reorder clip list icons — bg color, cursor, click-to-play ([f56b04f](https://github.com/sethjuarez/snipsy/commit/f56b04f7172fdd25923c2a79524f516be02e6c9e))
+* rewrite playback pipeline to eliminate flash and blip ([684efc0](https://github.com/sethjuarez/snipsy/commit/684efc06a80a4a56158b5428c47963975d0adf3a))
+* update titlebar icon and favicon to new scissors design ([0fcacd8](https://github.com/sethjuarez/snipsy/commit/0fcacd8b0708fc75c57ad8339c91d7ec10481808))
+* use sig figs with ~ prefix for speed on overview cards ([0a046e8](https://github.com/sethjuarez/snipsy/commit/0a046e8fc05a58e40647f2983f58c87c4d986251))
+* wait for painted frame before showing playback window ([9311f93](https://github.com/sethjuarez/snipsy/commit/9311f931b98c62387b9ba8493790dbc97fa28e0a))
+
+
+### Miscellaneous
+
+* remove icon preview file ([8a3bc6f](https://github.com/sethjuarez/snipsy/commit/8a3bc6fb74218946ffb762bc232350ca3271c22a))
+
+
+### Refactoring
+
+* move card title + icon to top header bar ([a3f827b](https://github.com/sethjuarez/snipsy/commit/a3f827ba2c0a8086782ca1b38dbcc21bd8239961))
+
 ## [0.6.0](https://github.com/sethjuarez/snipsy/compare/v0.5.1...v0.6.0) (2026-03-07)
 
 
