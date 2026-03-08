@@ -47,8 +47,17 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
     appWindow?.hide();
   }, [appWindow]);
   const toggleMaximize = useCallback(() => appWindow?.toggleMaximize(), [appWindow]);
-  // Close hides to tray; actual quit is via tray menu
-  const close = useCallback(() => appWindow?.hide(), [appWindow]);
+  // Close actually quits the app (with confirmation)
+  const close = useCallback(async () => {
+    if (!appWindow) return;
+    const { confirm } = await import("@tauri-apps/plugin-dialog");
+    const ok = await confirm("Are you sure you want to quit Snipsy?", {
+      title: "Quit Snipsy",
+      okLabel: "Quit",
+      cancelLabel: "Cancel",
+    });
+    if (ok) appWindow.close();
+  }, [appWindow]);
 
   const handleRelaunchAsAdmin = useCallback(() => {
     getBackend().relaunchAsAdmin().catch(() => {});

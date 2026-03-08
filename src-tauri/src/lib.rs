@@ -25,15 +25,6 @@ pub fn run() {
                 if let Some(icon) = app.default_window_icon() {
                     let _ = main_window.set_icon(icon.clone());
                 }
-
-                // Intercept close (Alt+F4, etc.) — hide to tray instead of quitting
-                let w = main_window.clone();
-                main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = w.hide();
-                    }
-                });
             }
 
             // Always-on system tray icon

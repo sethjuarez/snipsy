@@ -41,6 +41,7 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
         .tooltip("Snipsy")
         .icon(icon)
         .menu(&menu)
+        .menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| match event.id.as_ref() {
             "exit_demo" => {
                 let _ = app_handle.emit("exit-demo-mode", ());
@@ -57,7 +58,12 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let tauri::tray::TrayIconEvent::Click { .. } = event {
+            // Left-click only — right-click opens the context menu
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                ..
+            } = event
+            {
                 let app_handle = tray.app_handle();
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let _ = window.show();
