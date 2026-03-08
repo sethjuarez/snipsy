@@ -80,19 +80,15 @@ function Playback() {
 
         // Restore cursor setting after click
         if (container) container.style.cursor = hideCursor ? "none" : "auto";
-      }
-
-      // 4. Start playback and wait for decoder to be actively rendering
-      video.play().catch(() => {});
-      await new Promise<void>((resolve) => {
-        video.addEventListener("playing", () => resolve(), { once: true });
-      });
-      if (cancelled) return;
-
-      // 5. Show the window (if not already shown by click-to-play)
-      if (!clickToPlay) {
+      } else {
+        // Show the window with the still first frame, then start playback.
+        // Showing while paused avoids a compositor blip that occurs when
+        // revealing a hidden window with an active video decoder.
         await showWindow();
       }
+
+      // 4. Start playback
+      video.play().catch(() => {});
     })();
 
     // Timeupdate for end-time clipping
