@@ -59,8 +59,7 @@ pub async fn play_video(
         .always_on_top(true)
         .resizable(false)
         .focused(true)
-        .skip_taskbar(true)
-        .visible(false);
+        .skip_taskbar(true);
 
     // Position on selected monitor, or default to fullscreen on primary
     if let Some(ref mon_name) = target_monitor {

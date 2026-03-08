@@ -14,6 +14,7 @@ function Playback() {
   const backgroundColor = searchParams.get("bg") ?? "#000000";
 
   const [videoSrc, setVideoSrc] = useState<string>("");
+  const [videoReady, setVideoReady] = useState(false);
 
   // Resolve file path to a webview-loadable URL
   useEffect(() => {
@@ -30,17 +31,9 @@ function Playback() {
   }, [file]);
 
   const closeWindow = useCallback(async () => {
-    // In Tauri, invoke close_playback_window command
     if (window.__TAURI_INTERNALS__) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("close_playback_window");
-    }
-  }, []);
-
-  const showWindow = useCallback(async () => {
-    if (window.__TAURI_INTERNALS__) {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("show_playback_window");
     }
   }, []);
 
@@ -54,17 +47,14 @@ function Playback() {
     };
 
     const handleSeeked = () => {
-      // Video has seeked to start frame — begin playing while still hidden
       video.removeEventListener("seeked", handleSeeked);
       video.play().catch(() => {});
     };
 
     const handlePlaying = () => {
-      // Video is actively rendering frames — reveal the window.
-      // Use setTimeout instead of rAF because rAF is throttled in hidden
-      // windows and would delay the show by 1-2 seconds.
+      // Video is actively rendering frames — reveal it
       video.removeEventListener("playing", handlePlaying);
-      setTimeout(() => showWindow(), 30);
+      setVideoReady(true);
     };
 
     const handleTimeUpdate = () => {
@@ -89,7 +79,6 @@ function Playback() {
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("ended", handleEnded);
 
-    // If already loaded (e.g., cached), start immediately
     if (video.readyState >= 2) {
       startPlayback();
     }
@@ -101,7 +90,7 @@ function Playback() {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [videoSrc, start, end, speed, endBehavior, closeWindow, showWindow]);
+  }, [videoSrc, start, end, speed, endBehavior, closeWindow]);
 
   // Handle Escape key to close playback
   useEffect(() => {
@@ -141,7 +130,7 @@ function Playback() {
         data-speed={speed}
         data-end-behavior={endBehavior}
         className="object-contain"
-        style={{ width: "100%", height: "100%", cursor: "inherit" }}
+        style={{ width: "100%", height: "100%", cursor: "inherit", opacity: videoReady ? 1 : 0 }}
       />
     </div>
   );
