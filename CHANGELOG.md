@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.8.0](https://github.com/sethjuarez/snipsy/compare/v0.7.0...v0.8.0) (2026-03-08)
+
+
+### Features
+
+* add mute/unmute option for video snippet playback ([625f458](https://github.com/sethjuarez/snipsy/commit/625f45822165618d88c4588021e07baf4fe48371))
+* always-on system tray with demo mode indicator ([1cbe8d5](https://github.com/sethjuarez/snipsy/commit/1cbe8d5407e4f6d70e77c0691565b216d524c7ac))
+
+
+### Bug Fixes
+
+* ensure playback window gets keyboard focus after show ([24f69b7](https://github.com/sethjuarez/snipsy/commit/24f69b7b6ffd76f7f979ddffc16bf52b8f1261cc))
+* remove max-w-xs so project path is not truncated in status bar ([c3edcd0](https://github.com/sethjuarez/snipsy/commit/c3edcd025d0e62ee771a408e2819a3df3276c27c))
+
+
+### Refactoring
+
+* move update indicator from title bar to status bar ([cd2024c](https://github.com/sethjuarez/snipsy/commit/cd2024c5b12ed1706cc9fd068814f479889d4c2f))
+
 ## [0.7.0](https://github.com/sethjuarez/snipsy/compare/v0.6.0...v0.7.0) (2026-03-08)
 
 
