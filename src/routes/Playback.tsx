@@ -59,10 +59,15 @@ function Playback() {
       video.play().catch(() => {});
     };
 
-    const handlePlaying = async () => {
-      // Video is actively rendering frames — now safe to reveal the window
+    const handlePlaying = () => {
+      // Video is actively rendering frames — wait a couple of paint cycles
+      // so the compositor has a decoded frame on screen before we reveal.
       video.removeEventListener("playing", handlePlaying);
-      await showWindow();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          showWindow();
+        });
+      });
     };
 
     const handleTimeUpdate = () => {
