@@ -3,6 +3,7 @@ mod delivery;
 mod demo;
 mod elevation;
 mod focus;
+mod keyboard_hook;
 mod models;
 mod playback;
 mod recorder;
@@ -83,6 +84,9 @@ fn cleanup_on_exit(app: &tauri::AppHandle) {
             demo.active = false;
         }
     }
+
+    // Clean up low-level keyboard hooks
+    keyboard_hook::clear_all_hooks();
 
     // Close the playback window if it's still open
     if let Some(window) = app.get_webview_window("playback") {

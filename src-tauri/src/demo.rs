@@ -63,13 +63,18 @@ pub fn enter_demo_mode(
     hotkeys: Vec<SnippetHotkey>,
 ) -> Result<(), String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
+
+    // Clean up any stale registrations from a previous session
+    let gs = app.global_shortcut();
+    for hk in &demo.registered_hotkeys {
+        let _ = gs.unregister(hk.hotkey.as_str());
+    }
+    crate::keyboard_hook::clear_all_hooks();
+
     demo.active = true;
     demo.registered_hotkeys = hotkeys.clone();
 
-    let gs = app.global_shortcut();
-
     for hk in &hotkeys {
-        // Skip snippets with empty hotkeys
         if hk.hotkey.is_empty() {
             continue;
         }
@@ -79,7 +84,7 @@ pub fn enter_demo_mode(
             let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
             let type_delay = hk.type_delay;
 
-            if let Err(e) = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
+            let result = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
                     let _ = crate::delivery::deliver_text(
                         text.clone(),
@@ -87,8 +92,27 @@ pub fn enter_demo_mode(
                         type_delay,
                     );
                 }
-            }) {
-                eprintln!("Warning: could not register hotkey '{}': {e}", hk.hotkey);
+            });
+
+            if let Err(e) = result {
+                eprintln!(
+                    "RegisterHotKey failed for '{}': {e} — falling back to low-level hook",
+                    hk.hotkey
+                );
+                let text = hk.text.clone().unwrap_or_default();
+                let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+                let type_delay = hk.type_delay;
+
+                let _ = crate::keyboard_hook::register_hook_fallback(
+                    &hk.hotkey,
+                    Box::new(move || {
+                        let _ = crate::delivery::deliver_text(
+                            text.clone(),
+                            delivery.clone(),
+                            type_delay,
+                        );
+                    }),
+                );
             }
         } else if hk.snippet_type == "video" {
             let project_path = hk.project_path.clone();
@@ -103,7 +127,7 @@ pub fn enter_demo_mode(
             let background_color = hk.background_color.clone();
             let click_to_play = hk.click_to_play;
 
-            if let Err(e) = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
+            let result = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
                     let app = app.clone();
                     let project_path = project_path.clone();
@@ -133,8 +157,58 @@ pub fn enter_demo_mode(
                         }
                     });
                 }
-            }) {
-                eprintln!("Warning: could not register hotkey '{}': {e}", hk.hotkey);
+            });
+
+            if let Err(e) = result {
+                eprintln!(
+                    "RegisterHotKey failed for '{}': {e} — falling back to low-level hook",
+                    hk.hotkey
+                );
+                let app2 = app.clone();
+                let project_path = hk.project_path.clone();
+                let video_file = hk.video_file.clone().unwrap_or_default();
+                let start_time = hk.start_time.unwrap_or(0.0);
+                let end_time = hk.end_time.unwrap_or(0.0);
+                let speed = hk.speed.unwrap_or(1.0);
+                let transition_actions = hk.transition_actions.clone();
+                let target_monitor = hk.target_monitor.clone();
+                let end_behavior = hk.end_behavior.clone();
+                let hide_cursor = hk.hide_cursor;
+                let background_color = hk.background_color.clone();
+                let click_to_play = hk.click_to_play;
+
+                let _ = crate::keyboard_hook::register_hook_fallback(
+                    &hk.hotkey,
+                    Box::new(move || {
+                        let app = app2.clone();
+                        let project_path = project_path.clone();
+                        let video_file = video_file.clone();
+                        let transition_actions = transition_actions.clone();
+                        let target_monitor = target_monitor.clone();
+                        let end_behavior = end_behavior.clone();
+                        let background_color = background_color.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = crate::playback::play_video(
+                                app,
+                                project_path,
+                                video_file,
+                                start_time,
+                                end_time,
+                                speed,
+                                transition_actions,
+                                target_monitor,
+                                end_behavior,
+                                hide_cursor,
+                                background_color,
+                                click_to_play,
+                            )
+                            .await
+                            {
+                                eprintln!("Video playback error (hook fallback): {e}");
+                            }
+                        });
+                    }),
+                );
             }
         }
     }
@@ -155,6 +229,8 @@ pub fn exit_demo_mode(
         let _ = gs.unregister(hk.hotkey.as_str());
     }
     demo.registered_hotkeys.clear();
+
+    crate::keyboard_hook::clear_all_hooks();
 
     Ok(())
 }
