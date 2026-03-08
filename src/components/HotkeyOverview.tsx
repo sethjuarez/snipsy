@@ -94,8 +94,8 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
       {/* Footer: hotkey + delivery method */}
       <div className="px-3 py-2 flex items-center gap-2">
         <span
-          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono font-semibold shrink-0"
-          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono shrink-0"
+          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
         >
           <Keyboard size={11} />
           {snippet.hotkey}
@@ -166,8 +166,8 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
       {/* Footer: hotkey + extras */}
       <div className="px-3 py-2 flex items-center gap-2">
         <span
-          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono font-semibold shrink-0"
-          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono shrink-0"
+          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
         >
           <Keyboard size={11} />
           {snippet.hotkey}
