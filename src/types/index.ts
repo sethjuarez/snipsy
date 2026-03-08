@@ -45,6 +45,7 @@ export interface VideoSnippet {
   targetMonitor?: string;
   endBehavior?: EndBehavior;
   hideCursor?: boolean;
+  backgroundColor?: string;
   transitionActions?: TransitionAction[];
 }
 

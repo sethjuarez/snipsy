@@ -231,6 +231,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         targetMonitor: s.targetMonitor,
         endBehavior: s.endBehavior,
         hideCursor: s.hideCursor,
+        backgroundColor: s.backgroundColor,
       })),
     ];
     try {
@@ -300,6 +301,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       monitor,
       snippet.endBehavior,
       snippet.hideCursor,
+      snippet.backgroundColor,
     );
   },
 }));

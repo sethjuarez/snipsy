@@ -14,6 +14,7 @@ pub async fn play_video(
     target_monitor: Option<String>,
     end_behavior: Option<String>,
     hide_cursor: Option<bool>,
+    background_color: Option<String>,
 ) -> Result<(), String> {
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
@@ -33,22 +34,26 @@ pub async fn play_video(
 
     let eb = end_behavior.as_deref().unwrap_or("close");
     let hc = if hide_cursor.unwrap_or(true) { "true" } else { "false" };
+    let bg = background_color.as_deref().unwrap_or("#000000");
     let url = format!(
-        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}",
+        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}",
         urlencoded(&abs_path),
         start_time,
         end_time,
         speed,
         eb,
-        hc
+        hc,
+        urlencoded(bg)
+    );
+
+    let init_script = format!(
+        "window.__IS_PLAYBACK = true;\
+         document.documentElement.style.background = '{bg}';\
+         document.body.style.background = '{bg}';",
     );
 
     let mut builder = WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))
-        .initialization_script(
-            "window.__IS_PLAYBACK = true;\
-             document.documentElement.style.background = '#000';\
-             document.body.style.background = '#000';",
-        )
+        .initialization_script(&init_script)
         .title("Snipsy Playback")
         .decorations(false)
         .always_on_top(true)

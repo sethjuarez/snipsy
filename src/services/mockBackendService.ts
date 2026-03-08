@@ -154,6 +154,7 @@ export class MockBackendService implements BackendService {
     _targetMonitor?: string,
     _endBehavior?: string,
     _hideCursor?: boolean,
+    _backgroundColor?: string,
   ): Promise<void> {
     // Mock: no-op in test mode
   }

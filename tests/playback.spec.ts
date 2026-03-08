@@ -46,4 +46,16 @@ test.describe("Playback Window", () => {
     const video = page.getByTestId("playback-video");
     await expect(video).toHaveCSS("cursor", "auto");
   });
+
+  test("uses black background by default", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4");
+    const container = page.getByTestId("playback-container");
+    await expect(container).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  });
+
+  test("applies custom background color", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4&bg=%231e1e1e");
+    const container = page.getByTestId("playback-container");
+    await expect(container).toHaveCSS("background-color", "rgb(30, 30, 30)");
+  });
 });

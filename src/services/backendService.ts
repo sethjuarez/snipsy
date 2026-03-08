@@ -26,6 +26,7 @@ export interface SnippetHotkey {
   targetMonitor?: string;
   endBehavior?: string;
   hideCursor?: boolean;
+  backgroundColor?: string;
 }
 
 export interface BackendService {
@@ -57,6 +58,7 @@ export interface BackendService {
     targetMonitor?: string,
     endBehavior?: string,
     hideCursor?: boolean,
+    backgroundColor?: string,
   ): Promise<void>;
   showPlaybackWindow(): Promise<void>;
   closePlaybackWindow(): Promise<void>;

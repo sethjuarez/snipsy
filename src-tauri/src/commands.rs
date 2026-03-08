@@ -492,6 +492,7 @@ mod tests {
             target_monitor: Some("Primary Monitor".into()),
             end_behavior: None,
             hide_cursor: None,
+            background_color: None,
             transition_actions: None,
         }];
 

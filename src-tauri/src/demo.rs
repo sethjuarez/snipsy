@@ -24,6 +24,7 @@ pub struct SnippetHotkey {
     pub target_monitor: Option<String>,
     pub end_behavior: Option<String>,
     pub hide_cursor: Option<bool>,
+    pub background_color: Option<String>,
 }
 
 /// State tracking for demo mode
@@ -98,6 +99,7 @@ pub fn enter_demo_mode(
             let target_monitor = hk.target_monitor.clone();
             let end_behavior = hk.end_behavior.clone();
             let hide_cursor = hk.hide_cursor;
+            let background_color = hk.background_color.clone();
 
             if let Err(e) = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
@@ -107,6 +109,7 @@ pub fn enter_demo_mode(
                     let transition_actions = transition_actions.clone();
                     let target_monitor = target_monitor.clone();
                     let end_behavior = end_behavior.clone();
+                    let background_color = background_color.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = crate::playback::play_video(
                             app,
@@ -119,6 +122,7 @@ pub fn enter_demo_mode(
                             target_monitor,
                             end_behavior,
                             hide_cursor,
+                            background_color,
                         )
                         .await
                         {
@@ -187,6 +191,7 @@ mod tests {
             target_monitor: None,
             end_behavior: None,
             hide_cursor: None,
+            background_color: None,
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
@@ -213,6 +218,7 @@ mod tests {
             target_monitor: Some("Primary Monitor".into()),
             end_behavior: Some("freeze".into()),
             hide_cursor: Some(true),
+            background_color: Some("#1e1e1e".into()),
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();

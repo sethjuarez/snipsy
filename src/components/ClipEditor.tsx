@@ -107,6 +107,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [targetMonitor, setTargetMonitor] = useState(existingClip?.targetMonitor ?? "");
   const [endBehavior, setEndBehavior] = useState<EndBehavior>(existingClip?.endBehavior ?? "close");
   const [hideCursor, setHideCursor] = useState(existingClip?.hideCursor ?? true);
+  const [backgroundColor, setBackgroundColor] = useState(existingClip?.backgroundColor ?? "#000000");
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
 
@@ -300,6 +301,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       targetMonitor: targetMonitor || undefined,
       endBehavior,
       hideCursor,
+      backgroundColor,
     });
   };
 
@@ -606,6 +608,17 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               data-testid="clip-hide-cursor"
             />
             Hide cursor
+          </label>
+          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+            Background:
+            <input
+              type="color"
+              value={backgroundColor}
+              onChange={(e) => setBackgroundColor(e.target.value)}
+              className="w-6 h-5 rounded cursor-pointer border-0 p-0"
+              title="Letterbox / background color for playback"
+              data-testid="clip-background-color"
+            />
           </label>
           <button
             onClick={handleSave}
