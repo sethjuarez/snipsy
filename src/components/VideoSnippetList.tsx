@@ -1,4 +1,4 @@
-import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off } from "lucide-react";
+import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off, MousePointerClick } from "lucide-react";
 import type { VideoSnippet } from "../types";
 
 interface VideoSnippetListProps {
@@ -75,6 +75,16 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                 title={`Background: ${snippet.backgroundColor || "#000000"}`}
                 data-testid={`bg-color-swatch-${snippet.id}`}
               />
+              {snippet.clickToPlay && (
+                <span
+                  className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+                  title="Click to play — first frame freezes until clicked"
+                  data-testid={`click-to-play-indicator-${snippet.id}`}
+                >
+                  <MousePointerClick size={10} />
+                </span>
+              )}
             </div>
             {snippet.description && (
               <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
