@@ -81,11 +81,12 @@ function Playback() {
         // Restore cursor setting after click
         if (container) container.style.cursor = hideCursor ? "none" : "auto";
       } else {
-        // Show the window with the still first frame, then start playback.
-        // Showing while paused avoids a compositor blip that occurs when
-        // revealing a hidden window with an active video decoder.
+        // Show the window with the still first frame before starting the
+        // decoder. The video uses translateZ(0) to stay in a regular
+        // compositing layer, avoiding hardware-overlay blips.
         await showWindow();
       }
+      if (cancelled) return;
 
       // 4. Start playback
       video.play().catch(() => {});
@@ -157,6 +158,11 @@ function Playback() {
           width: "100%", height: "100%",
           cursor: "inherit",
           backgroundColor,
+          // Force the video into a regular compositing layer instead of a
+          // hardware video overlay. Without this, the browser may punch a
+          // transparent hole through the letterbox bars when play() activates
+          // the hardware decoder.
+          transform: "translateZ(0)",
         }}
       />
     </div>
