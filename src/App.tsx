@@ -12,6 +12,7 @@ import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList from "./components/VideoList";
 import ClipEditor from "./components/ClipEditor";
 import VideoSnippetList from "./components/VideoSnippetList";
+import HotkeyOverview from "./components/HotkeyOverview";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
@@ -39,7 +40,7 @@ function App() {
   const closeProject = useProjectStore((s) => s.closeProject);
   const autoOpenLastProject = useProjectStore((s) => s.autoOpenLastProject);
 
-  const [activeView, setActiveView] = useState<AppView>("text-snippets");
+  const [activeView, setActiveView] = useState<AppView>("home");
   const [showForm, setShowForm] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>(undefined);
   const [showVideoForm, setShowVideoForm] = useState(false);
@@ -257,6 +258,10 @@ function App() {
 
           {/* Scrollable content — use overflow-hidden when clip editor is active */}
           <div className={`flex-1 p-4 ${activeView === "videos" && clipEditingVideo ? "overflow-hidden" : "overflow-y-auto"}`}>
+            {activeView === "home" && (
+              <HotkeyOverview textSnippets={textSnippets} videoSnippets={videoSnippets} />
+            )}
+
             {activeView === "text-snippets" && (
               showForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
@@ -399,6 +404,7 @@ function App() {
 
 /* ── Content header with title + add button ── */
 const VIEW_LABELS: Record<AppView, string> = {
+  home: "Hotkey Overview",
   "text-snippets": "Text Snippets",
   videos: "Videos",
   "video-snippets": "Video Clips",
@@ -422,7 +428,7 @@ function ContentHeader({
   onAdd: () => void;
   onCloseForm: () => void;
 }) {
-  const canAdd = view !== "videos";
+  const canAdd = view !== "videos" && view !== "home";
 
   return (
     <div

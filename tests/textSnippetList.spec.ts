@@ -9,8 +9,8 @@ test.describe("Text Snippet List", () => {
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     // Click the submit button (not the mode toggle)
     await page.locator('button:text-is("Open")').click();
-    // Wait for project to load (sidebar appears)
     await expect(page.getByTestId("sidebar")).toBeVisible();
+    await page.getByTestId("nav-text-snippets").click();
   });
 
   test("displays text snippets from mock data", async ({ page }) => {
@@ -45,6 +45,7 @@ test.describe("Text Snippet List", () => {
     await page.getByPlaceholder("My Demo").fill("Empty");
     await page.locator('button:text-is("Create")').click();
     await expect(page.getByTestId("sidebar")).toBeVisible();
+    await page.getByTestId("nav-text-snippets").click();
     await expect(page.getByTestId("empty-state")).toBeVisible();
     await expect(page.getByTestId("empty-state")).toContainText(
       "No text snippets yet",

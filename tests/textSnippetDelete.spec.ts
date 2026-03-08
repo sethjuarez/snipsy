@@ -7,6 +7,7 @@ test.describe("Text Snippet Delete", () => {
     await page.getByPlaceholder("/path/to/project").fill("/mock/project");
     await page.locator('button:text-is("Open")').click();
     await expect(page.getByTestId("sidebar")).toBeVisible();
+    await page.getByTestId("nav-text-snippets").click();
   });
 
   test("can delete a snippet with confirmation", async ({ page }) => {

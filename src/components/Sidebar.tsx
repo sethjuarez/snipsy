@@ -1,6 +1,6 @@
-import { Home, FileText, Film, Video, ScrollText, type LucideIcon } from "lucide-react";
+import { Home, LayoutDashboard, FileText, Film, Video, ScrollText, type LucideIcon } from "lucide-react";
 
-export type AppView = "text-snippets" | "videos" | "video-snippets" | "scripts";
+export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "scripts";
 
 interface NavItem {
   id: AppView;
@@ -9,6 +9,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { id: "home", label: "Overview", Icon: LayoutDashboard },
   { id: "text-snippets", label: "Text", Icon: FileText },
   { id: "video-snippets", label: "Clips", Icon: Film },
   { id: "videos", label: "Videos", Icon: Video },
