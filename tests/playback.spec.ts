@@ -58,4 +58,16 @@ test.describe("Playback Window", () => {
     const container = page.getByTestId("playback-container");
     await expect(container).toHaveCSS("background-color", "rgb(30, 30, 30)");
   });
+
+  test("click-to-play defaults to false (auto-play)", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4");
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveAttribute("data-click-to-play", "false");
+  });
+
+  test("click-to-play sets data attribute when enabled", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4&clickToPlay=true");
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveAttribute("data-click-to-play", "true");
+  });
 });

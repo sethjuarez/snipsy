@@ -12,6 +12,7 @@ function Playback() {
   const endBehavior = searchParams.get("endBehavior") ?? "close";
   const hideCursor = searchParams.get("hideCursor") !== "false";
   const backgroundColor = searchParams.get("bg") ?? "#000000";
+  const clickToPlay = searchParams.get("clickToPlay") === "true";
 
   const closeWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
@@ -27,7 +28,7 @@ function Playback() {
     }
   }, []);
 
-  // Single effect: resolve src, load, seek, play, show — zero React re-renders
+  // Single effect: resolve src, load, seek, (optionally wait for click), play, show
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !file) return;
@@ -35,7 +36,7 @@ function Playback() {
     let cancelled = false;
 
     (async () => {
-      // 1. Resolve file path to asset URL — set src directly on the DOM element
+      // 1. Resolve file path to asset URL
       let src = file;
       try {
         const mod = await import("@tauri-apps/api/core");
@@ -60,6 +61,27 @@ function Playback() {
       });
       if (cancelled) return;
 
+      if (clickToPlay) {
+        // Show the window with the first frame frozen, cursor visible for clicking
+        const container = video.parentElement;
+        if (container) container.style.cursor = "pointer";
+        await showWindow();
+
+        // Wait for a click anywhere on the window to start playback
+        await new Promise<void>((resolve) => {
+          if (cancelled) return resolve();
+          const onClick = () => {
+            window.removeEventListener("click", onClick);
+            resolve();
+          };
+          window.addEventListener("click", onClick);
+        });
+        if (cancelled) return;
+
+        // Restore cursor setting after click
+        if (container) container.style.cursor = hideCursor ? "none" : "auto";
+      }
+
       // 4. Start playback and wait for decoder to be actively rendering
       video.play().catch(() => {});
       await new Promise<void>((resolve) => {
@@ -67,8 +89,10 @@ function Playback() {
       });
       if (cancelled) return;
 
-      // 5. Show the window (it was created hidden to avoid any flash)
-      await showWindow();
+      // 5. Show the window (if not already shown by click-to-play)
+      if (!clickToPlay) {
+        await showWindow();
+      }
     })();
 
     // Timeupdate for end-time clipping
@@ -91,7 +115,7 @@ function Playback() {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, endBehavior, closeWindow, showWindow]);
+  }, [file, start, end, speed, endBehavior, hideCursor, clickToPlay, closeWindow, showWindow]);
 
   // Escape to close
   useEffect(() => {
@@ -131,6 +155,7 @@ function Playback() {
         data-end={end}
         data-speed={speed}
         data-end-behavior={endBehavior}
+        data-click-to-play={clickToPlay}
         className="object-contain"
         style={{
           width: "100%", height: "100%",

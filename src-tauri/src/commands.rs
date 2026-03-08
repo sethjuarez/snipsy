@@ -493,6 +493,7 @@ mod tests {
             end_behavior: None,
             hide_cursor: None,
             background_color: None,
+            click_to_play: None,
             transition_actions: None,
         }];
 

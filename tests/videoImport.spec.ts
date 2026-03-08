@@ -83,6 +83,17 @@ test.describe("Video Import", () => {
     await expect(checkbox).not.toBeChecked();
   });
 
+  test("clip editor shows click-to-play checkbox defaulting to unchecked", async ({ page }) => {
+    await page.getByTestId("create-clip-0").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    const checkbox = page.getByTestId("clip-click-to-play");
+    await expect(checkbox).toBeVisible();
+    await expect(checkbox).not.toBeChecked();
+    // Can check
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();
