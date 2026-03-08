@@ -259,7 +259,7 @@ function App() {
           {/* Scrollable content — use overflow-hidden when clip editor is active */}
           <div className={`flex-1 p-4 ${activeView === "videos" && clipEditingVideo ? "overflow-hidden" : "overflow-y-auto"}`}>
             {activeView === "home" && (
-              <HotkeyOverview textSnippets={textSnippets} videoSnippets={videoSnippets} />
+              <HotkeyOverview textSnippets={textSnippets} videoSnippets={videoSnippets} onPlayVideo={playVideo} />
             )}
 
             {activeView === "text-snippets" && (
