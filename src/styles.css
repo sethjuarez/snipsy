@@ -14,17 +14,29 @@
   --color-border-subtle: var(--color-border-subtle);
   --color-text: var(--color-text);
   --color-text-secondary: var(--color-text-secondary);
+  --color-text-on-accent: var(--color-text-on-accent);
   --color-accent: var(--color-accent);
   --color-accent-hover: var(--color-accent-hover);
   --color-danger: var(--color-danger);
   --color-danger-hover: var(--color-danger-hover);
   --color-success: var(--color-success);
   --color-warning: var(--color-warning);
+  --color-overlay: var(--color-overlay);
+  --color-brand-gradient-start: var(--color-brand-gradient-start);
+  --color-brand-gradient-end: var(--color-brand-gradient-end);
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-size-2xs: var(--font-size-2xs);
+  --font-size-xs: var(--font-size-xs);
+  --font-size-sm: var(--font-size-sm);
+  --font-size-base: var(--font-size-base);
+  --font-size-md: var(--font-size-md);
+  --font-size-lg: var(--font-size-lg);
+  --font-size-heading: var(--font-size-heading);
 }
 
 /* ── Light theme (default) ──────────────────────────────────── */
 :root {
+  /* Colors */
   --color-surface: #ffffff;
   --color-surface-alt: #f8f9fa;
   --color-surface-inset: #f0f1f3;
@@ -33,17 +45,45 @@
   --color-border-subtle: #ebedf0;
   --color-text: #1a1c20;
   --color-text-secondary: #6b7280;
+  --color-text-on-accent: #ffffff;
   --color-accent: #2563eb;
   --color-accent-hover: #1d4fd8;
   --color-danger: #dc2626;
   --color-danger-hover: #b91c1c;
   --color-success: #16a34a;
   --color-warning: #d97706;
+  --color-overlay: rgba(0, 0, 0, 0.5);
+  --color-brand-gradient-start: #5856d6;
+  --color-brand-gradient-end: #7c7af0;
 
+  /* Layout */
   --titlebar-height: 40px;
   --statusbar-height: 26px;
   --sidebar-width: 200px;
   --sidebar-collapsed-width: 48px;
+
+  /* Typography scale */
+  --font-size-2xs: 9px;
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-heading: 22px;
+
+  /* Border radius scale */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --duration-fast: 0.1s;
+  --duration-normal: 0.15s;
+  --duration-slow: 0.3s;
+  --easing-default: ease;
+  --easing-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* ── Dark theme ─────────────────────────────────────────────── */
@@ -56,12 +96,16 @@
   --color-border-subtle: #2d2d30;
   --color-text: #e4e4e7;
   --color-text-secondary: #9ca3af;
+  --color-text-on-accent: #ffffff;
   --color-accent: #3b82f6;
   --color-accent-hover: #60a5fa;
   --color-danger: #ef4444;
   --color-danger-hover: #f87171;
   --color-success: #22c55e;
   --color-warning: #f59e0b;
+  --color-overlay: rgba(0, 0, 0, 0.6);
+  --color-brand-gradient-start: #6c6af0;
+  --color-brand-gradient-end: #9b99f5;
 }
 
 /* ── Base styles ────────────────────────────────────────────── */
@@ -123,14 +167,24 @@ input[type="radio"] {
 }
 
 /* ── Focus ring utility ─────────────────────────────────────── */
-.focus-ring:focus {
+/* Global focus-visible for all interactive elements */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -1px;
 }
 
 /* ── Smooth transitions ─────────────────────────────────────── */
 .theme-transition {
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--duration-normal) var(--easing-default),
+              color var(--duration-normal) var(--easing-default),
+              border-color var(--duration-normal) var(--easing-default);
 }
 
 /* ── Demo mode pulsing indicator ────────────────────────────── */
@@ -141,4 +195,20 @@ input[type="radio"] {
 
 .demo-pulse {
   animation: demoPulse 1.5s ease-in-out infinite;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .demo-pulse,
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

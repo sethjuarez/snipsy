@@ -75,7 +75,7 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
           <GripVertical size={12} />
         </button>
         <FileText size={12} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
-        <span className="text-[12px] font-medium truncate" style={{ color: "var(--color-text)" }}>
+        <span className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
           {snippet.title}
         </span>
       </div>
@@ -85,7 +85,7 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
         style={{ backgroundColor: "var(--color-surface-inset)" }}
       >
         <pre
-          className="text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-all"
+          className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all"
           style={{ color: "var(--color-text-secondary)" }}
         >
           {snippet.text}
@@ -94,14 +94,14 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
       {/* Footer: hotkey + delivery method */}
       <div className="px-3 py-2 flex items-center gap-2">
         <span
-          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono shrink-0"
+          className="flex items-center gap-1.5 text-base px-2.5 py-1 rounded font-mono shrink-0"
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
         >
           <Keyboard size={11} />
           {snippet.hotkey}
         </span>
         <span
-          className="text-[10px] ml-auto shrink-0 px-1.5 py-0.5 rounded flex items-center gap-1"
+          className="text-xs ml-auto shrink-0 px-1.5 py-0.5 rounded flex items-center gap-1"
           style={snippet.delivery === "fast-type"
             ? { backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }
             : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-success)" }}
@@ -137,7 +137,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
           <GripVertical size={12} />
         </button>
         <Film size={12} style={{ color: "var(--color-accent)", flexShrink: 0 }} />
-        <span className="text-[12px] font-medium truncate" style={{ color: "var(--color-text)" }}>
+        <span className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
           {snippet.title}
         </span>
       </div>
@@ -158,7 +158,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
           </button>
         )}
         <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--color-overlay)", color: "var(--color-text-on-accent)" }}>
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--color-overlay)", color: "var(--color-text-on-accent)" }}>
             {duration.toFixed(1)}s @ ~{parseFloat(snippet.speed.toPrecision(3))}×
           </span>
         </div>
@@ -166,7 +166,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
       {/* Footer: hotkey + extras */}
       <div className="px-3 py-2 flex items-center gap-2">
         <span
-          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded font-mono shrink-0"
+          className="flex items-center gap-1.5 text-base px-2.5 py-1 rounded font-mono shrink-0"
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
         >
           <Keyboard size={11} />
@@ -257,8 +257,8 @@ function HotkeyOverview({ textSnippets, videoSnippets, onPlayVideo }: HotkeyOver
     return (
       <div className="text-center py-12" style={{ color: "var(--color-text-secondary)" }} data-testid="hotkey-overview-empty">
         <Keyboard size={32} className="mx-auto mb-3 opacity-40" />
-        <p className="text-[13px]">No hotkeys configured yet</p>
-        <p className="text-[12px] mt-1">Create text snippets or video clips to assign hotkeys.</p>
+        <p className="text-md">No hotkeys configured yet</p>
+        <p className="text-base mt-1">Create text snippets or video clips to assign hotkeys.</p>
       </div>
     );
   }

@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw } from "lucide-react";
-import { createBackendService } from "../services";
+import { getBackend } from "../services";
 import type { EndBehavior, ImportedVideo, MonitorInfo, VideoSnippet } from "../types";
 
-const backend = createBackendService();
+const backend = getBackend();
 
 // Hold-to-repeat: fires callback on mousedown, then repeats with acceleration.
 // Uses a ref so the interval always calls the latest callback (avoids stale closures).
@@ -339,6 +339,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="Start − 1 frame"
+            aria-label="Start − 1 frame"
             data-testid="frame-back-start"
           >
             <ChevronLeft size={12} />
@@ -348,6 +349,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="Start + 1 frame"
+            aria-label="Start + 1 frame"
             data-testid="frame-fwd-start"
           >
             <ChevronRight size={12} />
@@ -374,9 +376,22 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           />
           {/* Playhead */}
           <div
-            className="absolute top-0 bottom-0 w-0.5"
-            style={{ left: `${playheadPos}%`, backgroundColor: "var(--color-danger, #ef4444)" }}
-          />
+            className="absolute bottom-0 flex flex-col items-center pointer-events-none"
+            style={{ left: `${playheadPos}%`, top: -6, transform: "translateX(-50%)" }}
+          >
+            {/* Arrow head */}
+            <div
+              style={{
+                width: 0,
+                height: 0,
+                borderLeft: "5px solid transparent",
+                borderRight: "5px solid transparent",
+                borderTop: "6px solid var(--color-danger, #ef4444)",
+              }}
+            />
+            {/* Vertical line */}
+            <div className="w-0.5 flex-1" style={{ backgroundColor: "var(--color-danger, #ef4444)" }} />
+          </div>
           {/* Start handle */}
           <div
             className="absolute top-0 bottom-0 rounded-l cursor-col-resize z-10"
@@ -403,13 +418,13 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           />
           {/* Time labels on the bar */}
           <span
-            className="absolute text-[9px] font-mono pointer-events-none"
+            className="absolute text-2xs font-mono pointer-events-none"
             style={{ left: 4, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }}
           >
             {formatTime(startTime, true)}
           </span>
           <span
-            className="absolute text-[9px] font-mono pointer-events-none"
+            className="absolute text-2xs font-mono pointer-events-none"
             style={{ right: 4, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }}
           >
             {formatTime(endTime, true)}
@@ -422,6 +437,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="End − 1 frame"
+            aria-label="End − 1 frame"
             data-testid="frame-back-end"
           >
             <ChevronLeft size={12} />
@@ -431,6 +447,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             className="shrink-0 w-6 h-7 flex items-center justify-center rounded"
             style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
             title="End + 1 frame"
+            aria-label="End + 1 frame"
             data-testid="frame-fwd-end"
           >
             <ChevronRight size={12} />
@@ -439,12 +456,12 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
 
         {/* Row 1: Clip duration + target playback time + Preview */}
         <div className="flex items-center gap-3">
-          <span className="text-[11px] shrink-0" style={{ color: "var(--color-text-secondary)" }}>
+          <span className="text-sm shrink-0" style={{ color: "var(--color-text-secondary)" }}>
             Clip: {formatTime(clipDuration)}
           </span>
-          <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>→</span>
+          <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>→</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>Play in</span>
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Play in</span>
             <input
               type="text"
               value={targetDuration}
@@ -453,7 +470,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
                 setTargetDuration(val);
               }}
               placeholder={`${Math.round(clipDuration)}s`}
-              className="w-14 px-1.5 py-0.5 rounded text-[11px] text-center font-mono"
+              className="w-14 px-1.5 py-0.5 rounded text-sm text-center font-mono"
               style={{
                 backgroundColor: "var(--color-surface-inset)",
                 color: "var(--color-text)",
@@ -461,9 +478,9 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               }}
               data-testid="target-duration"
             />
-            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>s</span>
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>s</span>
             {targetSec > 0 && (
-              <span className="text-[10px] font-mono" style={{ color: "var(--color-text-secondary)" }}>
+              <span className="text-xs font-mono" style={{ color: "var(--color-text-secondary)" }}>
                 ({computedSpeed.toFixed(1)}×)
               </span>
             )}
@@ -471,7 +488,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           <div className="flex-1" />
           <button
             onClick={handlePreview}
-            className="flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-medium"
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
             data-testid="clip-preview"
           >
@@ -487,7 +504,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title *"
-            className="min-w-0 px-2.5 py-1.5 rounded text-[12px]"
+            className="min-w-0 px-2.5 py-1.5 rounded text-base"
             style={{
               width: "25%",
               backgroundColor: "var(--color-surface-inset)",
@@ -501,7 +518,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description"
-            className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[12px]"
+            className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-base"
             style={{
               backgroundColor: "var(--color-surface-inset)",
               color: "var(--color-text)",
@@ -519,7 +536,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               onBlur={() => setCapturingHotkey(false)}
               onKeyDown={handleHotkeyCapture}
               placeholder="Click to capture hotkey"
-              className="w-full px-2 py-1.5 rounded font-mono text-[12px]"
+              className="w-full px-2 py-1.5 rounded font-mono text-base"
               style={capturingHotkey
                 ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
                 : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: hotkey ? "var(--color-text)" : "var(--color-text-secondary)" }}
@@ -532,7 +549,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
         <div className="flex items-center justify-between pt-1">
           <button
             onClick={onCancel}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-[11px] font-medium"
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium"
             style={{ color: "var(--color-text-secondary)" }}
             data-testid="clip-cancel"
           >
@@ -556,7 +573,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
                   setTargetMonitor(e.target.value);
                   setMonitorPreview(null);
                 }}
-                className="px-2 py-1 rounded text-[11px]"
+                className="px-2 py-1 rounded text-sm"
                 style={{
                   backgroundColor: "var(--color-surface-inset)",
                   color: "var(--color-text)",
@@ -587,11 +604,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>When done:</span>
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>When done:</span>
             <select
               value={endBehavior}
               onChange={(e) => setEndBehavior(e.target.value as EndBehavior)}
-              className="px-2 py-1 rounded text-[11px]"
+              className="px-2 py-1 rounded text-sm"
               style={{
                 backgroundColor: "var(--color-surface-inset)",
                 color: "var(--color-text)",
@@ -603,7 +620,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               <option value="freeze">Freeze last frame</option>
             </select>
           </div>
-          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
             <input
               type="checkbox"
               checked={hideCursor}
@@ -613,7 +630,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             />
             Hide cursor
           </label>
-          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
             <input
               type="checkbox"
               checked={clickToPlay}
@@ -623,7 +640,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             />
             Click to play
           </label>
-          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
             <input
               type="checkbox"
               checked={muted}
@@ -633,7 +650,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             />
             Mute audio
           </label>
-          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer" style={{ color: "var(--color-text-secondary)" }}>
             Background:
             <input
               type="color"
@@ -647,8 +664,8 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           <button
             onClick={handleSave}
             disabled={!canSave}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded text-[11px] font-medium disabled:opacity-50"
-            style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             data-testid="clip-save"
           >
             <Save size={12} /> Save Clip

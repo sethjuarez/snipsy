@@ -77,13 +77,13 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
       {/* Left: App icon + name + project (draggable) */}
       <div data-tauri-drag-region className="flex items-center gap-2 shrink-0">
         <img src={appIcon} alt="" className="w-4 h-4" draggable={false} />
-        <span data-tauri-drag-region className="font-semibold text-[13px]" style={{ color: "var(--color-text)" }}>
+        <span data-tauri-drag-region className="font-semibold text-md" style={{ color: "var(--color-text)" }}>
           Snipsy
         </span>
         {projectName && (
           <>
             <span data-tauri-drag-region style={{ color: "var(--color-text-secondary)" }}>/</span>
-            <span data-tauri-drag-region className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+            <span data-tauri-drag-region className="text-base" style={{ color: "var(--color-text-secondary)" }}>
               {projectName}
             </span>
           </>
@@ -103,6 +103,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
               className="w-7 h-7 flex items-center justify-center rounded"
               data-testid="demo-mode-toggle"
               title={demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
+              aria-label={demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
               style={{ color: demoMode ? "var(--color-danger)" : "var(--color-success)" }}
             >
               {demoMode
@@ -117,6 +118,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
               onClick={handleRelaunchAsAdmin}
               className="w-7 h-7 flex items-center justify-center rounded"
               title="Input protection requires Admin. Click to restart as Administrator."
+              aria-label="Restart as Administrator"
               data-testid="elevation-warning"
               style={{ color: "var(--color-warning, #f59e0b)" }}
             >
@@ -129,6 +131,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
             onClick={toggleTheme}
             className="w-7 h-7 flex items-center justify-center rounded"
             title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
             data-testid="theme-toggle"
             style={{ color: "var(--color-text-secondary)" }}
           >

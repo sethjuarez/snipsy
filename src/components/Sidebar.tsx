@@ -41,12 +41,14 @@ function Sidebar({ activeView, onViewChange, onGoHome, collapsed = false }: Side
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded text-[12px] font-medium text-left"
+              className="flex items-center gap-2 px-3 py-1.5 rounded text-base font-medium text-left"
               style={{
                 backgroundColor: isActive ? "var(--color-accent)" : "transparent",
-                color: isActive ? "#fff" : "var(--color-text-secondary)",
+                color: isActive ? "var(--color-text-on-accent)" : "var(--color-text-secondary)",
               }}
               data-testid={`nav-${item.id}`}
+              aria-current={isActive ? "page" : undefined}
+              aria-label={item.label}
               title={item.label}
             >
               <item.Icon size={15} />
@@ -61,7 +63,7 @@ function Sidebar({ activeView, onViewChange, onGoHome, collapsed = false }: Side
         <div className="p-1.5" style={{ borderTop: "1px solid var(--color-border)" }}>
           <button
             onClick={onGoHome}
-            className="flex items-center gap-2 px-3 py-1.5 rounded text-[12px] font-medium w-full text-left"
+            className="flex items-center gap-2 px-3 py-1.5 rounded text-base font-medium w-full text-left"
             style={{ color: "var(--color-text-secondary)" }}
             data-testid="nav-home"
             title="Home"

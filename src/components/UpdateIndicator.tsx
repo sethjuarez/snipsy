@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Download } from "lucide-react";
 import { useUpdateStore } from "../stores/updateStore";
+import type { DownloadEvent } from "@tauri-apps/plugin-updater";
 
 export default function UpdateIndicator() {
   const update = useUpdateStore((s) => s.update);
@@ -33,7 +34,7 @@ export default function UpdateIndicator() {
     setInstalling(true);
     try {
       let downloaded = 0;
-      await update.downloadAndInstall((event) => {
+      await update.downloadAndInstall((event: DownloadEvent) => {
         switch (event.event) {
           case "Started":
             setProgress("Downloading...");
@@ -86,7 +87,7 @@ export default function UpdateIndicator() {
           data-testid="update-dropdown"
         >
           <div
-            className="text-[10px] font-medium uppercase tracking-wider mb-1.5"
+            className="text-xs font-medium uppercase tracking-wider mb-1.5"
             style={{ color: "var(--color-text-secondary)" }}
           >
             Update Available
@@ -104,7 +105,7 @@ export default function UpdateIndicator() {
           </div>
           {installing ? (
             <div
-              className="text-[11px]"
+              className="text-sm"
               style={{ color: "var(--color-accent, #6366f1)" }}
               data-testid="update-progress"
             >
@@ -113,7 +114,7 @@ export default function UpdateIndicator() {
           ) : (
             <button
               onClick={handleInstall}
-              className="w-full h-[26px] rounded text-[11px] font-medium text-white transition-colors"
+              className="w-full h-[26px] rounded text-sm font-medium text-white transition-colors"
               style={{ backgroundColor: "var(--color-accent, #6366f1)" }}
               data-testid="update-install-btn"
             >

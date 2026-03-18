@@ -79,7 +79,7 @@ function VideoTimeline({
 
       <div className="space-y-2">
         <div className="flex items-center gap-3">
-          <label className="text-[12px] font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>Start</label>
+          <label className="text-base font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>Start</label>
           <input
             type="range"
             min={0}
@@ -90,13 +90,13 @@ function VideoTimeline({
             className="flex-1"
             data-testid="timeline-start"
           />
-          <span className="text-[12px] w-12 text-right font-mono" style={{ color: "var(--color-text-secondary)" }}>
+          <span className="text-base w-12 text-right font-mono" style={{ color: "var(--color-text-secondary)" }}>
             {formatTime(startTime)}
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          <label className="text-[12px] font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>End</label>
+          <label className="text-base font-medium w-16" style={{ color: "var(--color-text-secondary)" }}>End</label>
           <input
             type="range"
             min={0}
@@ -107,13 +107,13 @@ function VideoTimeline({
             className="flex-1"
             data-testid="timeline-end"
           />
-          <span className="text-[12px] w-12 text-right font-mono" style={{ color: "var(--color-text-secondary)" }}>
+          <span className="text-base w-12 text-right font-mono" style={{ color: "var(--color-text-secondary)" }}>
             {formatTime(endTime)}
           </span>
         </div>
       </div>
 
-      <div className="flex justify-between text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+      <div className="flex justify-between text-sm" style={{ color: "var(--color-text-secondary)" }}>
         <span>Current: {formatTime(currentTime)}</span>
         <span>
           Selection: {formatTime(startTime)} – {formatTime(endTime)} (

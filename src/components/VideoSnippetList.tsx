@@ -40,18 +40,18 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
           {/* Clip info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
-              <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
+              <h3 className="font-medium truncate text-md" style={{ color: "var(--color-text)" }}>
                 {snippet.title}
               </h3>
-              <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
                 <Keyboard size={10} />
                 {snippet.hotkey}
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
+              <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
                 ~{parseFloat(snippet.speed.toPrecision(3))}×
               </span>
               {snippet.targetMonitor && (
-                <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+                <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
                   <Monitor size={10} />
                   {snippet.targetMonitor}
                 </span>
@@ -66,7 +66,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                 data-testid={`bg-color-swatch-${snippet.id}`}
               />
               <span
-                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
                 style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
                 title={snippet.hideCursor !== false ? "Cursor hidden during playback" : "Cursor visible during playback"}
                 data-testid={`cursor-indicator-${snippet.id}`}
@@ -75,7 +75,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
               </span>
               {snippet.clickToPlay && (
                 <span
-                  className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                  className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
                   style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
                   title="Click to play — first frame freezes until clicked"
                   data-testid={`click-to-play-indicator-${snippet.id}`}
@@ -84,7 +84,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                 </span>
               )}
               <span
-                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded"
+                className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
                 style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
                 title={snippet.muted !== false ? "Audio muted during playback" : "Audio enabled during playback"}
                 data-testid={`muted-indicator-${snippet.id}`}
@@ -93,11 +93,11 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
               </span>
             </div>
             {snippet.description && (
-              <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
+              <p className="text-base mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
                 {snippet.description}
               </p>
             )}
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+            <p className="text-sm mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
               {snippet.videoFile} ({snippet.startTime.toFixed(1)}s –{" "}
               {snippet.endTime.toFixed(1)}s)
             </p>
@@ -106,7 +106,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
           <div className="flex items-center gap-2 ml-4">
             <button
               onClick={() => onEdit(snippet)}
-              className="flex items-center gap-1 text-[12px]"
+              className="flex items-center gap-1 text-base"
               style={{ color: "var(--color-accent)" }}
               data-testid={`video-edit-${snippet.id}`}
             >
@@ -114,7 +114,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
             </button>
             <button
               onClick={() => onDelete(snippet.id)}
-              className="flex items-center gap-1 text-[12px]"
+              className="flex items-center gap-1 text-base"
               style={{ color: "var(--color-danger)" }}
               data-testid={`video-delete-${snippet.id}`}
             >

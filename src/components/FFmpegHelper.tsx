@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, RefreshCw, RotateCcw, ExternalLink, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
-import { createBackendService } from "../services";
+import { getBackend } from "../services";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 type InstallState = "idle" | "installing" | "success" | "error";
 
@@ -9,16 +10,18 @@ interface FFmpegHelperProps {
   onFixed: () => void;
 }
 
+const backend = getBackend();
+
 function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
   const [installState, setInstallState] = useState<InstallState>("idle");
   const [message, setMessage] = useState("");
   const [checking, setChecking] = useState(false);
+  const trapRef = useFocusTrap<HTMLDivElement>();
 
   const handleInstall = async () => {
     setInstallState("installing");
     setMessage("");
     try {
-      const backend = createBackendService();
       const result = await backend.installFfmpeg();
       setInstallState("success");
       setMessage(result);
@@ -56,7 +59,6 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
   const handleRecheck = async () => {
     setChecking(true);
     try {
-      const backend = createBackendService();
       const available = await backend.checkFfmpeg();
       if (available) {
         onFixed();
@@ -72,9 +74,15 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
 
   return (
     <div
+      ref={trapRef}
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      style={{ backgroundColor: "var(--color-overlay)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ffmpeg-dialog-title"
     >
       <div
         className="rounded-lg shadow-xl max-w-md w-full mx-4"
@@ -88,7 +96,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           className="flex items-center justify-between px-5 py-3"
           style={{ borderBottom: "1px solid var(--color-border)" }}
         >
-          <h3 className="text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
+          <h3 id="ffmpeg-dialog-title" className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
             FFmpeg Required
           </h3>
           <button
@@ -102,7 +110,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
 
         {/* Body */}
         <div className="px-5 py-4 space-y-4">
-          <p className="text-[12px] leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+          <p className="text-base leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
             FFmpeg is a free tool needed for video processing and script recording.
             It's not bundled with Snipsy, but you can install it in one click.
           </p>
@@ -111,10 +119,10 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           <button
             onClick={handleInstall}
             disabled={installState === "installing"}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-[13px] font-medium transition-opacity"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-md font-medium transition-opacity"
             style={{
               backgroundColor: "var(--color-accent)",
-              color: "#fff",
+              color: "var(--color-text-on-accent)",
               opacity: installState === "installing" ? 0.7 : 1,
             }}
           >
@@ -128,7 +136,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           {/* Status message */}
           {message && (
             <div
-              className="p-3 rounded-md text-[11px] leading-relaxed"
+              className="p-3 rounded-md text-sm leading-relaxed"
               style={{
                 backgroundColor: "var(--color-surface-inset)",
                 border: "1px solid var(--color-border)",
@@ -149,7 +157,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           <button
             onClick={handleRecheck}
             disabled={checking}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-base font-medium"
             style={{
               backgroundColor: "var(--color-surface-inset)",
               color: "var(--color-text)",
@@ -164,10 +172,10 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           {(installState === "success" || installState === "error") && (
             <button
               onClick={handleRestart}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-base font-medium"
               style={{
                 backgroundColor: "var(--color-accent)",
-                color: "#fff",
+                color: "var(--color-text-on-accent)",
               }}
             >
               <RotateCcw size={13} /> Restart Snipsy
@@ -175,7 +183,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
           )}
 
           {/* Manual instructions */}
-          <details className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+          <details className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
             <summary className="cursor-pointer hover:underline">Manual installation instructions</summary>
             <div
               className="mt-2 p-3 rounded-md space-y-2"

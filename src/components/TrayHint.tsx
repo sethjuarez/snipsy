@@ -21,7 +21,7 @@ export default function TrayHint() {
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 text-[11px] shrink-0"
+      className="flex items-center gap-2 px-3 py-1.5 text-sm shrink-0"
       style={{
         backgroundColor: "var(--color-surface-toolbar)",
         borderTop: "1px solid var(--color-border)",

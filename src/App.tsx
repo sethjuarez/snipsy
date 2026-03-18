@@ -368,7 +368,7 @@ function App() {
               <>
                 {isRecording && (
                   <div
-                    className="mb-4 p-3 rounded-lg text-[12px] flex items-center gap-2 w-full"
+                    className="mb-4 p-3 rounded-lg text-base flex items-center gap-2 w-full"
                     data-testid="recording-indicator"
                     style={{
                       backgroundColor: "var(--color-surface-inset)",
@@ -380,7 +380,7 @@ function App() {
                     <span className="font-medium">Recording in progress...</span>
                     <button
                       onClick={handleStopRecording}
-                      className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+                      className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
                       style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
                       data-testid="stop-recording"
                     >
@@ -397,7 +397,7 @@ function App() {
                 {ffmpegAvailable === false && (
                   <button
                     onClick={() => setShowFfmpegHelper(true)}
-                    className="mb-4 p-3 rounded-lg text-[12px] flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
+                    className="mb-4 p-3 rounded-lg text-base flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
                     data-testid="ffmpeg-warning"
                     style={{
                       backgroundColor: "var(--color-surface-inset)",
@@ -486,14 +486,14 @@ function ContentHeader({
         backgroundColor: "var(--color-surface)",
       }}
     >
-      <h2 className="text-[13px] font-semibold truncate" style={{ color: "var(--color-text)" }}>
+      <h2 className="text-md font-semibold truncate" style={{ color: "var(--color-text)" }}>
         {editLabel ?? VIEW_LABELS[view]}
       </h2>
       <div className="flex items-center gap-2">
         {view === "scripts" && !showForm && !isRecording && (
           <button
             onClick={onRecord}
-            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
             data-testid="record-script"
           >
@@ -503,7 +503,7 @@ function ContentHeader({
         {view === "scripts" && isRecording && (
           <button
             onClick={onStopRecord}
-            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium animate-pulse"
+            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium animate-pulse"
             style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
             data-testid="stop-recording-header"
           >
@@ -513,7 +513,7 @@ function ContentHeader({
         {canAdd && !showForm && (
           <button
             onClick={onAdd}
-            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             data-testid={
               view === "text-snippets" ? "add-snippet" :
@@ -527,7 +527,7 @@ function ContentHeader({
         {showForm && (
           <button
             onClick={onCloseForm}
-            className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
+            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
           >
             <XIcon size={12} /> Cancel
@@ -555,31 +555,31 @@ function RecordingSaveDialog({
       style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
       data-testid="recording-save-dialog"
     >
-      <h3 className="text-[13px] font-semibold mb-3" style={{ color: "var(--color-text)" }}>
+      <h3 className="text-md font-semibold mb-3" style={{ color: "var(--color-text)" }}>
         Save Recorded Script
       </h3>
       <div className="space-y-3">
         <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Title</label>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Title</label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="My Recorded Script"
-            className="w-full rounded px-3 py-1.5 text-[12px]"
+            className="w-full rounded px-3 py-1.5 text-base"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="recording-title"
             autoFocus
           />
         </div>
         <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Description</label>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Description</label>
           <input
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description"
-            className="w-full rounded px-3 py-1.5 text-[12px]"
+            className="w-full rounded px-3 py-1.5 text-base"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="recording-description"
           />
@@ -587,14 +587,14 @@ function RecordingSaveDialog({
         <div className="flex gap-2 justify-end">
           <button
             onClick={onCancel}
-            className="px-4 py-1.5 rounded text-[11px] font-medium"
+            className="px-4 py-1.5 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
           >
             Cancel
           </button>
           <button
             onClick={() => onSave(title || "Untitled Recording", description)}
-            className="px-4 py-1.5 rounded text-[11px] font-medium"
+            className="px-4 py-1.5 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             data-testid="recording-save"
           >

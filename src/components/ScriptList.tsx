@@ -33,25 +33,25 @@ function ScriptList({ scripts, onEdit, onDelete, onRun }: ScriptListProps) {
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
-              <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
+              <h3 className="font-medium truncate text-md" style={{ color: "var(--color-text)" }}>
                 {script.title}
               </h3>
-              <span className="text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-warning)" }}>
+              <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-warning)" }}>
                 {script.steps.length} step{script.steps.length !== 1 && "s"}
               </span>
               {script.platform && (
-                <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid={`script-platform-${script.id}`}>
+                <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid={`script-platform-${script.id}`}>
                   <Monitor size={10} />
                   {PLATFORM_LABELS[script.platform] ?? script.platform}
                 </span>
               )}
             </div>
             {script.description && (
-              <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
+              <p className="text-base mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
                 {script.description}
               </p>
             )}
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+            <p className="text-sm mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
               Output: {script.outputVideo}
             </p>
           </div>
@@ -59,7 +59,7 @@ function ScriptList({ scripts, onEdit, onDelete, onRun }: ScriptListProps) {
             {onRun && (
               <button
                 onClick={() => onRun(script.id)}
-                className="flex items-center gap-1 text-[12px]"
+                className="flex items-center gap-1 text-base"
                 style={{ color: "var(--color-success, #22c55e)" }}
                 data-testid={`script-run-${script.id}`}
               >
@@ -68,7 +68,7 @@ function ScriptList({ scripts, onEdit, onDelete, onRun }: ScriptListProps) {
             )}
             <button
               onClick={() => onEdit(script)}
-              className="flex items-center gap-1 text-[12px]"
+              className="flex items-center gap-1 text-base"
               style={{ color: "var(--color-accent)" }}
               data-testid={`script-edit-${script.id}`}
             >
@@ -76,7 +76,7 @@ function ScriptList({ scripts, onEdit, onDelete, onRun }: ScriptListProps) {
             </button>
             <button
               onClick={() => onDelete(script.id)}
-              className="flex items-center gap-1 text-[12px]"
+              className="flex items-center gap-1 text-base"
               style={{ color: "var(--color-danger)" }}
               data-testid={`script-delete-${script.id}`}
             >

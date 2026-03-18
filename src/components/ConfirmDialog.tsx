@@ -39,16 +39,16 @@ function ConfirmDialog({
         className="rounded-lg p-5 w-full max-w-sm space-y-4"
         style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
       >
-        <h3 id="confirm-dialog-title" className="text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
+        <h3 id="confirm-dialog-title" className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
           {title}
         </h3>
-        <p className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+        <p className="text-base" style={{ color: "var(--color-text-secondary)" }}>
           {message}
         </p>
         <div className="flex gap-2 justify-end">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 rounded text-[12px] font-medium"
+            className="px-3 py-1.5 rounded text-base font-medium"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
             data-testid="confirm-dialog-cancel"
           >
@@ -56,7 +56,7 @@ function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            className="px-3 py-1.5 rounded text-[12px] font-medium"
+            className="px-3 py-1.5 rounded text-base font-medium"
             style={{
               backgroundColor: danger ? "var(--color-danger)" : "var(--color-accent)",
               color: "var(--color-text-on-accent)",

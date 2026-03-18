@@ -31,7 +31,7 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
         backgroundColor: demoMode ? "var(--color-accent)" : "var(--color-surface-toolbar)",
         borderTop: "1px solid var(--color-border)",
         fontSize: "11px",
-        color: demoMode ? "#fff" : "var(--color-text-secondary)",
+        color: demoMode ? "var(--color-text-on-accent)" : "var(--color-text-secondary)",
       }}
       data-testid="status-bar"
     >
@@ -53,7 +53,7 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
           <button
             onClick={onFfmpegClick}
             className="flex items-center gap-1 cursor-pointer hover:underline"
-            style={{ color: demoMode ? "#fff" : "var(--color-warning)" }}
+            style={{ color: demoMode ? "var(--color-text-on-accent)" : "var(--color-warning)" }}
           >
             <AlertTriangle size={11} /> FFmpeg missing — click to fix
           </button>

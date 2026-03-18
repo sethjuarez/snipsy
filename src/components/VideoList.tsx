@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { createBackendService } from "../services";
+import { getBackend } from "../services";
 import { FileVideo, Upload, Scissors, Film, Trash2 } from "lucide-react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import type { ImportedVideo, VideoSnippet } from "../types";
 
-const backend = createBackendService();
+const backend = getBackend();
 
 // Convert local file path to a URL the webview can load (only in Tauri context)
 let convertFileSrc: ((path: string) => string) | null = null;
@@ -62,12 +63,12 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-[13px] font-medium" style={{ color: "var(--color-text-secondary)" }}>Videos</h3>
+        <h3 className="text-md font-medium" style={{ color: "var(--color-text-secondary)" }}>Videos</h3>
         <button
           onClick={handleImport}
           disabled={importing}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded disabled:opacity-50"
-          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-base rounded disabled:opacity-50"
+          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
           data-testid="import-video"
         >
           <Upload size={12} />
@@ -77,7 +78,7 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
 
       {videos.length === 0 ? (
         <p
-          className="text-center py-8 text-[12px]"
+          className="text-center py-8 text-base"
           style={{ color: "var(--color-text-secondary)" }}
           data-testid="no-videos"
         >
@@ -118,14 +119,14 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
                 {/* Name + clip count */}
                 <div className="flex-1 min-w-0">
                   <span
-                    className="block text-[12px] font-medium truncate"
+                    className="block text-base font-medium truncate"
                     style={{ color: "var(--color-text)" }}
                     title={video.name}
                   >
                     {video.name}
                   </span>
                   <span
-                    className="flex items-center gap-1 text-[11px] mt-0.5"
+                    className="flex items-center gap-1 text-sm mt-0.5"
                     style={{ color: "var(--color-text-secondary)" }}
                   >
                     <Film size={10} /> {count} clip{count !== 1 ? "s" : ""}
@@ -135,8 +136,8 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
                 {/* Actions */}
                 <button
                   onClick={() => onCreateClip(video)}
-                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] font-medium"
-                  style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-sm font-medium"
+                  style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
                   data-testid={`create-clip-${i}`}
                 >
                   <Scissors size={11} /> Create Clip
@@ -147,6 +148,7 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
                   style={{ color: "var(--color-danger, #ef4444)" }}
                   data-testid={`delete-video-${i}`}
                   title="Remove video"
+                  aria-label="Remove video"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -158,46 +160,70 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
 
       {/* Delete confirmation dialog */}
       {confirmDelete && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-          data-testid="delete-video-dialog"
-        >
-          <div
-            className="rounded-lg p-5 w-full max-w-sm space-y-4"
-            style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
-          >
-            <h3 className="text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
-              Remove Video?
-            </h3>
-            <p className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
-              This will permanently delete <strong>{confirmDelete.name}</strong>
-              {(clipCounts[confirmDelete.relativePath] || 0) > 0 && (
-                <> and its <strong>{clipCounts[confirmDelete.relativePath]}</strong> associated clip{clipCounts[confirmDelete.relativePath] === 1 ? "" : "s"}</>
-              )}.
-              This action cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="px-3 py-1.5 rounded text-[12px] font-medium"
-                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
-                data-testid="cancel-delete-video"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-3 py-1.5 rounded text-[12px] font-medium"
-                style={{ backgroundColor: "var(--color-danger, #ef4444)", color: "#fff" }}
-                data-testid="confirm-delete-video"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteVideoDialog
+          video={confirmDelete}
+          clipCount={clipCounts[confirmDelete.relativePath] || 0}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={handleConfirmDelete}
+        />
       )}
+    </div>
+  );
+}
+
+function DeleteVideoDialog({ video, clipCount, onCancel, onConfirm }: {
+  video: ImportedVideo;
+  clipCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const trapRef = useFocusTrap<HTMLDivElement>();
+
+  return (
+    <div
+      ref={trapRef}
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ backgroundColor: "var(--color-overlay)" }}
+      data-testid="delete-video-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-video-dialog-title"
+      onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+      tabIndex={-1}
+    >
+      <div
+        className="rounded-lg p-5 w-full max-w-sm space-y-4"
+        style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
+      >
+        <h3 id="delete-video-dialog-title" className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
+          Remove Video?
+        </h3>
+        <p className="text-base" style={{ color: "var(--color-text-secondary)" }}>
+          This will permanently delete <strong>{video.name}</strong>
+          {clipCount > 0 && (
+            <> and its <strong>{clipCount}</strong> associated clip{clipCount === 1 ? "" : "s"}</>
+          )}.
+          This action cannot be undone.
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 rounded text-base font-medium"
+            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+            data-testid="cancel-delete-video"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 rounded text-base font-medium"
+            style={{ backgroundColor: "var(--color-danger, #ef4444)", color: "var(--color-text-on-accent)" }}
+            data-testid="confirm-delete-video"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

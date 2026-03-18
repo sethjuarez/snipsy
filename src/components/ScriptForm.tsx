@@ -85,12 +85,12 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
     >
       {script?.platform && (
         <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid="script-platform-badge">
+          <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid="script-platform-badge">
             <Monitor size={10} />
             {script.platform}
           </span>
           {script.recordedAt && (
-            <span className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
               Recorded {new Date(script.recordedAt).toLocaleDateString()}
             </span>
           )}
@@ -98,31 +98,33 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       )}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+          <label htmlFor="script-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
             Title
           </label>
           <input
+            id="script-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Script title"
             required
-            className="w-full px-3 py-2 rounded text-[13px]"
+            className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="script-title"
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+          <label htmlFor="script-output" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
             Output Video
           </label>
           <input
+            id="script-output"
             type="text"
             value={outputVideo}
             onChange={(e) => setOutputVideo(e.target.value)}
             placeholder="videos/output.mp4"
             required
-            className="w-full px-3 py-2 rounded text-[13px]"
+            className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="script-output"
           />
@@ -130,15 +132,16 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       </div>
 
       <div>
-        <label className="block font-medium mb-1 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+        <label htmlFor="script-description" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
           Description
         </label>
         <input
+          id="script-description"
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description"
-          className="w-full px-3 py-2 rounded text-[13px]"
+          className="w-full px-3 py-2 rounded text-md"
           style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
           data-testid="script-description"
         />
@@ -146,13 +149,13 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
 
       <div data-testid="script-steps-section">
         <div className="flex items-center justify-between mb-2">
-          <label className="block font-medium text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+          <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
             Steps
           </label>
           <button
             type="button"
             onClick={addStep}
-            className="text-[12px] font-medium"
+            className="text-base font-medium"
             style={{ color: "var(--color-accent)" }}
             data-testid="add-step"
           >
@@ -160,7 +163,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
           </button>
         </div>
         {steps.length === 0 && (
-          <p className="text-[12px]" style={{ color: "var(--color-text-secondary)" }} data-testid="no-steps">
+          <p className="text-base" style={{ color: "var(--color-text-secondary)" }} data-testid="no-steps">
             No steps yet. Add steps to define the script.
           </p>
         )}
@@ -174,7 +177,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
             <select
               value={step.action}
               onChange={(e) => updateStepAction(index, e.target.value)}
-              className="px-2 py-1 rounded text-[12px]"
+              className="px-2 py-1 rounded text-base"
               style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
               data-testid={`step-action-${index}`}
             >
@@ -194,7 +197,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                   updateStepField(index, "duration", Number(e.target.value))
                 }
                 placeholder="ms"
-                className="w-24 px-2 py-1 rounded text-[12px]"
+                className="w-24 px-2 py-1 rounded text-base"
                 style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                 data-testid={`step-duration-${index}`}
               />
@@ -208,7 +211,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                     updateStepField(index, "text", e.target.value)
                   }
                   placeholder="Text to type"
-                  className="flex-1 px-2 py-1 rounded text-[12px]"
+                  className="flex-1 px-2 py-1 rounded text-base"
                   style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                   data-testid={`step-text-${index}`}
                 />
@@ -219,7 +222,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                     updateStepField(index, "delay", Number(e.target.value))
                   }
                   placeholder="Delay"
-                  className="w-20 px-2 py-1 rounded text-[12px]"
+                  className="w-20 px-2 py-1 rounded text-base"
                   style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                   data-testid={`step-delay-${index}`}
                 />
@@ -231,7 +234,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                 value={(step as { key: string }).key}
                 onChange={(e) => updateStepField(index, "key", e.target.value)}
                 placeholder="Key name"
-                className="w-32 px-2 py-1 rounded text-[12px]"
+                className="w-32 px-2 py-1 rounded text-base"
                 style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                 data-testid={`step-key-${index}`}
               />
@@ -245,7 +248,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                     updateStepField(index, "x", Number(e.target.value))
                   }
                   placeholder="X"
-                  className="w-20 px-2 py-1 rounded text-[12px]"
+                  className="w-20 px-2 py-1 rounded text-base"
                   style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                   data-testid={`step-x-${index}`}
                 />
@@ -256,7 +259,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                     updateStepField(index, "y", Number(e.target.value))
                   }
                   placeholder="Y"
-                  className="w-20 px-2 py-1 rounded text-[12px]"
+                  className="w-20 px-2 py-1 rounded text-base"
                   style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                   data-testid={`step-y-${index}`}
                 />
@@ -270,7 +273,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                   updateStepField(index, "target", e.target.value)
                 }
                 placeholder="Target program"
-                className="flex-1 px-2 py-1 rounded text-[12px]"
+                className="flex-1 px-2 py-1 rounded text-base"
                 style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                 data-testid={`step-target-${index}`}
               />
@@ -283,7 +286,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                   updateStepField(index, "delta", Number(e.target.value))
                 }
                 placeholder="Delta"
-                className="w-24 px-2 py-1 rounded text-[12px]"
+                className="w-24 px-2 py-1 rounded text-base"
                 style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                 data-testid={`step-delta-${index}`}
               />
@@ -292,7 +295,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
             <button
               type="button"
               onClick={() => removeStep(index)}
-              className="text-[12px]"
+              className="text-base"
               style={{ color: "var(--color-danger)" }}
               data-testid={`step-remove-${index}`}
             >
@@ -305,8 +308,8 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       <div className="flex gap-3 pt-2">
         <button
           type="submit"
-          className="px-4 py-2 rounded font-medium text-[13px]"
-          style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+          className="px-4 py-2 rounded font-medium text-md"
+          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
           data-testid="script-save"
         >
           {script ? "Update" : "Create"}
@@ -314,7 +317,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded font-medium text-[13px]"
+          className="px-4 py-2 rounded font-medium text-md"
           style={{ backgroundColor: "var(--color-surface-alt)", color: "var(--color-text)" }}
           data-testid="script-cancel"
         >

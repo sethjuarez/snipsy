@@ -70,15 +70,15 @@ function SortableSnippetItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3">
-          <h3 className="font-medium truncate text-[13px]" style={{ color: "var(--color-text)" }}>
+          <h3 className="font-medium truncate text-md" style={{ color: "var(--color-text)" }}>
             {snippet.title}
           </h3>
-          <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
+          <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
             <Keyboard size={10} />
             {snippet.hotkey}
           </span>
           <span
-            className="text-[11px] px-2 py-0.5 rounded"
+            className="text-sm px-2 py-0.5 rounded"
             style={snippet.delivery === "fast-type"
               ? { backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }
               : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-success)" }}
@@ -91,7 +91,7 @@ function SortableSnippetItem({
           </span>
         </div>
         {snippet.description && (
-          <p className="text-[12px] mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
+          <p className="text-base mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
             {snippet.description}
           </p>
         )}
@@ -99,7 +99,7 @@ function SortableSnippetItem({
       <div className="flex items-center gap-2 ml-4">
         <button
           onClick={() => onEdit(snippet)}
-          className="flex items-center gap-1 text-[12px]"
+          className="flex items-center gap-1 text-base"
           data-testid={`edit-${snippet.id}`}
           style={{ color: "var(--color-accent)" }}
         >
@@ -107,7 +107,7 @@ function SortableSnippetItem({
         </button>
         <button
           onClick={() => onDelete(snippet.id)}
-          className="flex items-center gap-1 text-[12px]"
+          className="flex items-center gap-1 text-base"
           data-testid={`delete-${snippet.id}`}
           style={{ color: "var(--color-danger)" }}
         >
