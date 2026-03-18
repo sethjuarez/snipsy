@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.9.0](https://github.com/sethjuarez/snipsy/compare/v0.8.1...v0.9.0) (2026-03-18)
+
+
+### Features
+
+* add documentation site with Astro Starlight ([3fcd7a7](https://github.com/sethjuarez/snipsy/commit/3fcd7a72886cab768af8de3e1759fa2c2fe009ff))
+* design system hardening - tokens, accessibility, error handling ([6957aff](https://github.com/sethjuarez/snipsy/commit/6957aff02a8e711c938ad0a1304ae5ce89b8f088))
+
+
+### Documentation
+
+* update README frontend stack and PLAN service API ([73ec29b](https://github.com/sethjuarez/snipsy/commit/73ec29b72d4d9493599db6b8ea52988d2bbee041))
+* update Starlight docs for clip editor and confirm dialogs ([c754606](https://github.com/sethjuarez/snipsy/commit/c7546066c02693c9d726554f5b64f1b6a97e0883))
+
+
+### Refactoring
+
+* extract shared EmptyState component and replace hardcoded #fff with CSS variables ([c5bdded](https://github.com/sethjuarez/snipsy/commit/c5bddedb38a54f17d1c09ad5a70b19bb9487bb2b))
+* replace window.confirm() with styled ConfirmDialog component ([be9707f](https://github.com/sethjuarez/snipsy/commit/be9707fe959eeab5e64b21436e3f76d098208d6f))
+
 ## [0.8.1](https://github.com/sethjuarez/snipsy/compare/v0.8.0...v0.8.1) (2026-03-08)
 
 
