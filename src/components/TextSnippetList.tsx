@@ -1,4 +1,5 @@
 import { Pencil, Trash2, Keyboard, Clipboard, GripVertical } from "lucide-react";
+import EmptyState from "./EmptyState";
 import {
   DndContext,
   closestCenter,
@@ -125,10 +126,7 @@ function TextSnippetList({ snippets, onEdit, onDelete, onReorder }: TextSnippetL
 
   if (snippets.length === 0) {
     return (
-      <div className="text-center py-12" data-testid="empty-state" style={{ color: "var(--color-text-secondary)" }}>
-        <p className="text-[13px]">No text snippets yet</p>
-        <p className="text-[12px] mt-1">Create one to get started.</p>
-      </div>
+      <EmptyState title="No text snippets yet" description="Create one to get started." data-testid="empty-state" />
     );
   }
 

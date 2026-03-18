@@ -150,7 +150,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
           <button
             onClick={() => onPlay(snippet)}
             className="w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity"
-            style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             title="Preview clip"
             data-testid={`overview-play-${snippet.id}`}
           >
@@ -158,7 +158,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
           </button>
         )}
         <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fff" }}>
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--color-overlay)", color: "var(--color-text-on-accent)" }}>
             {duration.toFixed(1)}s @ ~{parseFloat(snippet.speed.toPrecision(3))}×
           </span>
         </div>

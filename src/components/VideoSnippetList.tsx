@@ -1,4 +1,5 @@
 import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off, MousePointerClick, Volume2, VolumeOff } from "lucide-react";
+import EmptyState from "./EmptyState";
 import type { VideoSnippet } from "../types";
 
 interface VideoSnippetListProps {
@@ -11,10 +12,7 @@ interface VideoSnippetListProps {
 function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetListProps) {
   if (snippets.length === 0) {
     return (
-      <div className="text-center py-8" style={{ color: "var(--color-text-secondary)" }} data-testid="video-empty-state">
-        <p className="text-[13px]">No video snippets yet</p>
-        <p className="text-[12px] mt-1">Create one from an imported video.</p>
-      </div>
+      <EmptyState title="No video snippets yet" description="Create one from an imported video." data-testid="video-empty-state" />
     );
   }
 
@@ -32,7 +30,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
             <button
               onClick={() => onPlay(snippet)}
               className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity"
-              style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+              style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
               data-testid={`video-preview-${snippet.id}`}
               title="Preview clip"
             >

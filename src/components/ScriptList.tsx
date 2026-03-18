@@ -1,4 +1,5 @@
 import { Pencil, Trash2, Monitor, Play } from "lucide-react";
+import EmptyState from "./EmptyState";
 import type { Script } from "../types";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -17,16 +18,7 @@ interface ScriptListProps {
 function ScriptList({ scripts, onEdit, onDelete, onRun }: ScriptListProps) {
   if (scripts.length === 0) {
     return (
-      <div
-        className="text-center py-8"
-        style={{ color: "var(--color-text-secondary)" }}
-        data-testid="script-empty-state"
-      >
-        <p className="text-[13px]">No scripts yet</p>
-        <p className="text-[12px] mt-1">
-          Create a script to automate demo recordings.
-        </p>
-      </div>
+      <EmptyState title="No scripts yet" description="Create a script to automate demo recordings." data-testid="script-empty-state" />
     );
   }
 

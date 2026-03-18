@@ -108,7 +108,6 @@ function App() {
       if (match) {
         setEditingVideoSnippet(snippet);
         setClipEditingVideo(match);
-        setActiveView("videos");
         return;
       }
     }
@@ -221,17 +220,28 @@ function App() {
       <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} onViewChange={setActiveView} onGoHome={closeProject} />
+        <Sidebar activeView={activeView} onViewChange={(view) => {
+          if (clipEditingVideo) {
+            setClipEditingVideo(null);
+            setEditingVideoSnippet(undefined);
+          }
+          setActiveView(view);
+        }} onGoHome={closeProject} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* Content header */}
           <ContentHeader
             view={activeView}
+            editLabel={
+              clipEditingVideo
+                ? (editingVideoSnippet ? `Edit Clip — ${clipEditingVideo.name}` : `New Clip — ${clipEditingVideo.name}`)
+                : undefined
+            }
             showForm={
               (activeView === "text-snippets" && showForm) ||
               (activeView === "video-snippets" && showVideoForm) ||
-              (activeView === "videos" && clipEditingVideo !== null) ||
+              clipEditingVideo !== null ||
               (activeView === "scripts" && showScriptForm)
             }
             isRecording={isRecording}
@@ -259,7 +269,41 @@ function App() {
           />
 
           {/* Scrollable content — use overflow-hidden when clip editor is active */}
-          <div className={`flex-1 p-4 ${activeView === "videos" && clipEditingVideo ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <div className={`flex-1 p-4 ${clipEditingVideo ? "overflow-hidden" : "overflow-y-auto"}`}>
+            {clipEditingVideo && projectPath ? (
+              <div className="h-full rounded-lg p-4" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
+                <ClipEditor
+                  video={clipEditingVideo}
+                  existingClip={editingVideoSnippet}
+                  onSave={(clip) => {
+                    if (editingVideoSnippet) {
+                      // Update existing snippet
+                      const idx = videoSnippets.findIndex((s) => s.id === editingVideoSnippet.id);
+                      if (idx >= 0) {
+                        const updated = [...videoSnippets];
+                        updated[idx] = { id: editingVideoSnippet.id, ...clip };
+                        setVideoSnippets(updated);
+                      }
+                    } else {
+                      // Create new snippet
+                      const newSnippet: VideoSnippet = {
+                        id: crypto.randomUUID(),
+                        ...clip,
+                      };
+                      setVideoSnippets([...videoSnippets, newSnippet]);
+                    }
+                    setClipEditingVideo(null);
+                    setEditingVideoSnippet(undefined);
+                    setActiveView("video-snippets");
+                  }}
+                  onCancel={() => {
+                    setClipEditingVideo(null);
+                    setEditingVideoSnippet(undefined);
+                  }}
+                />
+              </div>
+            ) : (
+            <>
             {activeView === "home" && (
               <HotkeyOverview textSnippets={textSnippets} videoSnippets={videoSnippets} onPlayVideo={playVideo} />
             )}
@@ -275,49 +319,15 @@ function App() {
             )}
 
             {activeView === "videos" && projectPath && (
-              clipEditingVideo ? (
-                <div className="h-full rounded-lg p-4" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
-                  <ClipEditor
-                    video={clipEditingVideo}
-                    existingClip={editingVideoSnippet}
-                    onSave={(clip) => {
-                      if (editingVideoSnippet) {
-                        // Update existing snippet
-                        const idx = videoSnippets.findIndex((s) => s.id === editingVideoSnippet.id);
-                        if (idx >= 0) {
-                          const updated = [...videoSnippets];
-                          updated[idx] = { id: editingVideoSnippet.id, ...clip };
-                          setVideoSnippets(updated);
-                        }
-                      } else {
-                        // Create new snippet
-                        const newSnippet: VideoSnippet = {
-                          id: crypto.randomUUID(),
-                          ...clip,
-                        };
-                        setVideoSnippets([...videoSnippets, newSnippet]);
-                      }
-                      setClipEditingVideo(null);
-                      setEditingVideoSnippet(undefined);
-                      setActiveView("video-snippets");
-                    }}
-                    onCancel={() => {
-                      setClipEditingVideo(null);
-                      setEditingVideoSnippet(undefined);
-                    }}
-                  />
-                </div>
-              ) : (
-                <VideoList
-                  projectPath={projectPath}
-                  videoSnippets={videoSnippets}
-                  onCreateClip={(video) => setClipEditingVideo(video)}
-                  onDeleteVideo={(video) => {
-                    // Remove all clips associated with this video
-                    setVideoSnippets(videoSnippets.filter((s) => s.videoFile !== video.relativePath));
-                  }}
-                />
-              )
+              <VideoList
+                projectPath={projectPath}
+                videoSnippets={videoSnippets}
+                onCreateClip={(video) => setClipEditingVideo(video)}
+                onDeleteVideo={(video) => {
+                  // Remove all clips associated with this video
+                  setVideoSnippets(videoSnippets.filter((s) => s.videoFile !== video.relativePath));
+                }}
+              />
             )}
 
             {activeView === "video-snippets" && (
@@ -352,7 +362,7 @@ function App() {
                     <button
                       onClick={handleStopRecording}
                       className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
-                      style={{ backgroundColor: "var(--color-danger)", color: "#fff" }}
+                      style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
                       data-testid="stop-recording"
                     >
                       <Square size={10} fill="currentColor" /> Stop Recording
@@ -388,6 +398,8 @@ function App() {
                 )}
               </>
             )}
+            </>
+            )}
           </div>
         </main>
       </div>
@@ -416,6 +428,7 @@ const VIEW_LABELS: Record<AppView, string> = {
 
 function ContentHeader({
   view,
+  editLabel,
   showForm,
   isRecording,
   onRecord,
@@ -424,6 +437,7 @@ function ContentHeader({
   onCloseForm,
 }: {
   view: AppView;
+  editLabel?: string;
   showForm: boolean;
   isRecording?: boolean;
   onRecord?: () => void;
@@ -442,15 +456,15 @@ function ContentHeader({
         backgroundColor: "var(--color-surface)",
       }}
     >
-      <h2 className="text-[13px] font-semibold" style={{ color: "var(--color-text)" }}>
-        {VIEW_LABELS[view]}
+      <h2 className="text-[13px] font-semibold truncate" style={{ color: "var(--color-text)" }}>
+        {editLabel ?? VIEW_LABELS[view]}
       </h2>
       <div className="flex items-center gap-2">
         {view === "scripts" && !showForm && !isRecording && (
           <button
             onClick={onRecord}
             className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
-            style={{ backgroundColor: "var(--color-danger)", color: "#fff" }}
+            style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
             data-testid="record-script"
           >
             <Circle size={10} fill="currentColor" /> Record
@@ -460,7 +474,7 @@ function ContentHeader({
           <button
             onClick={onStopRecord}
             className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium animate-pulse"
-            style={{ backgroundColor: "var(--color-danger)", color: "#fff" }}
+            style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
             data-testid="stop-recording-header"
           >
             <Square size={10} fill="currentColor" /> Stop
@@ -470,7 +484,7 @@ function ContentHeader({
           <button
             onClick={onAdd}
             className="flex items-center gap-1 px-3 py-1 rounded text-[11px] font-medium"
-            style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             data-testid={
               view === "text-snippets" ? "add-snippet" :
               view === "video-snippets" ? "add-video-snippet" :
@@ -551,7 +565,7 @@ function RecordingSaveDialog({
           <button
             onClick={() => onSave(title || "Untitled Recording", description)}
             className="px-4 py-1.5 rounded text-[11px] font-medium"
-            style={{ backgroundColor: "var(--color-accent)", color: "#fff" }}
+            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             data-testid="recording-save"
           >
             Save Script
