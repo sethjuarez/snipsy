@@ -182,9 +182,13 @@ Supported step actions:
 ### Frontend Stack
 
 - **React 18+** with TypeScript.
+- **React Router** for multi-window routing (main app vs playback window).
+- **Zustand** for lightweight state management with selective subscriptions.
 - **Vite** for dev server and production bundling.
-- **Tailwind CSS** (or similar utility framework) for styling.
-- A timeline/waveform component (custom or library-based) for video snippet creation.
+- **Tailwind CSS v4** with a semantic design token system — typography scale (`text-2xs` through `text-heading`), radius, motion, and color tokens defined in `src/styles.css` and bridged via `@theme`.
+- A custom timeline component for video clip editing with draggable playhead.
+- **Accessibility**: ARIA attributes (`aria-current`, `aria-label`, `aria-modal`), global `focus-visible` styles, `prefers-reduced-motion` support, and focus trapping in modals via `useFocusTrap` hook.
+- **Shared UI components**: `ErrorBoundary` (render error recovery), `ConfirmDialog` (styled replacement for `window.confirm()`), `EmptyState` (placeholder for empty lists).
 
 ### Global Hotkey System
 

@@ -212,7 +212,7 @@ In `src/services/`, create:
 - `BackendService` — TypeScript interface with methods matching the Tauri commands: `createProject()`, `openProject()`, `saveTextSnippets()`, `saveVideoSnippets()`.
 - `TauriBackendService` — implementation that calls `@tauri-apps/api/core invoke()`.
 - `MockBackendService` — implementation that operates on in-memory test fixture data.
-- `createBackendService()` — factory that returns `TauriBackendService` if `window.__TAURI_INTERNALS__` exists, otherwise `MockBackendService`.
+- `getBackend()` — singleton factory that returns `TauriBackendService` if `window.__TAURI_INTERNALS__` exists, otherwise `MockBackendService`. (The internal `createBackendService()` is private — always use `getBackend()`.)
 
 Write unit tests for `MockBackendService` to confirm it returns valid fixture data.
 
