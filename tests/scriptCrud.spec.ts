@@ -53,8 +53,9 @@ test.describe("Script CRUD", () => {
   });
 
   test("can delete a script", async ({ page }) => {
-    page.on("dialog", (dialog) => dialog.accept());
     await page.getByTestId("script-delete-sc-1").click();
+    await expect(page.getByTestId("confirm-delete-dialog")).toBeVisible();
+    await page.getByTestId("confirm-dialog-confirm").click();
     await expect(page.getByTestId("script-sc-1")).not.toBeVisible();
     await expect(page.getByTestId("script-empty-state")).toBeVisible();
   });

@@ -17,6 +17,8 @@ import HotkeyOverview from "./components/HotkeyOverview";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
+import ConfirmDialog from "./components/ConfirmDialog";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { getBackend } from "./services";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
@@ -49,6 +51,7 @@ function App() {
   const [showScriptForm, setShowScriptForm] = useState(false);
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
   const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showRecordingDialog, setShowRecordingDialog] = useState(false);
@@ -78,9 +81,14 @@ function App() {
     setShowForm(true);
   };
   const handleDelete = (id: string) => {
-    if (window.confirm("Delete this snippet?")) {
-      setTextSnippets(textSnippets.filter((s) => s.id !== id));
-    }
+    setConfirmDialog({
+      title: "Delete Snippet?",
+      message: "This will permanently delete this text snippet. This action cannot be undone.",
+      onConfirm: () => {
+        setTextSnippets(textSnippets.filter((s) => s.id !== id));
+        setConfirmDialog(null);
+      },
+    });
   };
   const handleSave = (snippet: TextSnippet) => {
     const idx = textSnippets.findIndex((s) => s.id === snippet.id);
@@ -116,9 +124,14 @@ function App() {
     setShowVideoForm(true);
   };
   const handleVideoDelete = (id: string) => {
-    if (window.confirm("Delete this video snippet?")) {
-      setVideoSnippets(videoSnippets.filter((s) => s.id !== id));
-    }
+    setConfirmDialog({
+      title: "Delete Video Clip?",
+      message: "This will permanently delete this video clip. This action cannot be undone.",
+      onConfirm: () => {
+        setVideoSnippets(videoSnippets.filter((s) => s.id !== id));
+        setConfirmDialog(null);
+      },
+    });
   };
   const handleVideoSave = (snippet: VideoSnippet) => {
     const idx = videoSnippets.findIndex((s) => s.id === snippet.id);
@@ -143,9 +156,14 @@ function App() {
     setShowScriptForm(true);
   };
   const handleScriptDelete = (id: string) => {
-    if (window.confirm("Delete this script?")) {
-      deleteScriptFromStore(id);
-    }
+    setConfirmDialog({
+      title: "Delete Script?",
+      message: "This will permanently delete this script. This action cannot be undone.",
+      onConfirm: () => {
+        deleteScriptFromStore(id);
+        setConfirmDialog(null);
+      },
+    });
   };
   const handleScriptSave = (script: Script) => {
     saveScript(script);
@@ -230,6 +248,7 @@ function App() {
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">
+          <ErrorBoundary>
           {/* Content header */}
           <ContentHeader
             view={activeView}
@@ -401,11 +420,22 @@ function App() {
             </>
             )}
           </div>
+          </ErrorBoundary>
         </main>
       </div>
 
       <TrayHint />
       <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} onFfmpegClick={() => setShowFfmpegHelper(true)} />
+
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+          data-testid="confirm-delete-dialog"
+        />
+      )}
 
       {showFfmpegHelper && (
         <FFmpegHelper

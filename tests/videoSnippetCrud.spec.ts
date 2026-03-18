@@ -54,8 +54,9 @@ test.describe("Video Snippet CRUD", () => {
   });
 
   test("can delete a video snippet", async ({ page }) => {
-    page.on("dialog", (dialog) => dialog.accept());
     await page.getByTestId("video-delete-vs-1").click();
+    await expect(page.getByTestId("confirm-delete-dialog")).toBeVisible();
+    await page.getByTestId("confirm-dialog-confirm").click();
     await expect(page.getByTestId("video-snippet-vs-1")).not.toBeVisible();
     await expect(page.getByTestId("video-empty-state")).toBeVisible();
   });
