@@ -113,12 +113,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   openProject: async (path) => {
     const data = await backend.openProject(path);
     applyProjectData(set, path, data);
-    const scripts = await backend.loadScripts(path);
-    set({ scripts });
-    const ffmpegAvailable = await backend.checkFfmpeg();
-    set({ ffmpegAvailable });
     saveRecentProject(path, data.project.name);
     set({ recentProjects: loadRecentProjects() });
+
+    // Load scripts and check FFmpeg in parallel (non-blocking)
+    const [scripts, ffmpegAvailable] = await Promise.all([
+      backend.loadScripts(path),
+      backend.checkFfmpeg(),
+    ]);
+    set({ scripts, ffmpegAvailable });
   },
 
   closeProject: () => {
