@@ -248,7 +248,7 @@ function Welcome() {
           </div>
 
           {/* Right column: Recent projects */}
-          <div className="flex-1">
+          <div className="w-[260px] shrink-0">
             <h3 className="text-sm font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--color-text-secondary)" }}>
               Recent Projects
             </h3>
