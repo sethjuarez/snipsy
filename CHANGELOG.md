@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.1](https://github.com/sethjuarez/snipsy/compare/v0.9.0...v0.9.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* hide console windows when spawning subprocesses on Windows ([c2ef628](https://github.com/sethjuarez/snipsy/commit/c2ef62881dbab76262d8df7ea4e7f8569d298101))
+* prevent recent projects from squishing welcome action buttons ([08391c2](https://github.com/sethjuarez/snipsy/commit/08391c276a1a01c03f1987eba1eccde92ac445cb))
+
+
+### Miscellaneous
+
+* sync Cargo.lock version bump to 0.9.0 ([1ee4ac2](https://github.com/sethjuarez/snipsy/commit/1ee4ac219e25b84fbc9e641e0baad2d9926dd79e))
+
+
+### Performance
+
+* parallelize project open to reduce UI freeze ([12b8da0](https://github.com/sethjuarez/snipsy/commit/12b8da0b06ee2bf8c1227d1387dd8026f82520fc))
+
 ## [0.9.0](https://github.com/sethjuarez/snipsy/compare/v0.8.1...v0.9.0) (2026-03-18)
 
 
