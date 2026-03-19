@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use crate::models::{Project, ProjectData, Script, TextSnippet, VideoSnippet};
 
 #[tauri::command]
@@ -140,16 +143,18 @@ fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path
         .to_string_lossy();
     let thumb_path = thumbs_dir.join(format!("{stem}.jpg"));
 
-    let output = std::process::Command::new(ffmpeg)
-        .args([
-            "-i", &video_path.to_string_lossy(),
-            "-ss", "00:00:01",
-            "-vframes", "1",
-            "-q:v", "2",
-            "-y",
-            &thumb_path.to_string_lossy(),
-        ])
-        .output()
+    let mut cmd = std::process::Command::new(ffmpeg);
+    cmd.args([
+        "-i", &video_path.to_string_lossy(),
+        "-ss", "00:00:01",
+        "-vframes", "1",
+        "-q:v", "2",
+        "-y",
+        &thumb_path.to_string_lossy(),
+    ]);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let output = cmd.output()
         .map_err(|e| format!("ffmpeg not available: {e}"))?;
 
     if !output.status.success() {
@@ -174,15 +179,17 @@ pub fn get_video_fps(video_path: String) -> Result<f64, String> {
         })
         .unwrap_or_else(|| "ffprobe".to_string());
 
-    let output = std::process::Command::new(ffprobe)
-        .args([
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=r_frame_rate",
-            "-of", "csv=p=0",
-            &video_path,
-        ])
-        .output()
+    let mut cmd = std::process::Command::new(ffprobe);
+    cmd.args([
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=r_frame_rate",
+        "-of", "csv=p=0",
+        &video_path,
+    ]);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let output = cmd.output()
         .map_err(|e| format!("ffprobe not available: {e}"))?;
 
     if !output.status.success() {

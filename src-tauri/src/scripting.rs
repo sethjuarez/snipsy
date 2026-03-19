@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 use std::process::{Child, Command};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use crate::models::{Script, ScriptStep};
 
 /// Resolve the full path to the ffmpeg binary.
@@ -9,10 +12,13 @@ use crate::models::{Script, ScriptStep};
 /// the system PATH, so user-installed ffmpeg wouldn't be found otherwise.
 pub fn resolve_ffmpeg_path() -> Option<String> {
     // Try the normal PATH first
-    if Command::new("ffmpeg")
-        .arg("-version")
+    let mut cmd = Command::new("ffmpeg");
+    cmd.arg("-version")
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    if cmd
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -84,6 +90,7 @@ fn start_recording(output_path: &str) -> Result<Child, String> {
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .spawn()
         .map_err(|e| format!("Failed to start FFmpeg: {}", e))?;
 
@@ -323,6 +330,7 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
             #[cfg(target_os = "windows")]
             Command::new("cmd")
                 .args(["/C", "start", "", target])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
                 .spawn()
                 .map_err(|e| format!("launch error: {}", e))?;
             #[cfg(target_os = "macos")]
@@ -463,6 +471,7 @@ pub async fn install_ffmpeg() -> Result<String, String> {
         // Try winget first, fall back to no-op with instructions
         let output = Command::new("winget")
             .args(["install", "--id", "Gyan.FFmpeg", "-e", "--accept-source-agreements", "--accept-package-agreements"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
             .map_err(|e| format!("Failed to run winget: {}. Please install FFmpeg manually from https://ffmpeg.org", e))?;
 
