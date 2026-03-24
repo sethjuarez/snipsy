@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/sethjuarez/snipsy/compare/v0.9.1...v0.10.0) (2026-03-19)
+
+
+### Features
+
+* add Windows ARM64 build support ([77a003c](https://github.com/sethjuarez/snipsy/commit/77a003cd3b82b004061fcecf6d3c441e3ac39c58))
+
 ## [0.9.1](https://github.com/sethjuarez/snipsy/compare/v0.9.0...v0.9.1) (2026-03-19)
 
 
