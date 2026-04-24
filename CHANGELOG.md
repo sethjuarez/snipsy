@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/sethjuarez/snipsy/compare/v0.10.0...v0.11.0) (2026-04-24)
+
+
+### Features
+
+* add video pause stops ([451ada5](https://github.com/sethjuarez/snipsy/commit/451ada5037fb627da191dd26d66555949bbdbb9d))
+* update documentation images for dark mode, hotkey overview, and video snippet list ([0e68949](https://github.com/sethjuarez/snipsy/commit/0e689494941592f7fa6e24910c37258e2eb5dce7))
+
 ## [0.10.0](https://github.com/sethjuarez/snipsy/compare/v0.9.1...v0.10.0) (2026-03-19)
 
 
