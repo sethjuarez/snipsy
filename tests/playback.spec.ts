@@ -82,4 +82,15 @@ test.describe("Playback Window", () => {
     const video = page.getByTestId("playback-video");
     await expect(video).toHaveAttribute("data-muted", "false");
   });
+
+  test("pause stops are parsed as source-video timestamps within the clip range", async ({ page }) => {
+    const stops = encodeURIComponent(JSON.stringify([
+      { time: 0 },
+      { time: 10.5, label: "Explain result" },
+      { time: 40 },
+    ]));
+    await page.goto(`/playback?file=test.mp4&start=5&end=30&speed=3&pauseStops=${stops}`);
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveAttribute("data-pause-stops", "1");
+  });
 });

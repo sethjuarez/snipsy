@@ -42,6 +42,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
     snippet?.transitionActions ?? [],
   );
   const [muted, setMuted] = useState(snippet?.muted !== false);
+  const [pauseStops] = useState(snippet?.pauseStops);
 
   const addTransitionAction = () => {
     setTransitionActions([
@@ -91,6 +92,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       hotkey,
       speed,
       muted,
+      pauseStops,
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
     });

@@ -502,6 +502,7 @@ mod tests {
             background_color: None,
             click_to_play: None,
             muted: None,
+            pause_stops: None,
             transition_actions: None,
         }];
 

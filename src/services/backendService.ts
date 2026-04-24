@@ -2,6 +2,7 @@ import type {
   ProjectData,
   ImportedVideo,
   MonitorInfo,
+  PauseStop,
   Script,
   TextSnippet,
   TransitionAction,
@@ -29,6 +30,7 @@ export interface SnippetHotkey {
   backgroundColor?: string;
   clickToPlay?: boolean;
   muted?: boolean;
+  pauseStops?: PauseStop[];
 }
 
 export interface BackendService {
@@ -63,6 +65,7 @@ export interface BackendService {
     backgroundColor?: string,
     clickToPlay?: boolean,
     muted?: boolean,
+    pauseStops?: PauseStop[],
   ): Promise<void>;
   showPlaybackWindow(): Promise<void>;
   closePlaybackWindow(): Promise<void>;

@@ -50,7 +50,17 @@ pub struct VideoSnippet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub muted: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_stops: Option<Vec<PauseStop>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub transition_actions: Option<Vec<TransitionAction>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PauseStop {
+    pub time: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -222,6 +232,9 @@ mod tests {
             "endTime": 45.0,
             "hotkey": "Ctrl+Shift+2",
             "speed": 3.0,
+            "pauseStops": [
+                { "time": 18.5, "label": "Wait for presenter" }
+            ],
             "transitionActions": [
                 {
                     "triggerAt": "end",
@@ -235,6 +248,11 @@ mod tests {
         assert_eq!(snippet.id, "unique-id");
         assert_eq!(snippet.start_time, 12.5);
         assert_eq!(snippet.speed, 3.0);
+        assert!(snippet.pause_stops.is_some());
+        let stops = snippet.pause_stops.as_ref().unwrap();
+        assert_eq!(stops.len(), 1);
+        assert_eq!(stops[0].time, 18.5);
+        assert_eq!(stops[0].label.as_deref(), Some("Wait for presenter"));
         assert!(snippet.transition_actions.is_some());
         let actions = snippet.transition_actions.as_ref().unwrap();
         assert_eq!(actions.len(), 1);

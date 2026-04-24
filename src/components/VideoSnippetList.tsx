@@ -83,6 +83,17 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
                   <MousePointerClick size={10} />
                 </span>
               )}
+              {snippet.pauseStops && snippet.pauseStops.length > 0 && (
+                <span
+                  className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
+                  title={`${snippet.pauseStops.length} pause stop${snippet.pauseStops.length === 1 ? "" : "s"}`}
+                  data-testid={`pause-stops-indicator-${snippet.id}`}
+                >
+                  <MousePointerClick size={10} />
+                  {snippet.pauseStops.length} stop{snippet.pauseStops.length === 1 ? "" : "s"}
+                </span>
+              )}
               <span
                 className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
                 style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}

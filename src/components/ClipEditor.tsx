@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw } from "lucide-react";
+import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw, MousePointerClick } from "lucide-react";
 import { getBackend } from "../services";
-import type { EndBehavior, ImportedVideo, MonitorInfo, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, VideoSnippet } from "../types";
 
 const backend = getBackend();
 
@@ -78,6 +78,21 @@ function formatKeyCombo(e: KeyboardEvent): string {
   return parts.join("+");
 }
 
+function normalizePauseStops(stops: PauseStop[], startTime: number, endTime: number): PauseStop[] {
+  const sorted = stops
+    .filter((stop) => Number.isFinite(stop.time) && stop.time > startTime && stop.time < endTime)
+    .map((stop) => ({
+      time: Number(stop.time.toFixed(3)),
+      label: stop.label?.trim() || undefined,
+    }))
+    .sort((a, b) => a.time - b.time);
+
+  return sorted.filter((stop, index) => {
+    const previous = sorted[index - 1];
+    return !previous || Math.abs(stop.time - previous.time) > 0.05;
+  });
+}
+
 function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -110,6 +125,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [backgroundColor, setBackgroundColor] = useState(existingClip?.backgroundColor ?? "#000000");
   const [clickToPlay, setClickToPlay] = useState(existingClip?.clickToPlay ?? false);
   const [muted, setMuted] = useState(existingClip?.muted !== false);
+  const [pauseStops, setPauseStops] = useState<PauseStop[]>(existingClip?.pauseStops ?? []);
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
 
@@ -280,6 +296,27 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     }
   }, [playing, startTime, effectiveSpeed]);
 
+  const addPauseStop = useCallback(() => {
+    const time = Math.min(Math.max(currentTime, startTime + frameDuration), endTime - frameDuration);
+    if (!Number.isFinite(time) || time <= startTime || time >= endTime) return;
+    setPauseStops((stops) => normalizePauseStops([...stops, { time }], startTime, endTime));
+  }, [currentTime, startTime, endTime, frameDuration]);
+
+  const updatePauseStop = (index: number, field: keyof PauseStop, value: string | number) => {
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      updated[index] = {
+        ...updated[index],
+        [field]: field === "time" ? Number(value) : value,
+      };
+      return updated;
+    });
+  };
+
+  const removePauseStop = (index: number) => {
+    setPauseStops((stops) => stops.filter((_, i) => i !== index));
+  };
+
   const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -292,6 +329,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
 
   const handleSave = () => {
     if (!title.trim() || !hotkey) return;
+    const normalizedPauseStops = normalizePauseStops(pauseStops, startTime, endTime);
     onSave({
       title: title.trim(),
       description: description.trim(),
@@ -306,6 +344,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       backgroundColor,
       clickToPlay,
       muted,
+      pauseStops: normalizedPauseStops.length > 0 ? normalizedPauseStops : undefined,
     });
   };
 
@@ -392,6 +431,23 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             {/* Vertical line */}
             <div className="w-0.5 flex-1" style={{ backgroundColor: "var(--color-danger, #ef4444)" }} />
           </div>
+          {/* Pause stop markers */}
+          {pauseStops.map((stop, index) => {
+            const left = duration > 0 ? (stop.time / duration) * 100 : 0;
+            return (
+              <div
+                key={`${stop.time}-${index}`}
+                className="absolute top-0 bottom-0 w-0.5 pointer-events-none z-20"
+                style={{
+                  left: `${left}%`,
+                  backgroundColor: "var(--color-warning)",
+                  transform: "translateX(-50%)",
+                }}
+                title={`Pause at ${formatTime(stop.time, true)}`}
+                data-testid={`pause-stop-marker-${index}`}
+              />
+            );
+          })}
           {/* Start handle */}
           <div
             className="absolute top-0 bottom-0 rounded-l cursor-col-resize z-10"
@@ -495,7 +551,61 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             {playing ? <Pause size={11} /> : <Play size={11} />}
             {playing ? "Pause" : "Preview"}
           </button>
+          <button
+            onClick={addPauseStop}
+            disabled={currentTime <= startTime || currentTime >= endTime}
+            className="flex items-center gap-1.5 px-3 py-1 rounded text-sm font-medium disabled:opacity-50"
+            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+            data-testid="add-pause-stop"
+          >
+            <MousePointerClick size={11} /> Add pause at playhead
+          </button>
         </div>
+
+        {pauseStops.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2" data-testid="pause-stops-list">
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Pause stops:</span>
+            {pauseStops.map((stop, index) => (
+              <div
+                key={`${stop.time}-${index}`}
+                className="flex items-center gap-1.5 px-2 py-1 rounded"
+                style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+                data-testid={`pause-stop-${index}`}
+              >
+                <input
+                  type="number"
+                  value={Number(stop.time.toFixed(3))}
+                  min={startTime}
+                  max={endTime}
+                  step={frameDuration}
+                  onChange={(e) => updatePauseStop(index, "time", Number(e.target.value))}
+                  className="w-20 px-1 py-0.5 rounded text-sm font-mono"
+                  style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                  aria-label={`Pause stop ${index + 1} time`}
+                  data-testid={`pause-stop-time-${index}`}
+                />
+                <input
+                  type="text"
+                  value={stop.label ?? ""}
+                  onChange={(e) => updatePauseStop(index, "label", e.target.value)}
+                  placeholder="Label"
+                  className="w-28 px-1 py-0.5 rounded text-sm"
+                  style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                  data-testid={`pause-stop-label-${index}`}
+                />
+                <button
+                  onClick={() => removePauseStop(index)}
+                  className="px-1 text-sm"
+                  style={{ color: "var(--color-danger)" }}
+                  aria-label={`Remove pause stop ${index + 1}`}
+                  data-testid={`remove-pause-stop-${index}`}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Row 2: Title + Description + Hotkey inline */}
         <div className="flex items-center gap-2">

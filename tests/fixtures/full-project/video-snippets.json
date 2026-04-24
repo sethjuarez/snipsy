@@ -8,6 +8,12 @@
     "endTime": 45.0,
     "hotkey": "CmdOrControl+Shift+4",
     "speed": 3.0,
+    "pauseStops": [
+      {
+        "time": 24.0,
+        "label": "Explain build output"
+      }
+    ],
     "transitionActions": [
       {
         "triggerAt": "end",

@@ -73,6 +73,7 @@ export class TauriBackendService implements BackendService {
     backgroundColor?: string,
     clickToPlay?: boolean,
     muted?: boolean,
+    pauseStops?: import("../types").PauseStop[],
   ): Promise<void> {
     return invoke("play_video", {
       projectPath: projectPath ?? null,
@@ -87,6 +88,7 @@ export class TauriBackendService implements BackendService {
       backgroundColor: backgroundColor ?? null,
       clickToPlay: clickToPlay ?? null,
       muted: muted ?? null,
+      pauseStops: pauseStops ?? null,
     });
   }
 

@@ -1,10 +1,49 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
+
+interface PauseStop {
+  time: number;
+  label?: string;
+}
+
+const STOP_EPSILON = 0.05;
+
+function parsePauseStops(raw: string | null): PauseStop[] {
+  if (!raw) return [];
+
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .filter((item): item is PauseStop => (
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as PauseStop).time === "number" &&
+      Number.isFinite((item as PauseStop).time)
+    ))
+    .map((item) => ({
+      time: item.time,
+      label: typeof item.label === "string" ? item.label : undefined,
+    }));
+}
+
+function normalizePauseStops(stops: PauseStop[], start: number, end: number): PauseStop[] {
+  const sorted = stops
+    .filter((stop) => stop.time > start + STOP_EPSILON)
+    .filter((stop) => end <= start || stop.time < end - STOP_EPSILON)
+    .sort((a, b) => a.time - b.time);
+
+  return sorted.filter((stop, index) => {
+    const previous = sorted[index - 1];
+    return !previous || Math.abs(stop.time - previous.time) > STOP_EPSILON;
+  });
+}
 
 function Playback() {
   const [searchParams] = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [waitingForResume, setWaitingForResume] = useState(false);
 
   const file = searchParams.get("file") ?? "";
   const start = parseFloat(searchParams.get("start") ?? "0");
@@ -15,6 +54,14 @@ function Playback() {
   const backgroundColor = searchParams.get("bg") ?? "#000000";
   const clickToPlay = searchParams.get("clickToPlay") === "true";
   const muted = searchParams.get("muted") !== "false";
+  const pauseStops = useMemo(() => {
+    try {
+      return normalizePauseStops(parsePauseStops(searchParams.get("pauseStops")), start, end);
+    } catch (error) {
+      console.error("Failed to parse pause stops:", error);
+      return [];
+    }
+  }, [searchParams, start, end]);
 
   const closeWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
@@ -36,6 +83,38 @@ function Playback() {
     if (!video || !file) return;
 
     let cancelled = false;
+    let waitCleanup: (() => void) | null = null;
+    const nextStopIndexRef = { current: 0 };
+    const resumingRef = { current: false };
+
+    const waitForResume = async () => {
+      setWaitingForResume(true);
+      await new Promise<void>((resolve) => {
+        if (cancelled) return resolve();
+
+        const finish = () => {
+          waitCleanup?.();
+          resolve();
+        };
+        const onClick = () => finish();
+        const onKeyDown = (event: KeyboardEvent) => {
+          if (event.code === "Space" || event.key === " ") {
+            event.preventDefault();
+            finish();
+          }
+        };
+
+        waitCleanup = () => {
+          window.removeEventListener("click", onClick);
+          window.removeEventListener("keydown", onKeyDown);
+          waitCleanup = null;
+          setWaitingForResume(false);
+        };
+
+        window.addEventListener("click", onClick);
+        window.addEventListener("keydown", onKeyDown);
+      });
+    };
 
     (async () => {
       // 1. Resolve file path to asset URL
@@ -69,23 +148,11 @@ function Playback() {
         // Remove the compositor-guard overlay so the user sees the still frame.
         if (overlayRef.current) overlayRef.current.style.display = "none";
 
-        const container = video.parentElement;
-        if (container) container.style.cursor = "pointer";
         await showWindow();
 
-        // Wait for a click anywhere on the window to start playback
-        await new Promise<void>((resolve) => {
-          if (cancelled) return resolve();
-          const onClick = () => {
-            window.removeEventListener("click", onClick);
-            resolve();
-          };
-          window.addEventListener("click", onClick);
-        });
+        // Wait for a click or Space anywhere on the window to start playback.
+        await waitForResume();
         if (cancelled) return;
-
-        // Restore cursor setting after click
-        if (container) container.style.cursor = hideCursor ? "none" : "auto";
 
         // 4. Start playback — no overlay needed; compositor has settled
         // during the click-wait interval.
@@ -124,6 +191,20 @@ function Playback() {
 
     // Timeupdate for end-time clipping
     const handleTimeUpdate = () => {
+      const nextStop = pauseStops[nextStopIndexRef.current];
+      if (nextStop && !resumingRef.current && video.currentTime >= nextStop.time - STOP_EPSILON) {
+        resumingRef.current = true;
+        nextStopIndexRef.current += 1;
+        video.pause();
+        video.currentTime = nextStop.time;
+        waitForResume().then(() => {
+          if (cancelled) return;
+          resumingRef.current = false;
+          video.play().catch(() => {});
+        });
+        return;
+      }
+
       if (end > 0 && video.currentTime >= end) {
         video.pause();
         video.currentTime = end;
@@ -139,15 +220,16 @@ function Playback() {
 
     return () => {
       cancelled = true;
+      waitCleanup?.();
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, endBehavior, hideCursor, clickToPlay, muted, closeWindow, showWindow]);
+  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, closeWindow, showWindow]);
 
   // Escape to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeWindow();
+          if (e.key === "Escape") closeWindow();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -168,10 +250,11 @@ function Playback() {
       className="flex items-center justify-center"
       style={{
         position: "fixed", inset: 0,
-        cursor: hideCursor ? "none" : "auto",
+        cursor: waitingForResume ? "pointer" : hideCursor ? "none" : "auto",
         backgroundColor,
       }}
       data-testid="playback-container"
+      data-waiting-for-resume={waitingForResume}
     >
       <video
         ref={videoRef}
@@ -184,6 +267,7 @@ function Playback() {
         data-end-behavior={endBehavior}
         data-click-to-play={clickToPlay}
         data-muted={muted}
+        data-pause-stops={pauseStops.length}
         className="object-contain"
         style={{
           width: "100%", height: "100%",

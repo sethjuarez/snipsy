@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-use crate::models::TransitionAction;
+use crate::models::{PauseStop, TransitionAction};
 
 #[tauri::command]
 pub async fn play_video(
@@ -17,6 +17,7 @@ pub async fn play_video(
     background_color: Option<String>,
     click_to_play: Option<bool>,
     muted: Option<bool>,
+    pause_stops: Option<Vec<PauseStop>>,
 ) -> Result<(), String> {
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
@@ -39,8 +40,15 @@ pub async fn play_video(
     let bg = background_color.as_deref().unwrap_or("#000000");
     let ctp = if click_to_play.unwrap_or(false) { "true" } else { "false" };
     let mute = if muted.unwrap_or(true) { "true" } else { "false" };
+    let pause_stops_json = pause_stops
+        .as_ref()
+        .filter(|stops| !stops.is_empty())
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|e| format!("Failed to serialize pause stops: {}", e))?
+        .unwrap_or_default();
     let url = format!(
-        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}&clickToPlay={}&muted={}",
+        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}&clickToPlay={}&muted={}&pauseStops={}",
         urlencoded(&abs_path),
         start_time,
         end_time,
@@ -49,7 +57,8 @@ pub async fn play_video(
         hc,
         urlencoded(bg),
         ctp,
-        mute
+        mute,
+        urlencoded(&pause_stops_json)
     );
 
     let init_script = format!(
@@ -199,10 +208,17 @@ fn schedule_transition_actions(actions: Vec<TransitionAction>, video_duration_se
 fn urlencoded(s: &str) -> String {
     s.replace('%', "%25")
         .replace(' ', "%20")
+        .replace('"', "%22")
         .replace('&', "%26")
         .replace('=', "%3D")
         .replace('#', "%23")
         .replace('?', "%3F")
+        .replace('[', "%5B")
+        .replace(']', "%5D")
+        .replace('{', "%7B")
+        .replace('}', "%7D")
+        .replace(':', "%3A")
+        .replace(',', "%2C")
 }
 
 #[cfg(test)]
@@ -218,12 +234,17 @@ mod tests {
         end_time: f64,
         speed: f64,
         transition_actions: Option<Vec<TransitionAction>>,
+        pause_stops: Option<Vec<PauseStop>>,
     }
 
     #[test]
     fn test_urlencoded() {
         assert_eq!(urlencoded("test file.mp4"), "test%20file.mp4");
         assert_eq!(urlencoded("a&b=c"), "a%26b%3Dc");
+        assert_eq!(
+            urlencoded(r#"[{"time":10.5,"label":"Explain"}]"#),
+            "%5B%7B%22time%22%3A10.5%2C%22label%22%3A%22Explain%22%7D%5D"
+        );
     }
 
     #[test]
@@ -235,6 +256,9 @@ mod tests {
             "speed": 1.5,
             "transitionActions": [
                 { "triggerAt": "end", "action": "click", "x": 100, "y": 200 }
+            ],
+            "pauseStops": [
+                { "time": 10.5, "label": "Explain result" }
             ]
         }"#;
         let params: PlayVideoParams = serde_json::from_str(json).unwrap();
@@ -246,6 +270,10 @@ mod tests {
         let actions = params.transition_actions.unwrap();
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].action, "click");
+        let stops = params.pause_stops.unwrap();
+        assert_eq!(stops.len(), 1);
+        assert_eq!(stops[0].time, 10.5);
+        assert_eq!(stops[0].label.as_deref(), Some("Explain result"));
     }
 
     #[test]

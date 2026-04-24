@@ -27,6 +27,7 @@ pub struct SnippetHotkey {
     pub background_color: Option<String>,
     pub click_to_play: Option<bool>,
     pub muted: Option<bool>,
+    pub pause_stops: Option<Vec<crate::models::PauseStop>>,
 }
 
 /// State tracking for demo mode
@@ -128,6 +129,7 @@ pub fn enter_demo_mode(
             let background_color = hk.background_color.clone();
             let click_to_play = hk.click_to_play;
             let muted = hk.muted;
+            let pause_stops = hk.pause_stops.clone();
 
             let result = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
@@ -138,6 +140,7 @@ pub fn enter_demo_mode(
                     let target_monitor = target_monitor.clone();
                     let end_behavior = end_behavior.clone();
                     let background_color = background_color.clone();
+                    let pause_stops = pause_stops.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = crate::playback::play_video(
                             app,
@@ -152,7 +155,8 @@ pub fn enter_demo_mode(
                             hide_cursor,
                             background_color,
                             click_to_play,
-                            muted,
+                             muted,
+                            pause_stops,
                         )
                         .await
                         {
@@ -180,6 +184,7 @@ pub fn enter_demo_mode(
                 let background_color = hk.background_color.clone();
                 let click_to_play = hk.click_to_play;
                 let muted = hk.muted;
+                let pause_stops = hk.pause_stops.clone();
 
                 let _ = crate::keyboard_hook::register_hook_fallback(
                     &hk.hotkey,
@@ -191,6 +196,7 @@ pub fn enter_demo_mode(
                         let target_monitor = target_monitor.clone();
                         let end_behavior = end_behavior.clone();
                         let background_color = background_color.clone();
+                        let pause_stops = pause_stops.clone();
                         tauri::async_runtime::spawn(async move {
                             if let Err(e) = crate::playback::play_video(
                                 app,
@@ -206,6 +212,7 @@ pub fn enter_demo_mode(
                                 background_color,
                                 click_to_play,
                                 muted,
+                                pause_stops,
                             )
                             .await
                             {
@@ -278,6 +285,7 @@ mod tests {
             background_color: None,
             click_to_play: None,
             muted: None,
+            pause_stops: None,
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
@@ -307,6 +315,10 @@ mod tests {
             background_color: Some("#1e1e1e".into()),
             click_to_play: Some(false),
             muted: Some(true),
+            pause_stops: Some(vec![crate::models::PauseStop {
+                time: 12.5,
+                label: Some("Explain output".into()),
+            }]),
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
@@ -315,5 +327,8 @@ mod tests {
         assert_eq!(deserialized.video_file.unwrap(), "videos/demo.mp4");
         assert_eq!(deserialized.speed.unwrap(), 2.0);
         assert_eq!(deserialized.end_behavior.unwrap(), "freeze");
+        let pause_stops = deserialized.pause_stops.unwrap();
+        assert_eq!(pause_stops.len(), 1);
+        assert_eq!(pause_stops[0].time, 12.5);
     }
 }

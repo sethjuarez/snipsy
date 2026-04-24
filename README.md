@@ -117,6 +117,12 @@ All configuration is stored as **JSON files**, making projects human-readable, v
   "endTime": 45.0,
   "hotkey": "Ctrl+Shift+2",
   "speed": 3.0,
+  "pauseStops": [
+    {
+      "time": 18.5,
+      "label": "Wait for presenter"
+    }
+  ],
   "transitionActions": [
     {
       "triggerAt": "end",
@@ -130,6 +136,7 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 
 - `startTime` / `endTime`: Seconds within the video file.
 - `speed`: Playback multiplier (1.0 = normal).
+- `pauseStops` (optional): Source-video timestamps where playback pauses on the designated frame until the presenter clicks or presses Space. Stops still target the same frame when playback speed is changed.
 - `transitionActions` (optional): Array of automation actions to execute during/at the end of playback for seamless transitions.
 
 ### Script Schema (Advanced Mode)

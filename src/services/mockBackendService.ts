@@ -44,6 +44,9 @@ const FIXTURE_PROJECT: ProjectData = {
       endTime: 30,
       hotkey: "CmdOrControl+Shift+4",
       speed: 2.0,
+      pauseStops: [
+        { time: 12.5, label: "Explain build output" },
+      ],
       transitionActions: [
         { triggerAt: "end", action: "click", x: 350, y: 40 },
       ],
@@ -157,6 +160,7 @@ export class MockBackendService implements BackendService {
     _backgroundColor?: string,
     _clickToPlay?: boolean,
     _muted?: boolean,
+    _pauseStops?: import("../types").PauseStop[],
   ): Promise<void> {
     // Mock: no-op in test mode
   }

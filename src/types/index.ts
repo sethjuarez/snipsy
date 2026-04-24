@@ -22,6 +22,11 @@ export interface TransitionAction {
   y?: number;
 }
 
+export interface PauseStop {
+  time: number;
+  label?: string;
+}
+
 export interface MonitorInfo {
   name: string;
   width: number;
@@ -48,6 +53,7 @@ export interface VideoSnippet {
   backgroundColor?: string;
   clickToPlay?: boolean;
   muted?: boolean;
+  pauseStops?: PauseStop[];
   transitionActions?: TransitionAction[];
 }
 

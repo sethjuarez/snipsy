@@ -192,6 +192,11 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
               <MousePointerClick size={10} style={{ color: "var(--color-text-secondary)" }} />
             </span>
           )}
+          {snippet.pauseStops && snippet.pauseStops.length > 0 && (
+            <span title={`${snippet.pauseStops.length} pause stop${snippet.pauseStops.length === 1 ? "" : "s"}`}>
+              <MousePointerClick size={10} style={{ color: "var(--color-warning)" }} />
+            </span>
+          )}
           <span title={snippet.muted !== false ? "Audio muted" : "Audio enabled"}>
             {snippet.muted !== false
               ? <VolumeOff size={10} style={{ color: "var(--color-text-secondary)" }} />

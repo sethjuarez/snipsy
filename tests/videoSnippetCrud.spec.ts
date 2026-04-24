@@ -65,4 +65,8 @@ test.describe("Video Snippet CRUD", () => {
     const previewBtn = page.getByTestId("video-preview-vs-1");
     await expect(previewBtn).toBeVisible();
   });
+
+  test("shows pause stop indicator for clips with stops", async ({ page }) => {
+    await expect(page.getByTestId("pause-stops-indicator-vs-1")).toContainText("1 stop");
+  });
 });

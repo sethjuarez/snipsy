@@ -105,6 +105,23 @@ test.describe("Video Import", () => {
     await expect(checkbox).not.toBeChecked();
   });
 
+  test("clip editor can add and remove pause stops", async ({ page }) => {
+    await page.getByTestId("nav-video-snippets").click();
+    await page.getByTestId("video-edit-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+
+    await page.getByTestId("clip-editor-video").evaluate((node) => {
+      const video = node as HTMLVideoElement;
+      video.currentTime = 15;
+      video.dispatchEvent(new Event("timeupdate"));
+    });
+    await page.getByTestId("add-pause-stop").click();
+    await expect(page.getByTestId("pause-stop-1")).toBeVisible();
+    await page.getByTestId("pause-stop-label-1").fill("Presenter checkpoint");
+    await page.getByTestId("remove-pause-stop-1").click();
+    await expect(page.getByTestId("pause-stop-1")).not.toBeVisible();
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();
