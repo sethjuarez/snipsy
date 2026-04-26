@@ -20,6 +20,18 @@ test.describe("Hotkey Overview", () => {
     expect(count).toBeGreaterThan(0);
   });
 
+  test("can jump from overview to edit a text snippet", async ({ page }) => {
+    await page.getByTestId("overview-edit-text-ts-1").click();
+    await expect(page.getByTestId("snippet-form")).toBeVisible();
+    await expect(page.getByTestId("snippet-title")).toHaveValue("React Import");
+  });
+
+  test("can jump from overview to edit a video snippet", async ({ page }) => {
+    await page.getByTestId("overview-edit-video-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    await expect(page.getByTestId("clip-title")).toHaveValue("Build Process");
+  });
+
   test("shows empty state for new project with no snippets", async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
