@@ -1,12 +1,8 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-
-interface PauseStop {
-  time: number;
-  label?: string;
-}
-
-const STOP_EPSILON = 0.05;
+import SpotlightOverlay from "../components/SpotlightOverlay";
+import type { PauseSpotlight, PauseStop } from "../types";
+import { STOP_EPSILON, getVideoContentBox, normalizePauseStops } from "../utils/spotlight";
 
 function parsePauseStops(raw: string | null): PauseStop[] {
   if (!raw) return [];
@@ -24,19 +20,8 @@ function parsePauseStops(raw: string | null): PauseStop[] {
     .map((item) => ({
       time: item.time,
       label: typeof item.label === "string" ? item.label : undefined,
+      spotlight: item.spotlight,
     }));
-}
-
-function normalizePauseStops(stops: PauseStop[], start: number, end: number): PauseStop[] {
-  const sorted = stops
-    .filter((stop) => stop.time > start + STOP_EPSILON)
-    .filter((stop) => end <= start || stop.time < end - STOP_EPSILON)
-    .sort((a, b) => a.time - b.time);
-
-  return sorted.filter((stop, index) => {
-    const previous = sorted[index - 1];
-    return !previous || Math.abs(stop.time - previous.time) > STOP_EPSILON;
-  });
 }
 
 function Playback() {
@@ -44,6 +29,7 @@ function Playback() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [waitingForResume, setWaitingForResume] = useState(false);
+  const [activeSpotlight, setActiveSpotlight] = useState<{ spotlight: PauseSpotlight; label?: string } | null>(null);
 
   const file = searchParams.get("file") ?? "";
   const start = parseFloat(searchParams.get("start") ?? "0");
@@ -197,8 +183,10 @@ function Playback() {
         nextStopIndexRef.current += 1;
         video.pause();
         video.currentTime = nextStop.time;
+        setActiveSpotlight(nextStop.spotlight ? { spotlight: nextStop.spotlight, label: nextStop.label } : null);
         waitForResume().then(() => {
           if (cancelled) return;
+          setActiveSpotlight(null);
           resumingRef.current = false;
           video.play().catch(() => {});
         });
@@ -221,6 +209,7 @@ function Playback() {
     return () => {
       cancelled = true;
       waitCleanup?.();
+      setActiveSpotlight(null);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
@@ -245,6 +234,14 @@ function Playback() {
     );
   }
 
+  const spotlightContentBox = activeSpotlight && videoRef.current
+    ? getVideoContentBox(videoRef.current)
+    : null;
+  const pauseSpotlightRegionCount = pauseStops.reduce(
+    (count, stop) => count + (stop.spotlight?.regions.length ?? 0),
+    0,
+  );
+
   return (
     <div
       className="flex items-center justify-center"
@@ -268,6 +265,7 @@ function Playback() {
         data-click-to-play={clickToPlay}
         data-muted={muted}
         data-pause-stops={pauseStops.length}
+        data-pause-spotlight-regions={pauseSpotlightRegionCount}
         className="object-contain"
         style={{
           width: "100%", height: "100%",
@@ -280,6 +278,14 @@ function Playback() {
           transform: "translateZ(0)",
         }}
       />
+      {activeSpotlight && spotlightContentBox && (
+        <SpotlightOverlay
+          spotlight={activeSpotlight.spotlight}
+          contentBox={spotlightContentBox}
+          label={activeSpotlight.label}
+          testIdPrefix="playback-spotlight"
+        />
+      )}
       {/* Compositor-guard overlay: a solid div the same color as the
           letterbox bars. It sits above the video so any brief compositor
           reconfiguration during play() start is invisible.  Removed via ref

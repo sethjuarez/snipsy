@@ -324,7 +324,19 @@ function App() {
             ) : (
             <>
             {activeView === "home" && (
-              <HotkeyOverview textSnippets={textSnippets} videoSnippets={videoSnippets} onPlayVideo={playVideo} />
+              <HotkeyOverview
+                textSnippets={textSnippets}
+                videoSnippets={videoSnippets}
+                onPlayVideo={playVideo}
+                onEditText={(snippet) => {
+                  setActiveView("text-snippets");
+                  handleEdit(snippet);
+                }}
+                onEditVideo={(snippet) => {
+                  setActiveView("video-snippets");
+                  handleVideoEdit(snippet);
+                }}
+              />
             )}
 
             {activeView === "text-snippets" && (

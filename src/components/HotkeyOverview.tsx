@@ -3,13 +3,15 @@ import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, us
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
-import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff } from "lucide-react";
+import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff, Pencil } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
 
 interface HotkeyOverviewProps {
   textSnippets: TextSnippet[];
   videoSnippets: VideoSnippet[];
   onPlayVideo?: (snippet: VideoSnippet) => void;
+  onEditText?: (snippet: TextSnippet) => void;
+  onEditVideo?: (snippet: VideoSnippet) => void;
 }
 
 type CardItem =
@@ -30,7 +32,17 @@ function saveOrder(ids: string[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
 }
 
-function SortableCard({ item, onPlay }: { item: CardItem; onPlay?: (s: VideoSnippet) => void }) {
+function SortableCard({
+  item,
+  onPlay,
+  onEditText,
+  onEditVideo,
+}: {
+  item: CardItem;
+  onPlay?: (s: VideoSnippet) => void;
+  onEditText?: (s: TextSnippet) => void;
+  onEditVideo?: (s: VideoSnippet) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
   const dragProps = { attributes, listeners };
@@ -44,9 +56,9 @@ function SortableCard({ item, onPlay }: { item: CardItem; onPlay?: (s: VideoSnip
   return (
     <div ref={setNodeRef} style={{ ...style, height: 200 }} data-testid="hotkey-entry">
       {item.kind === "text" ? (
-        <TextCardInner snippet={item.snippet} dragProps={dragProps} />
+        <TextCardInner snippet={item.snippet} onEdit={onEditText} dragProps={dragProps} />
       ) : (
-        <VideoCardInner snippet={item.snippet} onPlay={onPlay} dragProps={dragProps} />
+        <VideoCardInner snippet={item.snippet} onPlay={onPlay} onEdit={onEditVideo} dragProps={dragProps} />
       )}
     </div>
   );
@@ -57,7 +69,7 @@ interface DragProps {
   listeners: SyntheticListenerMap | undefined;
 }
 
-function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps: DragProps }) {
+function TextCardInner({ snippet, onEdit, dragProps }: { snippet: TextSnippet; onEdit?: (s: TextSnippet) => void; dragProps: DragProps }) {
   return (
     <div
       className="rounded-lg overflow-hidden flex flex-col h-full"
@@ -78,6 +90,18 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
         <span className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
           {snippet.title}
         </span>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(snippet)}
+            className="ml-auto shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+            style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
+            title="Edit text snippet"
+            data-testid={`overview-edit-text-${snippet.id}`}
+          >
+            <Pencil size={10} /> Edit
+          </button>
+        )}
       </div>
       {/* Text preview */}
       <div
@@ -117,7 +141,7 @@ function TextCardInner({ snippet, dragProps }: { snippet: TextSnippet; dragProps
   );
 }
 
-function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet; onPlay?: (s: VideoSnippet) => void; dragProps: DragProps }) {
+function VideoCardInner({ snippet, onPlay, onEdit, dragProps }: { snippet: VideoSnippet; onPlay?: (s: VideoSnippet) => void; onEdit?: (s: VideoSnippet) => void; dragProps: DragProps }) {
   const duration = snippet.endTime - snippet.startTime;
 
   return (
@@ -140,6 +164,18 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
         <span className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
           {snippet.title}
         </span>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(snippet)}
+            className="ml-auto shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+            style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
+            title="Edit video clip"
+            data-testid={`overview-edit-video-${snippet.id}`}
+          >
+            <Pencil size={10} /> Edit
+          </button>
+        )}
       </div>
       {/* Video preview */}
       <div
@@ -209,7 +245,7 @@ function VideoCardInner({ snippet, onPlay, dragProps }: { snippet: VideoSnippet;
   );
 }
 
-function HotkeyOverview({ textSnippets, videoSnippets, onPlayVideo }: HotkeyOverviewProps) {
+function HotkeyOverview({ textSnippets, videoSnippets, onPlayVideo, onEditText, onEditVideo }: HotkeyOverviewProps) {
   const allItems = useMemo<CardItem[]>(() => {
     const texts: CardItem[] = textSnippets.map((s) => ({ kind: "text", id: s.id, snippet: s }));
     const videos: CardItem[] = videoSnippets.map((s) => ({ kind: "video", id: s.id, snippet: s }));
@@ -273,7 +309,13 @@ function HotkeyOverview({ textSnippets, videoSnippets, onPlayVideo }: HotkeyOver
       <SortableContext items={sortedItems.map((i) => i.id)} strategy={rectSortingStrategy}>
         <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 300px))" }} data-testid="hotkey-overview">
           {sortedItems.map((item) => (
-            <SortableCard key={item.id} item={item} onPlay={item.kind === "video" ? onPlayVideo : undefined} />
+            <SortableCard
+              key={item.id}
+              item={item}
+              onPlay={item.kind === "video" ? onPlayVideo : undefined}
+              onEditText={item.kind === "text" ? onEditText : undefined}
+              onEditVideo={item.kind === "video" ? onEditVideo : undefined}
+            />
           ))}
         </div>
       </SortableContext>

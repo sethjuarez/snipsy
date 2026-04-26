@@ -93,4 +93,23 @@ test.describe("Playback Window", () => {
     const video = page.getByTestId("playback-video");
     await expect(video).toHaveAttribute("data-pause-stops", "1");
   });
+
+  test("pause stops preserve valid spotlight regions", async ({ page }) => {
+    const stops = encodeURIComponent(JSON.stringify([
+      {
+        time: 10.5,
+        label: "Explain result",
+        spotlight: {
+          regions: [
+            { type: "rectangle", x: 10, y: 12, width: 30, height: 20 },
+            { type: "rectangle", x: 96, y: 12, width: 1, height: 20 },
+          ],
+        },
+      },
+    ]));
+    await page.goto(`/playback?file=test.mp4&start=5&end=30&speed=3&pauseStops=${stops}`);
+    const video = page.getByTestId("playback-video");
+    await expect(video).toHaveAttribute("data-pause-stops", "1");
+    await expect(video).toHaveAttribute("data-pause-spotlight-regions", "1");
+  });
 });

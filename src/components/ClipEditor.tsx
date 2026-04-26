@@ -1,9 +1,39 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw, MousePointerClick } from "lucide-react";
 import { getBackend } from "../services";
-import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, VideoSnippet } from "../types";
+import SpotlightOverlay from "./SpotlightOverlay";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, VideoSnippet } from "../types";
+import {
+  DEFAULT_SPOTLIGHT_STYLE,
+  createRectangleRegion,
+  getVideoContentBox,
+  normalizePauseStops,
+  normalizeSpotlight,
+  pointerToVideoPoint,
+  regionToBox,
+  type Point,
+} from "../utils/spotlight";
 
 const backend = getBackend();
+const MIN_SPOTLIGHT_REGION_SIZE = 2;
+
+type SpotlightResizeHandle = "nw" | "ne" | "sw" | "se";
+type SpotlightManipulation =
+  | {
+      mode: "move";
+      stopIndex: number;
+      regionIndex: number;
+      startPoint: Point;
+      startRegion: RectanglePauseSpotlightRegion;
+    }
+  | {
+      mode: "resize";
+      stopIndex: number;
+      regionIndex: number;
+      handle: SpotlightResizeHandle;
+      startPoint: Point;
+      startRegion: RectanglePauseSpotlightRegion;
+    };
 
 // Hold-to-repeat: fires callback on mousedown, then repeats with acceleration.
 // Uses a ref so the interval always calls the latest callback (avoids stale closures).
@@ -78,18 +108,80 @@ function formatKeyCombo(e: KeyboardEvent): string {
   return parts.join("+");
 }
 
-function normalizePauseStops(stops: PauseStop[], startTime: number, endTime: number): PauseStop[] {
-  const sorted = stops
-    .filter((stop) => Number.isFinite(stop.time) && stop.time > startTime && stop.time < endTime)
-    .map((stop) => ({
-      time: Number(stop.time.toFixed(3)),
-      label: stop.label?.trim() || undefined,
-    }))
-    .sort((a, b) => a.time - b.time);
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
 
-  return sorted.filter((stop, index) => {
-    const previous = sorted[index - 1];
-    return !previous || Math.abs(stop.time - previous.time) > 0.05;
+function roundPercent(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function normalizeEditorRegion(region: RectanglePauseSpotlightRegion): RectanglePauseSpotlightRegion {
+  const x = clampPercent(region.x);
+  const y = clampPercent(region.y);
+  const width = Math.min(100 - x, Math.max(MIN_SPOTLIGHT_REGION_SIZE, region.width));
+  const height = Math.min(100 - y, Math.max(MIN_SPOTLIGHT_REGION_SIZE, region.height));
+  return {
+    type: "rectangle",
+    x: roundPercent(x),
+    y: roundPercent(y),
+    width: roundPercent(width),
+    height: roundPercent(height),
+  };
+}
+
+function moveRegion(
+  region: RectanglePauseSpotlightRegion,
+  start: Point,
+  current: Point,
+): RectanglePauseSpotlightRegion {
+  const dx = current.x - start.x;
+  const dy = current.y - start.y;
+  return normalizeEditorRegion({
+    ...region,
+    x: Math.min(100 - region.width, Math.max(0, region.x + dx)),
+    y: Math.min(100 - region.height, Math.max(0, region.y + dy)),
+  });
+}
+
+function resizeRegion(
+  region: RectanglePauseSpotlightRegion,
+  start: Point,
+  current: Point,
+  handle: SpotlightResizeHandle,
+): RectanglePauseSpotlightRegion {
+  const dx = current.x - start.x;
+  const dy = current.y - start.y;
+  let left = region.x;
+  let top = region.y;
+  let right = region.x + region.width;
+  let bottom = region.y + region.height;
+
+  if (handle.includes("w")) left = clampPercent(left + dx);
+  if (handle.includes("e")) right = clampPercent(right + dx);
+  if (handle.includes("n")) top = clampPercent(top + dy);
+  if (handle.includes("s")) bottom = clampPercent(bottom + dy);
+
+  if (right - left < MIN_SPOTLIGHT_REGION_SIZE) {
+    if (handle.includes("w")) left = right - MIN_SPOTLIGHT_REGION_SIZE;
+    else right = left + MIN_SPOTLIGHT_REGION_SIZE;
+  }
+  if (bottom - top < MIN_SPOTLIGHT_REGION_SIZE) {
+    if (handle.includes("n")) top = bottom - MIN_SPOTLIGHT_REGION_SIZE;
+    else bottom = top + MIN_SPOTLIGHT_REGION_SIZE;
+  }
+
+  left = clampPercent(left);
+  top = clampPercent(top);
+  right = clampPercent(right);
+  bottom = clampPercent(bottom);
+
+  return normalizeEditorRegion({
+    type: "rectangle",
+    x: Math.min(left, right - MIN_SPOTLIGHT_REGION_SIZE),
+    y: Math.min(top, bottom - MIN_SPOTLIGHT_REGION_SIZE),
+    width: Math.abs(right - left),
+    height: Math.abs(bottom - top),
   });
 }
 
@@ -126,6 +218,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [clickToPlay, setClickToPlay] = useState(existingClip?.clickToPlay ?? false);
   const [muted, setMuted] = useState(existingClip?.muted !== false);
   const [pauseStops, setPauseStops] = useState<PauseStop[]>(existingClip?.pauseStops ?? []);
+  const [editingSpotlightIndex, setEditingSpotlightIndex] = useState<number | null>(null);
+  const [selectedSpotlightRegion, setSelectedSpotlightRegion] = useState<number | null>(null);
+  const [drawingStart, setDrawingStart] = useState<Point | null>(null);
+  const [draftRegion, setDraftRegion] = useState<RectanglePauseSpotlightRegion | null>(null);
+  const [spotlightManipulation, setSpotlightManipulation] = useState<SpotlightManipulation | null>(null);
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
 
@@ -302,7 +399,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     setPauseStops((stops) => normalizePauseStops([...stops, { time }], startTime, endTime));
   }, [currentTime, startTime, endTime, frameDuration]);
 
-  const updatePauseStop = (index: number, field: keyof PauseStop, value: string | number) => {
+  const updatePauseStop = (index: number, field: "time" | "label", value: string | number) => {
     setPauseStops((stops) => {
       const updated = [...stops];
       updated[index] = {
@@ -315,7 +412,226 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
 
   const removePauseStop = (index: number) => {
     setPauseStops((stops) => stops.filter((_, i) => i !== index));
+    if (editingSpotlightIndex === index) {
+      setEditingSpotlightIndex(null);
+      setSelectedSpotlightRegion(null);
+    }
   };
+
+  const startSpotlightEdit = (index: number) => {
+    const stop = pauseStops[index];
+    if (!stop) return;
+    const vid = videoRef.current;
+    if (vid) {
+      vid.pause();
+      vid.currentTime = stop.time;
+      setCurrentTime(stop.time);
+      setPlaying(false);
+    }
+    setEditingSpotlightIndex(index);
+    setSelectedSpotlightRegion(stop.spotlight?.regions.length ? 0 : null);
+    setDrawingStart(null);
+    setDraftRegion(null);
+  };
+
+  const finishSpotlightEdit = () => {
+    setEditingSpotlightIndex(null);
+    setSelectedSpotlightRegion(null);
+    setDrawingStart(null);
+    setDraftRegion(null);
+    setSpotlightManipulation(null);
+  };
+
+  const removeSpotlight = (index: number) => {
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      const stop = updated[index];
+      if (!stop) return stops;
+      updated[index] = { ...stop, spotlight: undefined };
+      return updated;
+    });
+    finishSpotlightEdit();
+  };
+
+  const setSpotlightLabelVisible = (index: number, showLabel: boolean) => {
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      const stop = updated[index];
+      if (!stop?.spotlight) return stops;
+      updated[index] = {
+        ...stop,
+        spotlight: normalizeSpotlight({
+          ...stop.spotlight,
+          showLabel,
+        }),
+      };
+      return updated;
+    });
+  };
+
+  const deleteSelectedSpotlightRegion = () => {
+    if (editingSpotlightIndex === null || selectedSpotlightRegion === null) return;
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      const stop = updated[editingSpotlightIndex];
+      const regions = stop?.spotlight?.regions;
+      if (!stop || !regions) return stops;
+      const nextRegions = regions.filter((_, index) => index !== selectedSpotlightRegion);
+      updated[editingSpotlightIndex] = {
+        ...stop,
+        spotlight: normalizeSpotlight({
+          regions: nextRegions,
+          showLabel: stop.spotlight?.showLabel,
+          style: stop.spotlight?.style,
+        }),
+      };
+      return updated;
+    });
+    setSelectedSpotlightRegion(null);
+  };
+
+  const updateSpotlightRegion = (
+    stopIndex: number,
+    regionIndex: number,
+    region: RectanglePauseSpotlightRegion,
+  ) => {
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      const stop = updated[stopIndex];
+      const spotlight = stop?.spotlight;
+      if (!stop || !spotlight?.regions[regionIndex]) return stops;
+      const regions = [...spotlight.regions];
+      regions[regionIndex] = region;
+      updated[stopIndex] = {
+        ...stop,
+        spotlight: normalizeSpotlight({
+          regions,
+          showLabel: spotlight.showLabel,
+          style: spotlight.style,
+        }),
+      };
+      return updated;
+    });
+  };
+
+  const beginSpotlightMove = (regionIndex: number, e: React.MouseEvent) => {
+    if (editingSpotlightIndex === null || !videoRef.current) return;
+    const region = pauseStops[editingSpotlightIndex]?.spotlight?.regions[regionIndex];
+    if (!region || region.type !== "rectangle") return;
+    e.preventDefault();
+    setSelectedSpotlightRegion(regionIndex);
+    setSpotlightManipulation({
+      mode: "move",
+      stopIndex: editingSpotlightIndex,
+      regionIndex,
+      startPoint: pointerToVideoPoint(videoRef.current, e.clientX, e.clientY),
+      startRegion: region,
+    });
+  };
+
+  const beginSpotlightResize = (
+    regionIndex: number,
+    handle: SpotlightResizeHandle,
+    e: React.MouseEvent,
+  ) => {
+    if (editingSpotlightIndex === null || !videoRef.current) return;
+    const region = pauseStops[editingSpotlightIndex]?.spotlight?.regions[regionIndex];
+    if (!region || region.type !== "rectangle") return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedSpotlightRegion(regionIndex);
+    setSpotlightManipulation({
+      mode: "resize",
+      stopIndex: editingSpotlightIndex,
+      regionIndex,
+      handle,
+      startPoint: pointerToVideoPoint(videoRef.current, e.clientX, e.clientY),
+      startRegion: region,
+    });
+  };
+
+  const beginSpotlightDraw = (e: React.MouseEvent) => {
+    if (editingSpotlightIndex === null || !videoRef.current || spotlightManipulation) return;
+    e.preventDefault();
+    setSelectedSpotlightRegion(null);
+    setDrawingStart(pointerToVideoPoint(videoRef.current, e.clientX, e.clientY));
+    setDraftRegion(null);
+  };
+
+  useEffect(() => {
+    if (!drawingStart || editingSpotlightIndex === null) return;
+
+    const onMove = (e: MouseEvent) => {
+      const vid = videoRef.current;
+      if (!vid) return;
+      const point = pointerToVideoPoint(vid, e.clientX, e.clientY);
+      setDraftRegion(createRectangleRegion(drawingStart, point));
+    };
+    const onUp = (e: MouseEvent) => {
+      const vid = videoRef.current;
+      if (!vid) return;
+      const point = pointerToVideoPoint(vid, e.clientX, e.clientY);
+      const region = createRectangleRegion(drawingStart, point);
+      if (region) {
+        setPauseStops((stops) => {
+          const updated = [...stops];
+          const stop = updated[editingSpotlightIndex];
+          if (!stop) return stops;
+          const regions = [...(stop.spotlight?.regions ?? []), region];
+          updated[editingSpotlightIndex] = {
+            ...stop,
+            spotlight: normalizeSpotlight({
+              regions,
+              showLabel: stop.spotlight?.showLabel,
+              style: stop.spotlight?.style,
+            }),
+          };
+          setSelectedSpotlightRegion(regions.length - 1);
+          return updated;
+        });
+      }
+      setDrawingStart(null);
+      setDraftRegion(null);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [drawingStart, editingSpotlightIndex]);
+
+  useEffect(() => {
+    if (!spotlightManipulation) return;
+
+    const onMove = (e: MouseEvent) => {
+      const vid = videoRef.current;
+      if (!vid) return;
+      const point = pointerToVideoPoint(vid, e.clientX, e.clientY);
+      const region = spotlightManipulation.mode === "move"
+        ? moveRegion(spotlightManipulation.startRegion, spotlightManipulation.startPoint, point)
+        : resizeRegion(
+          spotlightManipulation.startRegion,
+          spotlightManipulation.startPoint,
+          point,
+          spotlightManipulation.handle,
+        );
+      updateSpotlightRegion(
+        spotlightManipulation.stopIndex,
+        spotlightManipulation.regionIndex,
+        region,
+      );
+    };
+    const onUp = () => setSpotlightManipulation(null);
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [spotlightManipulation]);
 
   const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -354,11 +670,20 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const selectionWidth = duration > 0 ? ((endTime - startTime) / duration) * 100 : 100;
   const playheadPos = duration > 0 ? (currentTime / duration) * 100 : 0;
   const handleW = 8;
+  const editingSpotlightStop = editingSpotlightIndex !== null ? pauseStops[editingSpotlightIndex] : null;
+  const videoContentBox = videoRef.current ? getVideoContentBox(videoRef.current) : null;
+  const draftBox = draftRegion && videoContentBox ? regionToBox(draftRegion, videoContentBox) : null;
+  const selectedSpotlightRegionData =
+    selectedSpotlightRegion !== null ? editingSpotlightStop?.spotlight?.regions[selectedSpotlightRegion] : null;
+  const selectedSpotlightRegionBox =
+    selectedSpotlightRegionData && videoContentBox
+      ? regionToBox(selectedSpotlightRegionData, videoContentBox)
+      : null;
 
   return (
     <div className="flex flex-col h-full" data-testid="clip-editor">
       {/* Video — fills all available space */}
-      <div className="flex-1 min-h-0 rounded-lg overflow-hidden" style={{ backgroundColor: backgroundColor || "#000000" }}>
+      <div className="relative flex-1 min-h-0 rounded-lg overflow-hidden" style={{ backgroundColor: backgroundColor || "#000000" }}>
         <video
           ref={videoRef}
           src={videoSrc}
@@ -366,6 +691,138 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           className="w-full h-full object-contain"
           data-testid="clip-editor-video"
         />
+        {editingSpotlightIndex !== null && videoContentBox && (
+          <div
+            className="absolute inset-0 cursor-crosshair"
+            onMouseDown={beginSpotlightDraw}
+            data-testid="spotlight-editor-surface"
+          >
+            {editingSpotlightStop?.spotlight && (
+              <SpotlightOverlay
+                spotlight={editingSpotlightStop.spotlight}
+                contentBox={videoContentBox}
+                label={editingSpotlightStop.label}
+                selectedRegionIndex={selectedSpotlightRegion}
+                onRegionClick={setSelectedSpotlightRegion}
+                onRegionMouseDown={beginSpotlightMove}
+                testIdPrefix="editor-spotlight"
+              />
+            )}
+            {selectedSpotlightRegion !== null && selectedSpotlightRegionBox && (
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  left: selectedSpotlightRegionBox.left,
+                  top: selectedSpotlightRegionBox.top,
+                  width: selectedSpotlightRegionBox.width,
+                  height: selectedSpotlightRegionBox.height,
+                  zIndex: 45,
+                }}
+              >
+                {[
+                  ["nw", "left-0 top-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize"],
+                  ["ne", "right-0 top-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize"],
+                  ["sw", "left-0 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize"],
+                  ["se", "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize"],
+                ].map(([handle, classes]) => (
+                  <button
+                    key={handle}
+                    type="button"
+                    aria-label={`Resize spotlight ${handle}`}
+                    data-testid={`editor-spotlight-resize-${handle}-${selectedSpotlightRegion}`}
+                    className={`absolute h-3 w-3 rounded-full border-2 border-white bg-yellow-300 shadow pointer-events-auto ${classes}`}
+                    onMouseDown={(event) =>
+                      beginSpotlightResize(
+                        selectedSpotlightRegion,
+                        handle as SpotlightResizeHandle,
+                        event,
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            )}
+            {draftBox && (
+              <div
+                className="absolute rounded-[10px] pointer-events-none"
+                style={{
+                  left: draftBox.left,
+                  top: draftBox.top,
+                  width: draftBox.width,
+                  height: draftBox.height,
+                  border: `${DEFAULT_SPOTLIGHT_STYLE.borderWidth}px dashed ${DEFAULT_SPOTLIGHT_STYLE.borderColor}`,
+                  boxShadow: `0 0 18px ${DEFAULT_SPOTLIGHT_STYLE.borderColor}`,
+                  zIndex: 40,
+                }}
+                data-testid="editor-spotlight-draft"
+              />
+            )}
+            <div
+              className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded text-xs"
+              style={{
+                backgroundColor: "var(--color-surface)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border)",
+                zIndex: 50,
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <span>Draw a rectangle to spotlight this pause</span>
+              {editingSpotlightStop?.spotlight && (
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editingSpotlightStop.spotlight.showLabel !== false}
+                    onChange={(e) => setSpotlightLabelVisible(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-show-label"
+                  />
+                  Show label
+                </label>
+              )}
+              <button
+                type="button"
+                className="px-2 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
+                onClick={finishSpotlightEdit}
+                data-testid="spotlight-done"
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                className="px-2 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                onClick={() => setSelectedSpotlightRegion(null)}
+                data-testid="spotlight-add-region"
+              >
+                Add another
+              </button>
+              <button
+                type="button"
+                className="px-2 py-0.5 rounded disabled:opacity-50"
+                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                disabled={selectedSpotlightRegion === null}
+                onClick={deleteSelectedSpotlightRegion}
+                data-testid="spotlight-delete-region"
+              >
+                Delete selected
+              </button>
+              <button
+                type="button"
+                className="px-2 py-0.5 rounded"
+                style={{ color: "var(--color-text-secondary)" }}
+                onClick={finishSpotlightEdit}
+                data-testid="spotlight-cancel"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Controls below video */}
@@ -593,6 +1050,29 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
                   style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
                   data-testid={`pause-stop-label-${index}`}
                 />
+                <button
+                  onClick={() => startSpotlightEdit(index)}
+                  className="px-2 py-0.5 rounded text-sm"
+                  style={{
+                    color: stop.spotlight ? "var(--color-text-on-accent)" : "var(--color-text)",
+                    backgroundColor: stop.spotlight ? "var(--color-accent)" : "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                  data-testid={`pause-stop-spotlight-${index}`}
+                >
+                  {stop.spotlight ? `Spotlight (${stop.spotlight.regions.length})` : "Add spotlight"}
+                </button>
+                {stop.spotlight && (
+                  <button
+                    onClick={() => removeSpotlight(index)}
+                    className="px-1 text-sm"
+                    style={{ color: "var(--color-danger)" }}
+                    aria-label={`Remove spotlight ${index + 1}`}
+                    data-testid={`remove-spotlight-${index}`}
+                  >
+                    Clear
+                  </button>
+                )}
                 <button
                   onClick={() => removePauseStop(index)}
                   className="px-1 text-sm"

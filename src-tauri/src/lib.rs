@@ -30,6 +30,10 @@ pub fn run() {
             // Always-on system tray icon
             tray::init_tray(app.handle())?;
 
+            if let Err(e) = tray::restore_main_window(app.handle()) {
+                eprintln!("{e}");
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

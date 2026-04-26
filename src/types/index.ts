@@ -22,9 +22,34 @@ export interface TransitionAction {
   y?: number;
 }
 
+export interface PauseSpotlight {
+  regions: PauseSpotlightRegion[];
+  showLabel?: boolean;
+  style?: PauseSpotlightStyle;
+}
+
+export type PauseSpotlightRegion = RectanglePauseSpotlightRegion;
+
+export interface RectanglePauseSpotlightRegion {
+  type: "rectangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PauseSpotlightStyle {
+  blur?: number;
+  dimOpacity?: number;
+  borderColor?: string;
+  borderWidth?: number;
+  glow?: boolean;
+}
+
 export interface PauseStop {
   time: number;
   label?: string;
+  spotlight?: PauseSpotlight;
 }
 
 export interface MonitorInfo {

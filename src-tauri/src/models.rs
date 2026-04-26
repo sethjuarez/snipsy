@@ -61,6 +61,44 @@ pub struct PauseStop {
     pub time: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spotlight: Option<PauseSpotlight>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PauseSpotlight {
+    pub regions: Vec<PauseSpotlightRegion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_label: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<PauseSpotlightStyle>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PauseSpotlightRegion {
+    Rectangle {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PauseSpotlightStyle {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blur: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dim_opacity: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub border_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub border_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glow: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -253,10 +291,67 @@ mod tests {
         assert_eq!(stops.len(), 1);
         assert_eq!(stops[0].time, 18.5);
         assert_eq!(stops[0].label.as_deref(), Some("Wait for presenter"));
+        assert!(stops[0].spotlight.is_none());
         assert!(snippet.transition_actions.is_some());
         let actions = snippet.transition_actions.as_ref().unwrap();
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].action, "click");
+
+        let re_json = serde_json::to_string(&snippet).unwrap();
+        let re_snippet: VideoSnippet = serde_json::from_str(&re_json).unwrap();
+        assert_eq!(snippet, re_snippet);
+    }
+
+    #[test]
+    fn video_snippet_spotlight_round_trip() {
+        let json = r##"{
+            "id": "spotlight-id",
+            "title": "Focused Output",
+            "description": "Highlights a section at a pause point",
+            "videoFile": "videos/focused-output.mp4",
+            "startTime": 5.0,
+            "endTime": 30.0,
+            "hotkey": "Ctrl+Shift+3",
+            "speed": 1.0,
+            "pauseStops": [
+                {
+                    "time": 12.5,
+                    "label": "Explain output",
+                    "spotlight": {
+                        "showLabel": false,
+                        "regions": [
+                            {
+                                "type": "rectangle",
+                                "x": 12.5,
+                                "y": 18.0,
+                                "width": 35.0,
+                                "height": 22.0
+                            }
+                        ],
+                        "style": {
+                            "borderColor": "#facc15",
+                            "glow": true
+                        }
+                    }
+                }
+            ]
+        }"##;
+        let snippet: VideoSnippet = serde_json::from_str(json).unwrap();
+        let spotlight = snippet
+            .pause_stops
+            .as_ref()
+            .unwrap()
+            .first()
+            .unwrap()
+            .spotlight
+            .as_ref()
+            .unwrap();
+        assert_eq!(spotlight.regions.len(), 1);
+        assert_eq!(
+            spotlight.style.as_ref().unwrap().border_color.as_deref(),
+            Some("#facc15")
+        );
+        assert_eq!(spotlight.show_label, Some(false));
 
         let re_json = serde_json::to_string(&snippet).unwrap();
         let re_snippet: VideoSnippet = serde_json::from_str(&re_json).unwrap();
