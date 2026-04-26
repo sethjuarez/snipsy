@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.12.0](https://github.com/sethjuarez/snipsy/compare/v0.11.0...v0.12.0) (2026-04-26)
+
+
+### Features
+
+* add pause stop spotlight controls ([6d30682](https://github.com/sethjuarez/snipsy/commit/6d30682e91f44748f7eb8aeb1944dfecb38a60a8))
+
+
+### Bug Fixes
+
+* restore main window on startup ([e7eb697](https://github.com/sethjuarez/snipsy/commit/e7eb69730fb9ca8c4c873837162f64f30686b43a))
+
+
+### Documentation
+
+* document release commit convention ([16d0b1b](https://github.com/sethjuarez/snipsy/commit/16d0b1b1b3452a36e514d58536987a9b27c556c1))
+* update generated screenshots ([4465240](https://github.com/sethjuarez/snipsy/commit/4465240e5e8aa21e77db864c98b6f412bb56e34f))
+
 ## [0.11.0](https://github.com/sethjuarez/snipsy/compare/v0.10.0...v0.11.0) (2026-04-24)
 
 
