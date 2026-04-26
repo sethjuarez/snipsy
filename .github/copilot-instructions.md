@@ -30,7 +30,12 @@ Read `README.md` for the full product spec, data model, and architecture.
 - **Rust**: `snake_case` module and file names. One module per concern (e.g., `models.rs`, `commands.rs`, `demo.rs`, `delivery.rs`).
 - **TypeScript**: `PascalCase` for component files, `camelCase` for everything else. Folder structure: `src/components/`, `src/services/`, `src/types/`, `src/stores/`, `src/routes/`.
 - **Errors**: Tauri commands return `Result<T, String>`. Frontend shows toast notifications for user-facing errors.
-- **Commits**: commit after each completed sub-step (e.g., 1.1, 1.2).
+- **Commits**: commit after each completed sub-step (e.g., 1.1, 1.2). Use Conventional Commit prefixes so Release Please can classify changes:
+  - `feat:` for user-facing features and enhancements.
+  - `fix:` for bug fixes, including startup/runtime fixes.
+  - `docs:` for documentation or generated documentation screenshots.
+  - `test:`, `refactor:`, `perf:`, `build:`, `ci:`, or `chore:` when those scopes apply.
+  - Include the required `Co-authored-by` trailer on Copilot-created commits.
 
 ## Testing Strategy
 
