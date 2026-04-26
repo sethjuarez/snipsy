@@ -154,13 +154,27 @@ test.describe("Video Import", () => {
     const regionAfterResize = await page.getByTestId("editor-spotlight-region-0").boundingBox();
     expect(regionAfterResize).not.toBeNull();
     expect(regionAfterResize?.width).toBeGreaterThan(regionBeforeResize.width);
+    await expect(page.getByTestId("spotlight-color")).toHaveValue("#facc15");
+    await page.getByTestId("spotlight-color-preset-1").click();
+    await expect(page.getByTestId("spotlight-color")).toHaveValue("#38bdf8");
+    await expect(page.getByTestId("editor-spotlight-region-0")).toHaveCSS("border-top-color", "rgb(56, 189, 248)");
+    await page.getByTestId("spotlight-add-region").click();
+    await page.mouse.move(box.x + 250, box.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 340, box.y + 260);
+    await page.mouse.up();
+    await expect(page.getByTestId("editor-spotlight-region-1")).toBeVisible();
+    await expect(page.getByTestId("spotlight-region-tabs")).toBeVisible();
+    await expect(page.getByTestId("spotlight-region-tab-0")).toBeVisible();
+    await expect(page.getByTestId("spotlight-region-tab-1")).toBeVisible();
+    await expect(page.getByTestId("editor-spotlight-region-1")).toHaveCSS("border-top-color", "rgb(56, 189, 248)");
     await expect(page.getByTestId("editor-spotlight-outside-blur")).toHaveCSS("backdrop-filter", /blur/);
     await expect(page.getByTestId("editor-spotlight-label")).toBeVisible();
     await page.getByTestId("spotlight-show-label").uncheck();
     await expect(page.getByTestId("editor-spotlight-label")).not.toBeVisible();
     await page.getByTestId("spotlight-show-label").check();
     await expect(page.getByTestId("editor-spotlight-label")).toBeVisible();
-    await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Spotlight (1)");
+    await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Spotlight (2)");
 
     await page.getByTestId("remove-spotlight-0").click();
     await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Add spotlight");
