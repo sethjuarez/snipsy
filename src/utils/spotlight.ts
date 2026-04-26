@@ -75,7 +75,11 @@ export function normalizeSpotlight(spotlight: PauseSpotlight | undefined): Pause
 
   if (regions.length === 0) return undefined;
 
-  return spotlight.style ? { regions, style: spotlight.style } : { regions };
+  return {
+    regions,
+    showLabel: spotlight.showLabel,
+    style: spotlight.style,
+  };
 }
 
 export function normalizePauseStops(

@@ -70,6 +70,8 @@ pub struct PauseStop {
 pub struct PauseSpotlight {
     pub regions: Vec<PauseSpotlightRegion>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_label: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<PauseSpotlightStyle>,
 }
 
@@ -316,6 +318,7 @@ mod tests {
                     "time": 12.5,
                     "label": "Explain output",
                     "spotlight": {
+                        "showLabel": false,
                         "regions": [
                             {
                                 "type": "rectangle",
@@ -348,6 +351,7 @@ mod tests {
             spotlight.style.as_ref().unwrap().border_color.as_deref(),
             Some("#facc15")
         );
+        assert_eq!(spotlight.show_label, Some(false));
 
         let re_json = serde_json::to_string(&snippet).unwrap();
         let re_snippet: VideoSnippet = serde_json::from_str(&re_json).unwrap();

@@ -99,7 +99,7 @@ function SpotlightOverlay({
         );
       })}
 
-      {label && regions[0] && (
+      {spotlight.showLabel !== false && label && regions[0] && (
         <div
           className="absolute px-2 py-1 rounded text-sm font-medium"
           style={{

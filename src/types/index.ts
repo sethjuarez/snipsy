@@ -24,6 +24,7 @@ export interface TransitionAction {
 
 export interface PauseSpotlight {
   regions: PauseSpotlightRegion[];
+  showLabel?: boolean;
   style?: PauseSpotlightStyle;
 }
 

@@ -355,6 +355,22 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     finishSpotlightEdit();
   };
 
+  const setSpotlightLabelVisible = (index: number, showLabel: boolean) => {
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      const stop = updated[index];
+      if (!stop?.spotlight) return stops;
+      updated[index] = {
+        ...stop,
+        spotlight: normalizeSpotlight({
+          ...stop.spotlight,
+          showLabel,
+        }),
+      };
+      return updated;
+    });
+  };
+
   const deleteSelectedSpotlightRegion = () => {
     if (editingSpotlightIndex === null || selectedSpotlightRegion === null) return;
     setPauseStops((stops) => {
@@ -365,7 +381,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
       const nextRegions = regions.filter((_, index) => index !== selectedSpotlightRegion);
       updated[editingSpotlightIndex] = {
         ...stop,
-        spotlight: normalizeSpotlight({ regions: nextRegions, style: stop.spotlight?.style }),
+        spotlight: normalizeSpotlight({
+          regions: nextRegions,
+          showLabel: stop.spotlight?.showLabel,
+          style: stop.spotlight?.style,
+        }),
       };
       return updated;
     });
@@ -402,7 +422,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           const regions = [...(stop.spotlight?.regions ?? []), region];
           updated[editingSpotlightIndex] = {
             ...stop,
-            spotlight: normalizeSpotlight({ regions, style: stop.spotlight?.style }),
+            spotlight: normalizeSpotlight({
+              regions,
+              showLabel: stop.spotlight?.showLabel,
+              style: stop.spotlight?.style,
+            }),
           };
           setSelectedSpotlightRegion(regions.length - 1);
           return updated;
@@ -514,6 +538,21 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               onMouseDown={(e) => e.stopPropagation()}
             >
               <span>Draw a rectangle to spotlight this pause</span>
+              {editingSpotlightStop?.spotlight && (
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editingSpotlightStop.spotlight.showLabel !== false}
+                    onChange={(e) => setSpotlightLabelVisible(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-show-label"
+                  />
+                  Show label
+                </label>
+              )}
               <button
                 type="button"
                 className="px-2 py-0.5 rounded"
