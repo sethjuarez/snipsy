@@ -10,6 +10,24 @@ const TRAY_ID: &str = "snipsy-tray";
 static ICON_IDLE: &[u8] = include_bytes!("../icons/tray-idle.png");
 static ICON_DEMO: &[u8] = include_bytes!("../icons/tray-demo.png");
 
+pub fn restore_main_window(app: &tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("Main window not found")?;
+
+    window
+        .show()
+        .map_err(|e| format!("Failed to show main window: {e}"))?;
+    window
+        .unminimize()
+        .map_err(|e| format!("Failed to unminimize main window: {e}"))?;
+    window
+        .set_focus()
+        .map_err(|e| format!("Failed to focus main window: {e}"))?;
+
+    Ok(())
+}
+
 /// Build the idle-mode menu (Show + Quit).
 fn build_idle_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, String> {
     let show = MenuItem::with_id(app, "show", "Show Snipsy", true, None::<&str>)
@@ -47,9 +65,8 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
                 let _ = app_handle.emit("exit-demo-mode", ());
             }
             "show" => {
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                if let Err(e) = restore_main_window(app_handle) {
+                    eprintln!("{e}");
                 }
             }
             "quit" => {
@@ -65,9 +82,8 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
             } = event
             {
                 let app_handle = tray.app_handle();
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                if let Err(e) = restore_main_window(app_handle) {
+                    eprintln!("{e}");
                 }
             }
         })
