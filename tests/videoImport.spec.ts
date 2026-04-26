@@ -141,6 +141,19 @@ test.describe("Video Import", () => {
     await page.mouse.up();
 
     await expect(page.getByTestId("editor-spotlight-region-0")).toBeVisible();
+    await expect(page.getByTestId("editor-spotlight-resize-se-0")).toBeVisible();
+    const regionBeforeResize = await page.getByTestId("editor-spotlight-region-0").boundingBox();
+    const resizeHandle = await page.getByTestId("editor-spotlight-resize-se-0").boundingBox();
+    expect(regionBeforeResize).not.toBeNull();
+    expect(resizeHandle).not.toBeNull();
+    if (!regionBeforeResize || !resizeHandle) return;
+    await page.mouse.move(resizeHandle.x + resizeHandle.width / 2, resizeHandle.y + resizeHandle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(resizeHandle.x + resizeHandle.width / 2 + 45, resizeHandle.y + resizeHandle.height / 2 + 25);
+    await page.mouse.up();
+    const regionAfterResize = await page.getByTestId("editor-spotlight-region-0").boundingBox();
+    expect(regionAfterResize).not.toBeNull();
+    expect(regionAfterResize?.width).toBeGreaterThan(regionBeforeResize.width);
     await expect(page.getByTestId("editor-spotlight-outside-blur")).toHaveCSS("backdrop-filter", /blur/);
     await expect(page.getByTestId("editor-spotlight-label")).toBeVisible();
     await page.getByTestId("spotlight-show-label").uncheck();

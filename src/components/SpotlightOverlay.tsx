@@ -8,6 +8,7 @@ interface SpotlightOverlayProps {
   selectedRegionIndex?: number | null;
   testIdPrefix?: string;
   onRegionClick?: (index: number) => void;
+  onRegionMouseDown?: (index: number, event: React.MouseEvent) => void;
 }
 
 function buildOutsideMask(contentBox: Rect, regions: Rect[]): string {
@@ -32,6 +33,7 @@ function SpotlightOverlay({
   selectedRegionIndex,
   testIdPrefix = "spotlight",
   onRegionClick,
+  onRegionMouseDown,
 }: SpotlightOverlayProps) {
   const style = { ...DEFAULT_SPOTLIGHT_STYLE, ...spotlight.style };
   const regions = spotlight.regions
@@ -77,7 +79,10 @@ function SpotlightOverlay({
             type="button"
             aria-label={`Spotlight region ${index + 1}`}
             data-testid={`${testIdPrefix}-region-${index}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+              onRegionMouseDown?.(index, event);
+            }}
             onClick={(event) => {
               event.stopPropagation();
               onRegionClick?.(index);
