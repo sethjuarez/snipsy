@@ -141,6 +141,7 @@ test.describe("Video Import", () => {
     await page.mouse.up();
 
     await expect(page.getByTestId("editor-spotlight-region-0")).toBeVisible();
+    await expect(page.getByTestId("editor-spotlight-outside-blur")).toHaveCSS("backdrop-filter", /blur/);
     await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Spotlight (1)");
 
     await page.getByTestId("remove-spotlight-0").click();

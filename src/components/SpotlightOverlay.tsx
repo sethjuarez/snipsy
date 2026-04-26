@@ -1,4 +1,3 @@
-import { useId } from "react";
 import type { PauseSpotlight } from "../types";
 import { DEFAULT_SPOTLIGHT_STYLE, type Rect, regionToBox } from "../utils/spotlight";
 
@@ -11,6 +10,21 @@ interface SpotlightOverlayProps {
   onRegionClick?: (index: number) => void;
 }
 
+function buildOutsideMask(contentBox: Rect, regions: Rect[]): string {
+  const outer = `M0 0H${contentBox.width}V${contentBox.height}H0Z`;
+  const holes = regions
+    .map((region) => {
+      const left = region.left - contentBox.left;
+      const top = region.top - contentBox.top;
+      const right = left + region.width;
+      const bottom = top + region.height;
+      return `M${left} ${top}H${right}V${bottom}H${left}Z`;
+    })
+    .join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${contentBox.width}" height="${contentBox.height}" viewBox="0 0 ${contentBox.width} ${contentBox.height}"><path fill="black" fill-rule="evenodd" d="${outer}${holes}"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
 function SpotlightOverlay({
   spotlight,
   contentBox,
@@ -19,7 +33,6 @@ function SpotlightOverlay({
   testIdPrefix = "spotlight",
   onRegionClick,
 }: SpotlightOverlayProps) {
-  const maskId = useId().replace(/:/g, "-");
   const style = { ...DEFAULT_SPOTLIGHT_STYLE, ...spotlight.style };
   const regions = spotlight.regions
     .filter((region) => region.type === "rectangle")
@@ -27,39 +40,34 @@ function SpotlightOverlay({
 
   if (regions.length === 0) return null;
 
+  const outsideMask = buildOutsideMask(contentBox, regions);
+
   return (
     <div
       className="absolute inset-0"
       style={{ pointerEvents: onRegionClick ? "auto" : "none", zIndex: 30 }}
       data-testid={`${testIdPrefix}-overlay`}
     >
-      <svg className="absolute inset-0 w-full h-full" aria-hidden="true">
-        <defs>
-          <mask id={maskId}>
-            <rect x="0" y="0" width="100%" height="100%" fill="white" />
-            {regions.map((region, index) => (
-              <rect
-                key={index}
-                x={region.left}
-                y={region.top}
-                width={region.width}
-                height={region.height}
-                rx="10"
-                fill="black"
-              />
-            ))}
-          </mask>
-        </defs>
-        <rect
-          x="0"
-          y="0"
-          width="100%"
-          height="100%"
-          fill="black"
-          opacity={style.dimOpacity}
-          mask={`url(#${maskId})`}
-        />
-      </svg>
+      <div
+        className="absolute"
+        style={{
+          left: contentBox.left,
+          top: contentBox.top,
+          width: contentBox.width,
+          height: contentBox.height,
+          backgroundColor: `rgba(0, 0, 0, ${style.dimOpacity})`,
+          backdropFilter: `blur(${style.blur}px)`,
+          WebkitBackdropFilter: `blur(${style.blur}px)`,
+          maskImage: outsideMask,
+          WebkitMaskImage: outsideMask,
+          maskRepeat: "no-repeat",
+          WebkitMaskRepeat: "no-repeat",
+          maskSize: "100% 100%",
+          WebkitMaskSize: "100% 100%",
+          pointerEvents: "none",
+        }}
+        data-testid={`${testIdPrefix}-outside-blur`}
+      />
 
       {regions.map((region, index) => {
         const selected = selectedRegionIndex === index;
