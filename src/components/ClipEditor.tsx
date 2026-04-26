@@ -7,6 +7,7 @@ import {
   DEFAULT_SPOTLIGHT_STYLE,
   createRectangleRegion,
   getVideoContentBox,
+  normalizeHexColor,
   normalizePauseStops,
   normalizeSpotlight,
   pointerToVideoPoint,
@@ -16,6 +17,7 @@ import {
 
 const backend = getBackend();
 const MIN_SPOTLIGHT_REGION_SIZE = 2;
+const SPOTLIGHT_COLOR_PRESETS = ["#facc15", "#38bdf8", "#34d399", "#fb7185", "#c084fc", "#fb923c"];
 
 type SpotlightResizeHandle = "nw" | "ne" | "sw" | "se";
 type SpotlightManipulation =
@@ -469,6 +471,27 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     });
   };
 
+  const setSpotlightColor = (index: number, color: string) => {
+    const borderColor = normalizeHexColor(color);
+    if (!borderColor) return;
+    setPauseStops((stops) => {
+      const updated = [...stops];
+      const stop = updated[index];
+      if (!stop?.spotlight) return stops;
+      updated[index] = {
+        ...stop,
+        spotlight: normalizeSpotlight({
+          ...stop.spotlight,
+          style: {
+            ...stop.spotlight.style,
+            borderColor,
+          },
+        }),
+      };
+      return updated;
+    });
+  };
+
   const deleteSelectedSpotlightRegion = () => {
     if (editingSpotlightIndex === null || selectedSpotlightRegion === null) return;
     setPauseStops((stops) => {
@@ -671,10 +694,13 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const playheadPos = duration > 0 ? (currentTime / duration) * 100 : 0;
   const handleW = 8;
   const editingSpotlightStop = editingSpotlightIndex !== null ? pauseStops[editingSpotlightIndex] : null;
+  const editingSpotlight = editingSpotlightStop?.spotlight;
+  const editingSpotlightColor =
+    normalizeHexColor(editingSpotlight?.style?.borderColor) ?? DEFAULT_SPOTLIGHT_STYLE.borderColor;
   const videoContentBox = videoRef.current ? getVideoContentBox(videoRef.current) : null;
   const draftBox = draftRegion && videoContentBox ? regionToBox(draftRegion, videoContentBox) : null;
   const selectedSpotlightRegionData =
-    selectedSpotlightRegion !== null ? editingSpotlightStop?.spotlight?.regions[selectedSpotlightRegion] : null;
+    selectedSpotlightRegion !== null ? editingSpotlight?.regions[selectedSpotlightRegion] : null;
   const selectedSpotlightRegionBox =
     selectedSpotlightRegionData && videoContentBox
       ? regionToBox(selectedSpotlightRegionData, videoContentBox)
@@ -758,40 +784,99 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
               />
             )}
             <div
-              className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded text-xs"
+              className="absolute left-2 right-2 top-2 flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded text-xs"
               style={{
-                backgroundColor: "var(--color-surface)",
+                backgroundColor: "color-mix(in srgb, var(--color-surface) 92%, transparent)",
                 color: "var(--color-text)",
                 border: "1px solid var(--color-border)",
                 zIndex: 50,
               }}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <span>Draw a rectangle to spotlight this pause</span>
-              {editingSpotlightStop?.spotlight && (
-                <label
-                  className="flex items-center gap-1 px-2 py-0.5 rounded"
-                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+              <span className="mr-1 font-medium">
+                {editingSpotlightStop?.label
+                  ? `Spotlight: ${editingSpotlightStop.label}`
+                  : `Spotlight at ${formatTime(editingSpotlightStop?.time ?? currentTime, true)}`}
+              </span>
+              <span style={{ color: "var(--color-text-secondary)" }}>
+                {selectedSpotlightRegion === null ? "Draw a rectangle" : "Drag to move or resize"}
+              </span>
+              {editingSpotlight && editingSpotlight.regions.length > 1 && (
+                <div
+                  className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5"
+                  style={{ backgroundColor: "var(--color-surface-inset)" }}
+                  data-testid="spotlight-region-tabs"
                 >
-                  <input
-                    type="checkbox"
-                    checked={editingSpotlightStop.spotlight.showLabel !== false}
-                    onChange={(e) => setSpotlightLabelVisible(editingSpotlightIndex, e.target.checked)}
-                    className="accent-[var(--color-accent)]"
-                    data-testid="spotlight-show-label"
-                  />
-                  Show label
-                </label>
+                  <span style={{ color: "var(--color-text-secondary)" }}>Regions</span>
+                  {editingSpotlight.regions.map((_, regionIndex) => (
+                    <button
+                      key={regionIndex}
+                      type="button"
+                      className="min-w-5 rounded px-1 py-0.5"
+                      style={{
+                        backgroundColor:
+                          selectedSpotlightRegion === regionIndex ? "var(--color-accent)" : "transparent",
+                        color:
+                          selectedSpotlightRegion === regionIndex
+                            ? "var(--color-text-on-accent)"
+                            : "var(--color-text)",
+                      }}
+                      onClick={() => setSelectedSpotlightRegion(regionIndex)}
+                      data-testid={`spotlight-region-tab-${regionIndex}`}
+                    >
+                      {regionIndex + 1}
+                    </button>
+                  ))}
+                </div>
               )}
-              <button
-                type="button"
-                className="px-2 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-                onClick={finishSpotlightEdit}
-                data-testid="spotlight-done"
-              >
-                Done
-              </button>
+              {editingSpotlight && (
+                <>
+                  <label
+                    className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded"
+                    style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                    title="Shared by all spotlight regions for this pause stop"
+                  >
+                    Color
+                    <input
+                      type="color"
+                      value={editingSpotlightColor}
+                      onChange={(e) => setSpotlightColor(editingSpotlightIndex, e.target.value)}
+                      className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                      data-testid="spotlight-color"
+                    />
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {SPOTLIGHT_COLOR_PRESETS.map((color, presetIndex) => (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-label={`Use spotlight color ${color}`}
+                        className="h-5 w-5 rounded-full border"
+                        style={{
+                          backgroundColor: color,
+                          borderColor: editingSpotlightColor === color ? "var(--color-text)" : "rgba(255,255,255,0.65)",
+                          boxShadow: editingSpotlightColor === color ? `0 0 10px ${color}` : undefined,
+                        }}
+                        onClick={() => setSpotlightColor(editingSpotlightIndex, color)}
+                        data-testid={`spotlight-color-preset-${presetIndex}`}
+                      />
+                    ))}
+                  </div>
+                  <label
+                    className="flex items-center gap-1 px-2 py-0.5 rounded"
+                    style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={editingSpotlight.showLabel !== false}
+                      onChange={(e) => setSpotlightLabelVisible(editingSpotlightIndex, e.target.checked)}
+                      className="accent-[var(--color-accent)]"
+                      data-testid="spotlight-show-label"
+                    />
+                    Show label
+                  </label>
+                </>
+              )}
               <button
                 type="button"
                 className="px-2 py-0.5 rounded"
@@ -799,7 +884,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
                 onClick={() => setSelectedSpotlightRegion(null)}
                 data-testid="spotlight-add-region"
               >
-                Add another
+                Add region
               </button>
               <button
                 type="button"
@@ -809,7 +894,16 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
                 onClick={deleteSelectedSpotlightRegion}
                 data-testid="spotlight-delete-region"
               >
-                Delete selected
+                Delete region
+              </button>
+              <button
+                type="button"
+                className="px-2 py-0.5 rounded"
+                style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
+                onClick={finishSpotlightEdit}
+                data-testid="spotlight-done"
+              >
+                Done
               </button>
               <button
                 type="button"

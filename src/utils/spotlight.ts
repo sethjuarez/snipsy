@@ -10,6 +10,7 @@ export const DEFAULT_SPOTLIGHT_STYLE = {
 
 export const STOP_EPSILON = 0.05;
 const MIN_REGION_SIZE = 2;
+const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 export interface Rect {
   left: number;
@@ -29,6 +30,16 @@ function clamp(value: number, min: number, max: number): number {
 
 function round(value: number): number {
   return Number(value.toFixed(3));
+}
+
+export function normalizeHexColor(value: string | undefined): string | undefined {
+  const match = value?.trim().match(HEX_COLOR_PATTERN);
+  if (!match) return undefined;
+  const hex = match[1].toLowerCase();
+  if (hex.length === 3) {
+    return `#${hex.split("").map((part) => `${part}${part}`).join("")}`;
+  }
+  return `#${hex}`;
 }
 
 function normalizeRectangleRegion(region: RectanglePauseSpotlightRegion): RectanglePauseSpotlightRegion | null {
@@ -78,7 +89,12 @@ export function normalizeSpotlight(spotlight: PauseSpotlight | undefined): Pause
   return {
     regions,
     showLabel: spotlight.showLabel,
-    style: spotlight.style,
+    style: spotlight.style
+      ? {
+        ...spotlight.style,
+        borderColor: normalizeHexColor(spotlight.style.borderColor) ?? DEFAULT_SPOTLIGHT_STYLE.borderColor,
+      }
+      : undefined,
   };
 }
 
