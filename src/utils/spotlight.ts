@@ -2,7 +2,7 @@ import type { PauseSpotlight, PauseSpotlightRegion, PauseStop, RectanglePauseSpo
 
 export const DEFAULT_SPOTLIGHT_STYLE = {
   blur: 6,
-  dimOpacity: 0.55,
+  dimOpacity: 0.12,
   borderColor: "#facc15",
   borderWidth: 3,
   glow: true,
