@@ -11,7 +11,18 @@
     "pauseStops": [
       {
         "time": 24.0,
-        "label": "Explain build output"
+        "label": "Explain build output",
+        "spotlight": {
+          "regions": [
+            {
+              "type": "rectangle",
+              "x": 18,
+              "y": 22,
+              "width": 38,
+              "height": 24
+            }
+          ]
+        }
       }
     ],
     "transitionActions": [

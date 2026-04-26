@@ -122,6 +122,31 @@ test.describe("Video Import", () => {
     await expect(page.getByTestId("pause-stop-1")).not.toBeVisible();
   });
 
+  test("clip editor can draw and clear a spotlight region for a pause stop", async ({ page }) => {
+    await page.getByTestId("nav-video-snippets").click();
+    await page.getByTestId("video-edit-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+
+    await page.getByTestId("pause-stop-spotlight-0").click();
+    const surface = page.getByTestId("spotlight-editor-surface");
+    await expect(surface).toBeVisible();
+
+    const box = await surface.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+
+    await page.mouse.move(box.x + 80, box.y + 70);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 220, box.y + 170);
+    await page.mouse.up();
+
+    await expect(page.getByTestId("editor-spotlight-region-0")).toBeVisible();
+    await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Spotlight (1)");
+
+    await page.getByTestId("remove-spotlight-0").click();
+    await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Add spotlight");
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();

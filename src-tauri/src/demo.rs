@@ -318,6 +318,7 @@ mod tests {
             pause_stops: Some(vec![crate::models::PauseStop {
                 time: 12.5,
                 label: Some("Explain output".into()),
+                spotlight: None,
             }]),
         };
         let json = serde_json::to_string(&hotkey).unwrap();
