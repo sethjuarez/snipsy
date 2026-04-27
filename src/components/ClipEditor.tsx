@@ -366,6 +366,22 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     }
   };
 
+  const nudgePlayhead = (direction: 1 | -1) => {
+    const vid = videoRef.current;
+    if (!vid || endTime <= startTime) return;
+    const minTime = startTime + frameDuration;
+    const maxTime = endTime - frameDuration;
+    if (minTime > maxTime) return;
+    if (!vid.paused) {
+      vid.pause();
+      setPlaying(false);
+    }
+    const baseTime = Math.min(Math.max(currentTime, minTime), maxTime);
+    const val = Math.min(maxTime, Math.max(minTime, baseTime + frameDuration * direction));
+    vid.currentTime = val;
+    setCurrentTime(val);
+  };
+
   const handleTimelineKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowLeft") {
       e.preventDefault();
@@ -381,6 +397,8 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const holdStartFwd  = useHoldRepeat(() => { setActiveHandle("start"); nudgeHandle("start", 1); });
   const holdEndBack   = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", -1); });
   const holdEndFwd    = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", 1); });
+  const holdPlayheadBack = useHoldRepeat(() => nudgePlayhead(-1));
+  const holdPlayheadFwd = useHoldRepeat(() => nudgePlayhead(1));
 
   const handlePreview = useCallback(() => {
     const vid = videoRef.current;
@@ -1102,6 +1120,29 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             {playing ? <Pause size={11} /> : <Play size={11} />}
             {playing ? "Pause" : "Preview"}
           </button>
+          <div className="flex items-center gap-1">
+            <button
+              {...holdPlayheadBack}
+              className="w-7 h-7 flex items-center justify-center rounded"
+              style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+              title="Playhead - 1 frame"
+              aria-label="Playhead - 1 frame"
+              data-testid="frame-back-playhead"
+            >
+              <ChevronLeft size={12} />
+            </button>
+            <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Playhead</span>
+            <button
+              {...holdPlayheadFwd}
+              className="w-7 h-7 flex items-center justify-center rounded"
+              style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+              title="Playhead + 1 frame"
+              aria-label="Playhead + 1 frame"
+              data-testid="frame-fwd-playhead"
+            >
+              <ChevronRight size={12} />
+            </button>
+          </div>
           <button
             onClick={addPauseStop}
             disabled={currentTime <= startTime || currentTime >= endTime}
