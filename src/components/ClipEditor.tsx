@@ -711,6 +711,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const selectionWidth = duration > 0 ? ((endTime - startTime) / duration) * 100 : 100;
   const playheadPos = duration > 0 ? (currentTime / duration) * 100 : 0;
   const handleW = 8;
+  const playheadMinTime = startTime + frameDuration;
+  const playheadMaxTime = endTime - frameDuration;
+  const canStepPlayhead = playheadMinTime <= playheadMaxTime;
+  const canStepPlayheadBack = canStepPlayhead && currentTime > playheadMinTime;
+  const canStepPlayheadFwd = canStepPlayhead && currentTime < playheadMaxTime;
   const editingSpotlightStop = editingSpotlightIndex !== null ? pauseStops[editingSpotlightIndex] : null;
   const editingSpotlight = editingSpotlightStop?.spotlight;
   const editingSpotlightColor =
@@ -1122,10 +1127,16 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           </button>
           <div className="flex items-center gap-1">
             <button
+              type="button"
               {...holdPlayheadBack}
-              className="w-7 h-7 flex items-center justify-center rounded"
-              style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
-              title="Playhead - 1 frame"
+              disabled={!canStepPlayheadBack}
+              className="w-7 h-7 flex items-center justify-center rounded disabled:opacity-40"
+              style={{
+                color: canStepPlayheadBack ? "var(--color-accent)" : "var(--color-text-secondary)",
+                backgroundColor: "var(--color-surface-inset)",
+                border: "1px solid var(--color-border)",
+              }}
+              title={canStepPlayheadBack ? "Playhead - 1 frame" : "Playhead is at the first selectable frame"}
               aria-label="Playhead - 1 frame"
               data-testid="frame-back-playhead"
             >
@@ -1133,10 +1144,16 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             </button>
             <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Playhead</span>
             <button
+              type="button"
               {...holdPlayheadFwd}
-              className="w-7 h-7 flex items-center justify-center rounded"
-              style={{ color: "var(--color-text-secondary)", backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
-              title="Playhead + 1 frame"
+              disabled={!canStepPlayheadFwd}
+              className="w-7 h-7 flex items-center justify-center rounded disabled:opacity-40"
+              style={{
+                color: canStepPlayheadFwd ? "var(--color-accent)" : "var(--color-text-secondary)",
+                backgroundColor: "var(--color-surface-inset)",
+                border: "1px solid var(--color-border)",
+              }}
+              title={canStepPlayheadFwd ? "Playhead + 1 frame" : "Playhead is at the last selectable frame"}
               aria-label="Playhead + 1 frame"
               data-testid="frame-fwd-playhead"
             >

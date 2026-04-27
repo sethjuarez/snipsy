@@ -128,12 +128,15 @@ test.describe("Video Import", () => {
     await expect(page.getByTestId("clip-editor")).toBeVisible();
 
     await expect(page.getByTestId("add-pause-stop")).toBeDisabled();
+    await expect(page.getByTestId("frame-back-playhead")).toBeDisabled();
+    await expect(page.getByTestId("frame-fwd-playhead")).toBeEnabled();
     const startBefore = await page.getByTestId("clip-start").getAttribute("style");
     const endBefore = await page.getByTestId("clip-end").getAttribute("style");
 
     await page.getByTestId("frame-fwd-playhead").click();
 
     await expect(page.getByTestId("add-pause-stop")).toBeEnabled();
+    await expect(page.getByTestId("frame-back-playhead")).toBeEnabled();
     await expect(page.getByTestId("clip-start")).toHaveAttribute("style", startBefore ?? "");
     await expect(page.getByTestId("clip-end")).toHaveAttribute("style", endBefore ?? "");
     await page.getByTestId("add-pause-stop").click();
