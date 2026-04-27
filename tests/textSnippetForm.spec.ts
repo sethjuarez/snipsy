@@ -32,6 +32,9 @@ test.describe("Text Snippet Form", () => {
     await page.keyboard.up("Control");
 
     await page.getByTestId("snippet-save").click();
+    await expect(page.getByTestId("snippet-save-status")).toContainText("Saved");
+    await expect(page.getByTestId("snippet-form")).toBeVisible();
+    await page.getByTestId("snippet-cancel").click();
 
     // Verify it appears in the list
     await expect(page.getByText("New Snippet")).toBeVisible();
@@ -48,6 +51,8 @@ test.describe("Text Snippet Form", () => {
     // Change the title
     await page.getByTestId("snippet-title").fill("Updated Import");
     await page.getByTestId("snippet-save").click();
+    await expect(page.getByTestId("snippet-save-status")).toContainText("Saved");
+    await page.getByTestId("snippet-cancel").click();
 
     // Verify the updated snippet appears in the list
     await expect(page.getByText("Updated Import")).toBeVisible();

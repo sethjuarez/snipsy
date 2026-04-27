@@ -7,6 +7,7 @@ interface SpotlightOverlayProps {
   label?: string;
   selectedRegionIndex?: number | null;
   testIdPrefix?: string;
+  showOutsideEffect?: boolean;
   onRegionClick?: (index: number) => void;
   onRegionMouseDown?: (index: number, event: React.MouseEvent) => void;
 }
@@ -32,6 +33,7 @@ function SpotlightOverlay({
   label,
   selectedRegionIndex,
   testIdPrefix = "spotlight",
+  showOutsideEffect = true,
   onRegionClick,
   onRegionMouseDown,
 }: SpotlightOverlayProps) {
@@ -50,26 +52,28 @@ function SpotlightOverlay({
       style={{ pointerEvents: onRegionClick ? "auto" : "none", zIndex: 30 }}
       data-testid={`${testIdPrefix}-overlay`}
     >
-      <div
-        className="absolute"
-        style={{
-          left: contentBox.left,
-          top: contentBox.top,
-          width: contentBox.width,
-          height: contentBox.height,
-          backgroundColor: `rgba(0, 0, 0, ${style.dimOpacity})`,
-          backdropFilter: `blur(${style.blur}px)`,
-          WebkitBackdropFilter: `blur(${style.blur}px)`,
-          maskImage: outsideMask,
-          WebkitMaskImage: outsideMask,
-          maskRepeat: "no-repeat",
-          WebkitMaskRepeat: "no-repeat",
-          maskSize: "100% 100%",
-          WebkitMaskSize: "100% 100%",
-          pointerEvents: "none",
-        }}
-        data-testid={`${testIdPrefix}-outside-blur`}
-      />
+      {showOutsideEffect && (
+        <div
+          className="absolute"
+          style={{
+            left: contentBox.left,
+            top: contentBox.top,
+            width: contentBox.width,
+            height: contentBox.height,
+            backgroundColor: `rgba(0, 0, 0, ${style.dimOpacity})`,
+            backdropFilter: `blur(${style.blur}px)`,
+            WebkitBackdropFilter: `blur(${style.blur}px)`,
+            maskImage: outsideMask,
+            WebkitMaskImage: outsideMask,
+            maskRepeat: "no-repeat",
+            WebkitMaskRepeat: "no-repeat",
+            maskSize: "100% 100%",
+            WebkitMaskSize: "100% 100%",
+            pointerEvents: "none",
+          }}
+          data-testid={`${testIdPrefix}-outside-blur`}
+        />
+      )}
 
       {regions.map((region, index) => {
         const selected = selectedRegionIndex === index;

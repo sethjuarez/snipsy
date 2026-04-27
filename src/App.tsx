@@ -99,8 +99,7 @@ function App() {
     } else {
       setTextSnippets([...textSnippets, snippet]);
     }
-    setShowForm(false);
-    setEditingSnippet(undefined);
+    setEditingSnippet(snippet);
   };
   const handleCancel = () => {
     setShowForm(false);
@@ -142,8 +141,7 @@ function App() {
     } else {
       setVideoSnippets([...videoSnippets, snippet]);
     }
-    setShowVideoForm(false);
-    setEditingVideoSnippet(undefined);
+    setEditingVideoSnippet(snippet);
   };
   const handleVideoCancel = () => {
     setShowVideoForm(false);
@@ -299,9 +297,11 @@ function App() {
                       // Update existing snippet
                       const idx = videoSnippets.findIndex((s) => s.id === editingVideoSnippet.id);
                       if (idx >= 0) {
+                        const updatedSnippet = { id: editingVideoSnippet.id, ...clip };
                         const updated = [...videoSnippets];
-                        updated[idx] = { id: editingVideoSnippet.id, ...clip };
+                        updated[idx] = updatedSnippet;
                         setVideoSnippets(updated);
+                        setEditingVideoSnippet(updatedSnippet);
                       }
                     } else {
                       // Create new snippet
@@ -310,10 +310,8 @@ function App() {
                         ...clip,
                       };
                       setVideoSnippets([...videoSnippets, newSnippet]);
+                      setEditingVideoSnippet(newSnippet);
                     }
-                    setClipEditingVideo(null);
-                    setEditingVideoSnippet(undefined);
-                    setActiveView("video-snippets");
                   }}
                   onCancel={() => {
                     setClipEditingVideo(null);

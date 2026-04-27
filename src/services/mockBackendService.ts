@@ -45,7 +45,15 @@ const FIXTURE_PROJECT: ProjectData = {
       hotkey: "CmdOrControl+Shift+4",
       speed: 2.0,
       pauseStops: [
-        { time: 12.5, label: "Explain build output" },
+        {
+          time: 12.5,
+          label: "Explain build output",
+          spotlight: {
+            regions: [
+              { type: "rectangle", x: 18, y: 22, width: 38, height: 24 },
+            ],
+          },
+        },
       ],
       transitionActions: [
         { triggerAt: "end", action: "click", x: 350, y: 40 },

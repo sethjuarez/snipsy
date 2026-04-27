@@ -164,10 +164,10 @@ test.describe("Video Import", () => {
     await page.mouse.move(box.x + 220, box.y + 170);
     await page.mouse.up();
 
-    await expect(page.getByTestId("editor-spotlight-region-0")).toBeVisible();
-    await expect(page.getByTestId("editor-spotlight-resize-se-0")).toBeVisible();
-    const regionBeforeResize = await page.getByTestId("editor-spotlight-region-0").boundingBox();
-    const resizeHandle = await page.getByTestId("editor-spotlight-resize-se-0").boundingBox();
+    await expect(page.getByTestId("editor-spotlight-region-1")).toBeVisible();
+    await expect(page.getByTestId("editor-spotlight-resize-se-1")).toBeVisible();
+    const regionBeforeResize = await page.getByTestId("editor-spotlight-region-1").boundingBox();
+    const resizeHandle = await page.getByTestId("editor-spotlight-resize-se-1").boundingBox();
     expect(regionBeforeResize).not.toBeNull();
     expect(resizeHandle).not.toBeNull();
     if (!regionBeforeResize || !resizeHandle) return;
@@ -175,9 +175,10 @@ test.describe("Video Import", () => {
     await page.mouse.down();
     await page.mouse.move(resizeHandle.x + resizeHandle.width / 2 + 45, resizeHandle.y + resizeHandle.height / 2 + 25);
     await page.mouse.up();
-    const regionAfterResize = await page.getByTestId("editor-spotlight-region-0").boundingBox();
+    const regionAfterResize = await page.getByTestId("editor-spotlight-region-1").boundingBox();
     expect(regionAfterResize).not.toBeNull();
     expect(regionAfterResize?.width).toBeGreaterThan(regionBeforeResize.width);
+    await expect(page.getByTestId("editor-spotlight-outside-blur")).not.toBeVisible();
     await expect(page.getByTestId("spotlight-color")).toHaveValue("#facc15");
     await page.getByTestId("spotlight-color-preset-1").click();
     await expect(page.getByTestId("spotlight-color")).toHaveValue("#38bdf8");
@@ -187,21 +188,39 @@ test.describe("Video Import", () => {
     await page.mouse.down();
     await page.mouse.move(box.x + 340, box.y + 260);
     await page.mouse.up();
-    await expect(page.getByTestId("editor-spotlight-region-1")).toBeVisible();
+    await expect(page.getByTestId("editor-spotlight-region-2")).toBeVisible();
     await expect(page.getByTestId("spotlight-region-tabs")).toBeVisible();
     await expect(page.getByTestId("spotlight-region-tab-0")).toBeVisible();
     await expect(page.getByTestId("spotlight-region-tab-1")).toBeVisible();
-    await expect(page.getByTestId("editor-spotlight-region-1")).toHaveCSS("border-top-color", "rgb(56, 189, 248)");
-    await expect(page.getByTestId("editor-spotlight-outside-blur")).toHaveCSS("backdrop-filter", /blur/);
+    await expect(page.getByTestId("spotlight-region-tab-2")).toBeVisible();
+    await expect(page.getByTestId("editor-spotlight-region-2")).toHaveCSS("border-top-color", "rgb(56, 189, 248)");
     await expect(page.getByTestId("editor-spotlight-label")).toBeVisible();
     await page.getByTestId("spotlight-show-label").uncheck();
     await expect(page.getByTestId("editor-spotlight-label")).not.toBeVisible();
     await page.getByTestId("spotlight-show-label").check();
     await expect(page.getByTestId("editor-spotlight-label")).toBeVisible();
-    await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Spotlight (2)");
+    await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Spotlight (3)");
 
     await page.getByTestId("remove-spotlight-0").click();
     await expect(page.getByTestId("pause-stop-spotlight-0")).toContainText("Add spotlight");
+  });
+
+  test("clip editor preview pauses at pause stops and shows spotlight overlay", async ({ page }) => {
+    await page.getByTestId("nav-video-snippets").click();
+    await page.getByTestId("video-edit-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+
+    await page.getByTestId("clip-preview").click();
+    await page.getByTestId("clip-editor-video").evaluate((node) => {
+      const video = node as HTMLVideoElement;
+      video.currentTime = 12.5;
+      video.dispatchEvent(new Event("timeupdate"));
+    });
+
+    await expect(page.getByTestId("clip-editor")).toHaveAttribute("data-preview-pause-active", "true");
+    await expect(page.getByTestId("preview-spotlight-region-0")).toBeVisible();
+    await expect(page.getByTestId("preview-spotlight-outside-blur")).toHaveCSS("backdrop-filter", /blur/);
+    await expect(page.getByTestId("clip-preview")).toContainText("Resume preview");
   });
 
   test("can cancel clip editor", async ({ page }) => {
