@@ -336,6 +336,8 @@ function App() {
                   setActiveView("video-snippets");
                   handleVideoEdit(snippet);
                 }}
+                onDeleteText={handleDelete}
+                onDeleteVideo={handleVideoDelete}
               />
             )}
 

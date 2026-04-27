@@ -117,17 +117,19 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
           <div className="flex items-center gap-2 ml-4">
             <button
               onClick={() => onEdit(snippet)}
-              className="flex items-center gap-1 text-base"
-              style={{ color: "var(--color-accent)" }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-base"
+              style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
               data-testid={`video-edit-${snippet.id}`}
+              title="Edit video clip"
             >
               <Pencil size={12} /> Edit
             </button>
             <button
               onClick={() => onDelete(snippet.id)}
-              className="flex items-center gap-1 text-base"
-              style={{ color: "var(--color-danger)" }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-base"
+              style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface-inset)" }}
               data-testid={`video-delete-${snippet.id}`}
+              title="Delete video clip"
             >
               <Trash2 size={12} /> Delete
             </button>
