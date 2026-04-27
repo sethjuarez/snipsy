@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { TextSnippet, DeliveryMethod } from "../types";
 
 interface TextSnippetFormProps {
@@ -43,6 +43,7 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
     snippet?.typeDelay ?? 30,
   );
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
 
   const handleHotkeyCapture = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -58,8 +59,7 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
     [],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveSnippet = () => {
     if (!title.trim() || !hotkey) return;
 
     onSave({
@@ -71,7 +71,27 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
       delivery,
       typeDelay: delivery === "fast-type" ? typeDelay : undefined,
     });
+    setSaveStatus("saved");
   };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveSnippet();
+  };
+
+  useEffect(() => {
+    if (saveStatus === "saved") setSaveStatus("unsaved");
+  }, [title, description, text, hotkey, delivery, typeDelay]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || capturingHotkey) return;
+      event.preventDefault();
+      saveSnippet();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" data-testid="snippet-form">
@@ -205,6 +225,13 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
         >
           {snippet ? "Update" : "Create"}
         </button>
+        <span
+          className="flex items-center text-sm"
+          style={{ color: saveStatus === "saved" ? "var(--color-success)" : "var(--color-text-secondary)" }}
+          data-testid="snippet-save-status"
+        >
+          {saveStatus === "saved" ? "Saved" : saveStatus === "unsaved" ? "Unsaved" : ""}
+        </span>
         <button
           type="button"
           onClick={onCancel}

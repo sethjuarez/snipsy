@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { VideoSnippet, TransitionAction } from "../types";
 
 interface VideoSnippetFormProps {
@@ -43,6 +43,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   );
   const [muted, setMuted] = useState(snippet?.muted !== false);
   const [pauseStops] = useState(snippet?.pauseStops);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
 
   const addTransitionAction = () => {
     setTransitionActions([
@@ -78,8 +79,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
     [],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveSnippet = () => {
     if (!title.trim() || !hotkey || !videoFile) return;
 
     onSave({
@@ -96,7 +96,27 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
     });
+    setSaveStatus("saved");
   };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveSnippet();
+  };
+
+  useEffect(() => {
+    if (saveStatus === "saved") setSaveStatus("unsaved");
+  }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || capturingHotkey) return;
+      event.preventDefault();
+      saveSnippet();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" data-testid="video-snippet-form">
@@ -317,6 +337,13 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
         >
           {snippet ? "Update" : "Create"}
         </button>
+        <span
+          className="flex items-center text-sm"
+          style={{ color: saveStatus === "saved" ? "var(--color-success)" : "var(--color-text-secondary)" }}
+          data-testid="video-snippet-save-status"
+        >
+          {saveStatus === "saved" ? "Saved" : saveStatus === "unsaved" ? "Unsaved" : ""}
+        </span>
         <button
           type="button"
           onClick={onCancel}

@@ -37,6 +37,8 @@ test.describe("Video Snippet CRUD", () => {
     await page.keyboard.up("Control");
 
     await page.getByTestId("video-snippet-save").click();
+    await expect(page.getByTestId("video-snippet-save-status")).toContainText("Saved");
+    await page.getByTestId("video-snippet-cancel").click();
     await expect(page.getByText("New Video Snippet")).toBeVisible();
   });
 
@@ -47,8 +49,9 @@ test.describe("Video Snippet CRUD", () => {
     await expect(page.getByTestId("clip-title")).toHaveValue("Build Process");
 
     await page.getByTestId("clip-title").fill("Updated Build");
-    await page.getByTestId("clip-save").click();
-    // Returns to video-snippets list (the view changed to videos, navigate back)
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+S" : "Control+S");
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+    await expect(page.getByTestId("clip-save-status")).toContainText("Saved");
     await page.getByTestId("nav-video-snippets").click();
     await expect(page.getByText("Updated Build")).toBeVisible();
   });

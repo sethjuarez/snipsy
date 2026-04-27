@@ -37,6 +37,8 @@ test.describe("Transition Action UI", () => {
     await page.keyboard.up("Shift");
     await page.keyboard.up("Control");
     await page.getByTestId("video-snippet-save").click();
+    await expect(page.getByTestId("video-snippet-save-status")).toContainText("Saved");
+    await page.getByTestId("video-snippet-cancel").click();
 
     // Verify snippet created
     await expect(page.getByText("Action Test")).toBeVisible();
