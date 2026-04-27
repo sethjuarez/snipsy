@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.14.0](https://github.com/sethjuarez/snipsy/compare/v0.13.0...v0.14.0) (2026-04-27)
+
+
+### Features
+
+* improve clip editing workflow ([ae6d025](https://github.com/sethjuarez/snipsy/commit/ae6d0250ba1bc31f66c441e62d0e44d1d00e1f28))
+* merge clip editor workflow improvements ([db922ed](https://github.com/sethjuarez/snipsy/commit/db922ed227aeb99c24dcc8f109395f28fae4740d))
+
+
+### Miscellaneous
+
+* merge remote 0.13.0 release ([cd37f1d](https://github.com/sethjuarez/snipsy/commit/cd37f1d414ddc9ffd7ad5fde9ee788a2d24a9d3d))
+* sync Cargo lock for 0.13.0 ([99c195f](https://github.com/sethjuarez/snipsy/commit/99c195f27183722c266cea01707fb57e789d5740))
+
 ## [0.13.0](https://github.com/sethjuarez/snipsy/compare/v0.12.0...v0.13.0) (2026-04-27)
 
 
