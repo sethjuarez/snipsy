@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.13.0](https://github.com/sethjuarez/snipsy/compare/v0.12.0...v0.13.0) (2026-04-27)
+
+
+### Features
+
+* add overview snippet delete actions ([849b14e](https://github.com/sethjuarez/snipsy/commit/849b14e61848a710f50677f1aa505e7d231434b9))
+* add playhead frame-step controls ([3a16b7d](https://github.com/sethjuarez/snipsy/commit/3a16b7da510c2e34cddb72232e2cdcbcf8f4fe1c))
+* merge overview delete and playhead controls ([c3f5565](https://github.com/sethjuarez/snipsy/commit/c3f55652ba8585e8944e8432456b8519b1fa31c9))
+
+
+### Bug Fixes
+
+* clarify playhead frame-step state ([fb308fa](https://github.com/sethjuarez/snipsy/commit/fb308fa20bd4158b9bd9f1409fc4d7e8c3bc9893))
+* show playhead frame-step feedback ([86ea512](https://github.com/sethjuarez/snipsy/commit/86ea512fe83c5871579ea2a8136a28059d23f393))
+
+
+### Miscellaneous
+
+* merge remote release changes ([e42bddd](https://github.com/sethjuarez/snipsy/commit/e42bdddb39b77952007267e1281ff1dac0039cd4))
+
 ## [0.12.0](https://github.com/sethjuarez/snipsy/compare/v0.11.0...v0.12.0) (2026-04-26)
 
 
