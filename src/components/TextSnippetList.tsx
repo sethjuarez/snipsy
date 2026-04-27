@@ -99,17 +99,19 @@ function SortableSnippetItem({
       <div className="flex items-center gap-2 ml-4">
         <button
           onClick={() => onEdit(snippet)}
-          className="flex items-center gap-1 text-base"
+          className="flex items-center gap-1 rounded px-2 py-1 text-base"
           data-testid={`edit-${snippet.id}`}
-          style={{ color: "var(--color-accent)" }}
+          style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
+          title="Edit text snippet"
         >
           <Pencil size={12} /> Edit
         </button>
         <button
           onClick={() => onDelete(snippet.id)}
-          className="flex items-center gap-1 text-base"
+          className="flex items-center gap-1 rounded px-2 py-1 text-base"
           data-testid={`delete-${snippet.id}`}
-          style={{ color: "var(--color-danger)" }}
+          style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface-inset)" }}
+          title="Delete text snippet"
         >
           <Trash2 size={12} /> Delete
         </button>

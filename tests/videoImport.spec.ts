@@ -122,6 +122,30 @@ test.describe("Video Import", () => {
     await expect(page.getByTestId("pause-stop-1")).not.toBeVisible();
   });
 
+  test("clip editor can frame-step the playhead without moving clip bounds", async ({ page }) => {
+    await page.getByTestId("nav-video-snippets").click();
+    await page.getByTestId("video-edit-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+
+    await expect(page.getByTestId("add-pause-stop")).toBeDisabled();
+    await expect(page.getByTestId("frame-back-playhead")).toBeDisabled();
+    await expect(page.getByTestId("frame-fwd-playhead")).toBeEnabled();
+    await expect(page.getByTestId("playhead-time")).toBeVisible();
+    const playheadBefore = await page.getByTestId("playhead-time").textContent();
+    const startBefore = await page.getByTestId("clip-start").getAttribute("style");
+    const endBefore = await page.getByTestId("clip-end").getAttribute("style");
+
+    await page.getByTestId("frame-fwd-playhead").click();
+
+    await expect(page.getByTestId("add-pause-stop")).toBeEnabled();
+    await expect(page.getByTestId("frame-back-playhead")).toBeEnabled();
+    await expect(page.getByTestId("playhead-time")).not.toHaveText(playheadBefore ?? "");
+    await expect(page.getByTestId("clip-start")).toHaveAttribute("style", startBefore ?? "");
+    await expect(page.getByTestId("clip-end")).toHaveAttribute("style", endBefore ?? "");
+    await page.getByTestId("add-pause-stop").click();
+    await expect(page.getByTestId("pause-stop-1")).toBeVisible();
+  });
+
   test("clip editor can draw and clear a spotlight region for a pause stop", async ({ page }) => {
     await page.getByTestId("nav-video-snippets").click();
     await page.getByTestId("video-edit-vs-1").click();

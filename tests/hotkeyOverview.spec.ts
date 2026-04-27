@@ -32,6 +32,26 @@ test.describe("Hotkey Overview", () => {
     await expect(page.getByTestId("clip-title")).toHaveValue("Build Process");
   });
 
+  test("can delete a text snippet from the overview", async ({ page }) => {
+    await expect(page.getByTestId("overview-delete-text-ts-2")).toBeVisible();
+    await page.getByTestId("overview-delete-text-ts-2").click();
+    await expect(page.getByTestId("confirm-delete-dialog")).toBeVisible();
+    await page.getByTestId("confirm-dialog-confirm").click();
+    await expect(page.getByTestId("overview-delete-text-ts-2")).not.toBeVisible();
+    await page.getByTestId("nav-text-snippets").click();
+    await expect(page.getByTestId("snippet-ts-2")).not.toBeVisible();
+  });
+
+  test("can delete a video clip from the overview", async ({ page }) => {
+    await expect(page.getByTestId("overview-delete-video-vs-1")).toBeVisible();
+    await page.getByTestId("overview-delete-video-vs-1").click();
+    await expect(page.getByTestId("confirm-delete-dialog")).toBeVisible();
+    await page.getByTestId("confirm-dialog-confirm").click();
+    await expect(page.getByTestId("overview-delete-video-vs-1")).not.toBeVisible();
+    await page.getByTestId("nav-video-snippets").click();
+    await expect(page.getByTestId("video-snippet-vs-1")).not.toBeVisible();
+  });
+
   test("shows empty state for new project with no snippets", async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());

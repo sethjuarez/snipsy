@@ -3,7 +3,7 @@ import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, us
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
-import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff, Pencil } from "lucide-react";
+import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff, Pencil, Trash2 } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
 
 interface HotkeyOverviewProps {
@@ -12,6 +12,8 @@ interface HotkeyOverviewProps {
   onPlayVideo?: (snippet: VideoSnippet) => void;
   onEditText?: (snippet: TextSnippet) => void;
   onEditVideo?: (snippet: VideoSnippet) => void;
+  onDeleteText?: (id: string) => void;
+  onDeleteVideo?: (id: string) => void;
 }
 
 type CardItem =
@@ -37,11 +39,15 @@ function SortableCard({
   onPlay,
   onEditText,
   onEditVideo,
+  onDeleteText,
+  onDeleteVideo,
 }: {
   item: CardItem;
   onPlay?: (s: VideoSnippet) => void;
   onEditText?: (s: TextSnippet) => void;
   onEditVideo?: (s: VideoSnippet) => void;
+  onDeleteText?: (id: string) => void;
+  onDeleteVideo?: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
@@ -56,9 +62,9 @@ function SortableCard({
   return (
     <div ref={setNodeRef} style={{ ...style, height: 200 }} data-testid="hotkey-entry">
       {item.kind === "text" ? (
-        <TextCardInner snippet={item.snippet} onEdit={onEditText} dragProps={dragProps} />
+        <TextCardInner snippet={item.snippet} onEdit={onEditText} onDelete={onDeleteText} dragProps={dragProps} />
       ) : (
-        <VideoCardInner snippet={item.snippet} onPlay={onPlay} onEdit={onEditVideo} dragProps={dragProps} />
+        <VideoCardInner snippet={item.snippet} onPlay={onPlay} onEdit={onEditVideo} onDelete={onDeleteVideo} dragProps={dragProps} />
       )}
     </div>
   );
@@ -69,7 +75,17 @@ interface DragProps {
   listeners: SyntheticListenerMap | undefined;
 }
 
-function TextCardInner({ snippet, onEdit, dragProps }: { snippet: TextSnippet; onEdit?: (s: TextSnippet) => void; dragProps: DragProps }) {
+function TextCardInner({
+  snippet,
+  onEdit,
+  onDelete,
+  dragProps,
+}: {
+  snippet: TextSnippet;
+  onEdit?: (s: TextSnippet) => void;
+  onDelete?: (id: string) => void;
+  dragProps: DragProps;
+}) {
   return (
     <div
       className="rounded-lg overflow-hidden flex flex-col h-full"
@@ -90,18 +106,32 @@ function TextCardInner({ snippet, onEdit, dragProps }: { snippet: TextSnippet; o
         <span className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
           {snippet.title}
         </span>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={() => onEdit(snippet)}
-            className="ml-auto shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded"
-            style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
-            title="Edit text snippet"
-            data-testid={`overview-edit-text-${snippet.id}`}
-          >
-            <Pencil size={10} /> Edit
-          </button>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(snippet)}
+              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+              style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
+              title="Edit text snippet"
+              data-testid={`overview-edit-text-${snippet.id}`}
+            >
+              <Pencil size={10} /> Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(snippet.id)}
+              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+              style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface-inset)" }}
+              title="Delete text snippet"
+              data-testid={`overview-delete-text-${snippet.id}`}
+            >
+              <Trash2 size={10} /> Delete
+            </button>
+          )}
+        </div>
       </div>
       {/* Text preview */}
       <div
@@ -141,7 +171,19 @@ function TextCardInner({ snippet, onEdit, dragProps }: { snippet: TextSnippet; o
   );
 }
 
-function VideoCardInner({ snippet, onPlay, onEdit, dragProps }: { snippet: VideoSnippet; onPlay?: (s: VideoSnippet) => void; onEdit?: (s: VideoSnippet) => void; dragProps: DragProps }) {
+function VideoCardInner({
+  snippet,
+  onPlay,
+  onEdit,
+  onDelete,
+  dragProps,
+}: {
+  snippet: VideoSnippet;
+  onPlay?: (s: VideoSnippet) => void;
+  onEdit?: (s: VideoSnippet) => void;
+  onDelete?: (id: string) => void;
+  dragProps: DragProps;
+}) {
   const duration = snippet.endTime - snippet.startTime;
 
   return (
@@ -164,18 +206,32 @@ function VideoCardInner({ snippet, onPlay, onEdit, dragProps }: { snippet: Video
         <span className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
           {snippet.title}
         </span>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={() => onEdit(snippet)}
-            className="ml-auto shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded"
-            style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
-            title="Edit video clip"
-            data-testid={`overview-edit-video-${snippet.id}`}
-          >
-            <Pencil size={10} /> Edit
-          </button>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(snippet)}
+              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+              style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
+              title="Edit video clip"
+              data-testid={`overview-edit-video-${snippet.id}`}
+            >
+              <Pencil size={10} /> Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(snippet.id)}
+              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+              style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface-inset)" }}
+              title="Delete video clip"
+              data-testid={`overview-delete-video-${snippet.id}`}
+            >
+              <Trash2 size={10} /> Delete
+            </button>
+          )}
+        </div>
       </div>
       {/* Video preview */}
       <div
@@ -245,7 +301,15 @@ function VideoCardInner({ snippet, onPlay, onEdit, dragProps }: { snippet: Video
   );
 }
 
-function HotkeyOverview({ textSnippets, videoSnippets, onPlayVideo, onEditText, onEditVideo }: HotkeyOverviewProps) {
+function HotkeyOverview({
+  textSnippets,
+  videoSnippets,
+  onPlayVideo,
+  onEditText,
+  onEditVideo,
+  onDeleteText,
+  onDeleteVideo,
+}: HotkeyOverviewProps) {
   const allItems = useMemo<CardItem[]>(() => {
     const texts: CardItem[] = textSnippets.map((s) => ({ kind: "text", id: s.id, snippet: s }));
     const videos: CardItem[] = videoSnippets.map((s) => ({ kind: "video", id: s.id, snippet: s }));
@@ -315,6 +379,8 @@ function HotkeyOverview({ textSnippets, videoSnippets, onPlayVideo, onEditText, 
               onPlay={item.kind === "video" ? onPlayVideo : undefined}
               onEditText={item.kind === "text" ? onEditText : undefined}
               onEditVideo={item.kind === "video" ? onEditVideo : undefined}
+              onDeleteText={item.kind === "text" ? onDeleteText : undefined}
+              onDeleteVideo={item.kind === "video" ? onDeleteVideo : undefined}
             />
           ))}
         </div>

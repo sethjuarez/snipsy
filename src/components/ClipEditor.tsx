@@ -366,6 +366,22 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     }
   };
 
+  const nudgePlayhead = (direction: 1 | -1) => {
+    const vid = videoRef.current;
+    if (!vid || endTime <= startTime) return;
+    const minTime = startTime + frameDuration;
+    const maxTime = endTime - frameDuration;
+    if (minTime > maxTime) return;
+    if (!vid.paused) {
+      vid.pause();
+      setPlaying(false);
+    }
+    const baseTime = Math.min(Math.max(currentTime, minTime), maxTime);
+    const val = Math.min(maxTime, Math.max(minTime, baseTime + frameDuration * direction));
+    vid.currentTime = val;
+    setCurrentTime(val);
+  };
+
   const handleTimelineKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowLeft") {
       e.preventDefault();
@@ -381,6 +397,8 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const holdStartFwd  = useHoldRepeat(() => { setActiveHandle("start"); nudgeHandle("start", 1); });
   const holdEndBack   = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", -1); });
   const holdEndFwd    = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", 1); });
+  const holdPlayheadBack = useHoldRepeat(() => nudgePlayhead(-1));
+  const holdPlayheadFwd = useHoldRepeat(() => nudgePlayhead(1));
 
   const handlePreview = useCallback(() => {
     const vid = videoRef.current;
@@ -693,6 +711,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const selectionWidth = duration > 0 ? ((endTime - startTime) / duration) * 100 : 100;
   const playheadPos = duration > 0 ? (currentTime / duration) * 100 : 0;
   const handleW = 8;
+  const playheadMinTime = startTime + frameDuration;
+  const playheadMaxTime = endTime - frameDuration;
+  const canStepPlayhead = playheadMinTime <= playheadMaxTime;
+  const canStepPlayheadBack = canStepPlayhead && currentTime > playheadMinTime;
+  const canStepPlayheadFwd = canStepPlayhead && currentTime < playheadMaxTime;
   const editingSpotlightStop = editingSpotlightIndex !== null ? pauseStops[editingSpotlightIndex] : null;
   const editingSpotlight = editingSpotlightStop?.spotlight;
   const editingSpotlightColor =
@@ -1102,6 +1125,52 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
             {playing ? <Pause size={11} /> : <Play size={11} />}
             {playing ? "Pause" : "Preview"}
           </button>
+          <div
+            className="flex items-center gap-1 rounded px-1 py-0.5"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+          >
+            <button
+              type="button"
+              {...holdPlayheadBack}
+              disabled={!canStepPlayheadBack}
+              className="w-7 h-7 flex items-center justify-center rounded disabled:opacity-40"
+              style={{
+                color: canStepPlayheadBack ? "var(--color-accent)" : "var(--color-text-secondary)",
+                backgroundColor: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+              }}
+              title={canStepPlayheadBack ? "Playhead - 1 frame" : "Playhead is at the first selectable frame"}
+              aria-label="Playhead - 1 frame"
+              data-testid="frame-back-playhead"
+            >
+              <ChevronLeft size={12} />
+            </button>
+            <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Playhead</span>
+            <span
+              className="min-w-14 text-center text-xs font-mono rounded px-1 py-0.5"
+              style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface)" }}
+              title={`Playhead at ${currentTime.toFixed(3)} seconds`}
+              data-testid="playhead-time"
+            >
+              {formatTime(currentTime, true)}
+            </span>
+            <button
+              type="button"
+              {...holdPlayheadFwd}
+              disabled={!canStepPlayheadFwd}
+              className="w-7 h-7 flex items-center justify-center rounded disabled:opacity-40"
+              style={{
+                color: canStepPlayheadFwd ? "var(--color-accent)" : "var(--color-text-secondary)",
+                backgroundColor: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+              }}
+              title={canStepPlayheadFwd ? "Playhead + 1 frame" : "Playhead is at the last selectable frame"}
+              aria-label="Playhead + 1 frame"
+              data-testid="frame-fwd-playhead"
+            >
+              <ChevronRight size={12} />
+            </button>
+          </div>
           <button
             onClick={addPauseStop}
             disabled={currentTime <= startTime || currentTime >= endTime}
