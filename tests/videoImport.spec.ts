@@ -223,6 +223,66 @@ test.describe("Video Import", () => {
     await expect(page.getByTestId("clip-preview")).toContainText("Resume preview");
   });
 
+  test("clip editor preview can jump between pause stops with controls and arrow keys", async ({ page }) => {
+    await page.getByTestId("nav-video-snippets").click();
+    await page.getByTestId("video-edit-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+
+    await expect(page.getByTestId("preview-previous-stop")).toBeDisabled();
+    await expect(page.getByTestId("preview-next-stop")).toBeDisabled();
+
+    await page.getByTestId("clip-preview").click();
+    await page.getByTestId("clip-editor-video").evaluate((node) => {
+      node.dispatchEvent(new Event("play"));
+    });
+
+    await expect(page.getByTestId("preview-next-stop")).toBeEnabled();
+    await page.getByTestId("preview-next-stop").click();
+    await expect(page.getByTestId("clip-editor")).toHaveAttribute("data-preview-stop-kind", "pause");
+    await expect(page.getByTestId("preview-spotlight-region-0")).toBeVisible();
+    await expect(page.getByTestId("clip-preview")).toContainText("Resume preview");
+    await expect
+      .poll(() => page.getByTestId("clip-editor-video").evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(12.5, 1);
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("clip-editor")).toHaveAttribute("data-preview-stop-kind", "end");
+    await expect(page.getByTestId("preview-spotlight-region-0")).not.toBeVisible();
+    await expect
+      .poll(() => page.getByTestId("clip-editor-video").evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(30, 1);
+
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByTestId("clip-editor")).toHaveAttribute("data-preview-stop-kind", "pause");
+    await expect(page.getByTestId("preview-spotlight-region-0")).toBeVisible();
+  });
+
+  test("clip editor preview jumps between start and end when there are no pause stops", async ({ page }) => {
+    await page.getByTestId("nav-video-snippets").click();
+    await page.getByTestId("video-edit-vs-1").click();
+    await expect(page.getByTestId("clip-editor")).toBeVisible();
+
+    await page.getByTestId("remove-pause-stop-0").click();
+    await expect(page.getByTestId("pause-stops-empty")).toBeVisible();
+
+    await page.getByTestId("clip-preview").click();
+    await page.getByTestId("clip-editor-video").evaluate((node) => {
+      node.dispatchEvent(new Event("play"));
+    });
+
+    await page.getByTestId("preview-next-stop").click();
+    await expect(page.getByTestId("clip-editor")).toHaveAttribute("data-preview-stop-kind", "end");
+    await expect
+      .poll(() => page.getByTestId("clip-editor-video").evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(30, 1);
+
+    await page.getByTestId("preview-previous-stop").click();
+    await expect(page.getByTestId("clip-editor")).toHaveAttribute("data-preview-stop-kind", "start");
+    await expect
+      .poll(() => page.getByTestId("clip-editor-video").evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(0, 1);
+  });
+
   test("can cancel clip editor", async ({ page }) => {
     await page.getByTestId("create-clip-0").click();
     await expect(page.getByTestId("clip-editor")).toBeVisible();

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { CheckCircle, Play, Pause, Save, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw, MousePointerClick } from "lucide-react";
 import { getBackend } from "../services";
 import SpotlightOverlay from "./SpotlightOverlay";
@@ -21,6 +21,10 @@ const MIN_SPOTLIGHT_REGION_SIZE = 2;
 const SPOTLIGHT_COLOR_PRESETS = ["#facc15", "#38bdf8", "#34d399", "#fb7185", "#c084fc", "#fb923c"];
 
 type SpotlightResizeHandle = "nw" | "ne" | "sw" | "se";
+type PreviewNavigationStop =
+  | { kind: "start"; time: number }
+  | { kind: "pause"; time: number; pauseStop: PauseStop }
+  | { kind: "end"; time: number };
 type SpotlightManipulation =
   | {
       mode: "move";
@@ -63,6 +67,76 @@ function useHoldRepeat(callback: () => void) {
   useEffect(() => stop, [stop]);
 
   return { onMouseDown: start, onMouseUp: stop, onMouseLeave: stop };
+}
+
+function buildPreviewNavigationStops(
+  stops: PauseStop[],
+  startTime: number,
+  endTime: number,
+): PreviewNavigationStop[] {
+  const pauseStops = normalizePauseStops(stops, startTime, endTime)
+    .filter((stop) => stop.time > startTime + STOP_EPSILON && stop.time < endTime - STOP_EPSILON);
+
+  return [
+    { kind: "start", time: startTime },
+    ...pauseStops.map((pauseStop): PreviewNavigationStop => ({
+      kind: "pause",
+      time: pauseStop.time,
+      pauseStop,
+    })),
+    { kind: "end", time: endTime },
+  ];
+}
+
+function isSamePreviewStop(a: PreviewNavigationStop, b: PreviewNavigationStop) {
+  return a.kind === b.kind && Math.abs(a.time - b.time) <= STOP_EPSILON;
+}
+
+function getAdjacentPreviewStop(
+  stops: PreviewNavigationStop[],
+  currentTime: number,
+  direction: -1 | 1,
+  activeStop: PreviewNavigationStop | null,
+) {
+  if (stops.length === 0) return null;
+
+  const activeIndex = activeStop
+    ? stops.findIndex((stop) => isSamePreviewStop(stop, activeStop))
+    : -1;
+  if (activeIndex >= 0) {
+    return stops[Math.max(0, Math.min(stops.length - 1, activeIndex + direction))] ?? null;
+  }
+
+  if (direction > 0) {
+    return stops.find((stop) => stop.time > currentTime + STOP_EPSILON) ?? stops[stops.length - 1];
+  }
+
+  for (let index = stops.length - 1; index >= 0; index -= 1) {
+    if (stops[index].time < currentTime - STOP_EPSILON) return stops[index];
+  }
+  return stops[0];
+}
+
+function getRemainingPreviewPauseStopsAfter(
+  stops: PreviewNavigationStop[],
+  time: number,
+): PauseStop[] {
+  return stops
+    .filter((stop): stop is Extract<PreviewNavigationStop, { kind: "pause" }> =>
+      stop.kind === "pause" && stop.time > time + STOP_EPSILON)
+    .map((stop) => stop.pauseStop);
+}
+
+function getPreviewStopLabel(stop: PreviewNavigationStop | null) {
+  if (!stop) return "";
+  if (stop.kind === "start") return "clip start";
+  if (stop.kind === "end") return "clip end";
+  return stop.pauseStop.label || `pause at ${formatTime(stop.time, true)}`;
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
 }
 
 // Convert local file path to a URL the webview can load (only in Tauri context)
@@ -222,7 +296,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const [clickToPlay, setClickToPlay] = useState(existingClip?.clickToPlay ?? false);
   const [muted, setMuted] = useState(existingClip?.muted !== false);
   const [pauseStops, setPauseStops] = useState<PauseStop[]>(existingClip?.pauseStops ?? []);
-  const [activePreviewStop, setActivePreviewStop] = useState<PauseStop | null>(null);
+  const [activePreviewStop, setActivePreviewStop] = useState<PreviewNavigationStop | null>(null);
   const [editingSpotlightIndex, setEditingSpotlightIndex] = useState<number | null>(null);
   const [selectedSpotlightRegion, setSelectedSpotlightRegion] = useState<number | null>(null);
   const [drawingStart, setDrawingStart] = useState<Point | null>(null);
@@ -292,7 +366,7 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
         setCurrentTime(nextStop.time);
         vid.pause();
         setPlaying(false);
-        setActivePreviewStop(nextStop);
+        setActivePreviewStop({ kind: "pause", time: nextStop.time, pauseStop: nextStop });
         return;
       }
       if (vid.currentTime >= endTime) {
@@ -415,6 +489,10 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
   const holdEndFwd    = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", 1); });
   const holdPlayheadBack = useHoldRepeat(() => nudgePlayhead(-1));
   const holdPlayheadFwd = useHoldRepeat(() => nudgePlayhead(1));
+  const previewNavigationStops = useMemo(
+    () => buildPreviewNavigationStops(pauseStops, startTime, endTime),
+    [pauseStops, startTime, endTime],
+  );
 
   const handlePreview = useCallback(() => {
     const vid = videoRef.current;
@@ -422,20 +500,41 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
 
     if (activePreviewStop) {
       setActivePreviewStop(null);
+      previewStopsRef.current = getRemainingPreviewPauseStopsAfter(previewNavigationStops, activePreviewStop.time);
       vid.playbackRate = effectiveSpeed;
       vid.play();
     } else if (playing) {
       previewStopsRef.current = [];
       vid.pause();
     } else {
-      previewStopsRef.current = normalizePauseStops(pauseStops, startTime, endTime)
-        .filter((stop) => stop.time > startTime + STOP_EPSILON && stop.time < endTime - STOP_EPSILON);
+      previewStopsRef.current = getRemainingPreviewPauseStopsAfter(previewNavigationStops, startTime);
       setActivePreviewStop(null);
       vid.currentTime = startTime;
       vid.playbackRate = effectiveSpeed;
       vid.play();
     }
-  }, [activePreviewStop, playing, pauseStops, startTime, endTime, effectiveSpeed]);
+  }, [activePreviewStop, playing, previewNavigationStops, startTime, effectiveSpeed]);
+
+  const jumpToPreviewStop = useCallback((direction: -1 | 1) => {
+    if (!playing && !activePreviewStop) return;
+    const vid = videoRef.current;
+    if (!vid) return;
+
+    const targetStop = getAdjacentPreviewStop(
+      previewNavigationStops,
+      currentTime,
+      direction,
+      activePreviewStop,
+    );
+    if (!targetStop) return;
+
+    vid.pause();
+    vid.currentTime = targetStop.time;
+    previewStopsRef.current = getRemainingPreviewPauseStopsAfter(previewNavigationStops, targetStop.time);
+    setCurrentTime(targetStop.time);
+    setPlaying(false);
+    setActivePreviewStop(targetStop);
+  }, [activePreviewStop, currentTime, playing, previewNavigationStops]);
 
   const addPauseStop = useCallback(() => {
     const time = Math.min(Math.max(currentTime, startTime + frameDuration), endTime - frameDuration);
@@ -766,6 +865,21 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (capturingHotkey || (!playing && !activePreviewStop) || isEditableKeyboardTarget(event.target)) return;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        jumpToPreviewStop(-1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        jumpToPreviewStop(1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePreviewStop, capturingHotkey, jumpToPreviewStop, playing]);
+
   const selectionLeft = duration > 0 ? (startTime / duration) * 100 : 0;
   const selectionWidth = duration > 0 ? ((endTime - startTime) / duration) * 100 : 100;
   const playheadPos = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -787,12 +901,30 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
     selectedSpotlightRegionData && videoContentBox
       ? regionToBox(selectedSpotlightRegionData, videoContentBox)
       : null;
+  const isPreviewActive = playing || activePreviewStop !== null;
+  const previousPreviewStop = isPreviewActive
+    ? getAdjacentPreviewStop(previewNavigationStops, currentTime, -1, activePreviewStop)
+    : null;
+  const nextPreviewStop = isPreviewActive
+    ? getAdjacentPreviewStop(previewNavigationStops, currentTime, 1, activePreviewStop)
+    : null;
+  const canJumpPreviewBack =
+    Boolean(previousPreviewStop) &&
+    (activePreviewStop
+      ? !isSamePreviewStop(previousPreviewStop!, activePreviewStop)
+      : Math.abs(previousPreviewStop!.time - currentTime) > STOP_EPSILON);
+  const canJumpPreviewForward =
+    Boolean(nextPreviewStop) &&
+    (activePreviewStop
+      ? !isSamePreviewStop(nextPreviewStop!, activePreviewStop)
+      : Math.abs(nextPreviewStop!.time - currentTime) > STOP_EPSILON);
 
   return (
     <div
       className="flex flex-col h-full"
       data-testid="clip-editor"
       data-preview-pause-active={activePreviewStop ? "true" : "false"}
+      data-preview-stop-kind={activePreviewStop?.kind ?? "none"}
     >
       <div className="flex flex-1 min-h-0 gap-3">
       {/* Video — fills all available space */}
@@ -804,11 +936,11 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           className="w-full h-full object-contain"
           data-testid="clip-editor-video"
         />
-        {editingSpotlightIndex === null && activePreviewStop?.spotlight && videoContentBox && (
+        {editingSpotlightIndex === null && activePreviewStop?.kind === "pause" && activePreviewStop.pauseStop.spotlight && videoContentBox && (
           <SpotlightOverlay
-            spotlight={activePreviewStop.spotlight}
+            spotlight={activePreviewStop.pauseStop.spotlight}
             contentBox={videoContentBox}
-            label={activePreviewStop.label}
+            label={activePreviewStop.pauseStop.label}
             testIdPrefix="preview-spotlight"
           />
         )}
@@ -1290,6 +1422,17 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           </div>
           <div className="flex-1" />
           <button
+            type="button"
+            onClick={() => jumpToPreviewStop(-1)}
+            disabled={!canJumpPreviewBack}
+            className="flex items-center gap-1 px-2.5 py-1 rounded text-sm font-medium disabled:opacity-40"
+            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+            title={previousPreviewStop ? `Previous preview stop: ${getPreviewStopLabel(previousPreviewStop)}` : "Start preview to jump between stops"}
+            data-testid="preview-previous-stop"
+          >
+            <ChevronLeft size={11} /> Previous stop
+          </button>
+          <button
             onClick={handlePreview}
             className="flex items-center gap-1.5 px-3 py-1 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
@@ -1297,6 +1440,17 @@ function ClipEditor({ video, existingClip, onSave, onCancel }: ClipEditorProps) 
           >
             {playing ? <Pause size={11} /> : <Play size={11} />}
             {activePreviewStop ? "Resume preview" : playing ? "Pause" : "Preview"}
+          </button>
+          <button
+            type="button"
+            onClick={() => jumpToPreviewStop(1)}
+            disabled={!canJumpPreviewForward}
+            className="flex items-center gap-1 px-2.5 py-1 rounded text-sm font-medium disabled:opacity-40"
+            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+            title={nextPreviewStop ? `Next preview stop: ${getPreviewStopLabel(nextPreviewStop)}` : "Start preview to jump between stops"}
+            data-testid="preview-next-stop"
+          >
+            Next stop <ChevronRight size={11} />
           </button>
           <div
             className="flex items-center gap-1 rounded px-1 py-0.5"
