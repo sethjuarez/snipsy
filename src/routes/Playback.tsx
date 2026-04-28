@@ -4,6 +4,13 @@ import SpotlightOverlay from "../components/SpotlightOverlay";
 import type { PauseSpotlight, PauseStop } from "../types";
 import { STOP_EPSILON, getVideoContentBox, normalizePauseStops } from "../utils/spotlight";
 
+type PlaybackNavigationStop =
+  | { kind: "start"; time: number }
+  | { kind: "pause"; time: number; pauseStop: PauseStop }
+  | { kind: "end"; time: number };
+
+const SEEK_PRESENTATION_TIMEOUT_MS = 500;
+
 function parsePauseStops(raw: string | null): PauseStop[] {
   if (!raw) return [];
 
@@ -24,12 +31,103 @@ function parsePauseStops(raw: string | null): PauseStop[] {
     }));
 }
 
+function buildPlaybackNavigationStops(
+  pauseStops: PauseStop[],
+  start: number,
+  end: number,
+): PlaybackNavigationStop[] {
+  const stops: PlaybackNavigationStop[] = [{ kind: "start", time: start }];
+  stops.push(...pauseStops.map((pauseStop) => ({
+    kind: "pause" as const,
+    time: pauseStop.time,
+    pauseStop,
+  })));
+  if (end > start) stops.push({ kind: "end", time: end });
+  return stops;
+}
+
+function isSamePlaybackStop(a: PlaybackNavigationStop, b: PlaybackNavigationStop) {
+  return a.kind === b.kind && Math.abs(a.time - b.time) <= STOP_EPSILON;
+}
+
+function getAdjacentPlaybackStop(
+  stops: PlaybackNavigationStop[],
+  currentTime: number,
+  direction: -1 | 1,
+  activeStop: PlaybackNavigationStop | null,
+) {
+  if (stops.length === 0) return null;
+
+  const activeIndex = activeStop
+    ? stops.findIndex((stop) => isSamePlaybackStop(stop, activeStop))
+    : -1;
+  if (activeIndex >= 0) {
+    return stops[Math.max(0, Math.min(stops.length - 1, activeIndex + direction))] ?? null;
+  }
+
+  if (direction > 0) {
+    return stops.find((stop) => stop.time > currentTime + STOP_EPSILON) ?? stops[stops.length - 1];
+  }
+
+  for (let index = stops.length - 1; index >= 0; index -= 1) {
+    if (stops[index].time < currentTime - STOP_EPSILON) return stops[index];
+  }
+  return stops[0];
+}
+
+function getNextPauseStopIndexAfter(pauseStops: PauseStop[], time: number) {
+  const index = pauseStops.findIndex((stop) => stop.time > time + STOP_EPSILON);
+  return index === -1 ? pauseStops.length : index;
+}
+
+function waitForPresentedSeekFrame(video: HTMLVideoElement): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const resolveAfterPaint = () => {
+      requestAnimationFrame(() => {
+        if ("requestVideoFrameCallback" in video) {
+          const videoWithFrameCallback = video as HTMLVideoElement & {
+            requestVideoFrameCallback: (callback: () => void) => number;
+          };
+          const frameTimeout = setTimeout(resolve, SEEK_PRESENTATION_TIMEOUT_MS);
+          videoWithFrameCallback.requestVideoFrameCallback(() => {
+            clearTimeout(frameTimeout);
+            resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    };
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      video.removeEventListener("seeked", finish);
+      resolveAfterPaint();
+    };
+
+    video.addEventListener("seeked", finish, { once: true });
+    timeoutId = setTimeout(finish, SEEK_PRESENTATION_TIMEOUT_MS);
+    if (!video.seeking) finish();
+  });
+}
+
 function Playback() {
   const [searchParams] = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const nextStopIndexRef = useRef(0);
+  const resumingRef = useRef(false);
+  const waitCleanupRef = useRef<(() => void) | null>(null);
+  const resumePromiseRef = useRef<Promise<void> | null>(null);
+  const seekVersionRef = useRef(0);
   const [waitingForResume, setWaitingForResume] = useState(false);
   const [activeSpotlight, setActiveSpotlight] = useState<{ spotlight: PauseSpotlight; label?: string } | null>(null);
+  const [activePlaybackStop, setActivePlaybackStop] = useState<PlaybackNavigationStop | null>(null);
 
   const file = searchParams.get("file") ?? "";
   const start = parseFloat(searchParams.get("start") ?? "0");
@@ -48,6 +146,10 @@ function Playback() {
       return [];
     }
   }, [searchParams, start, end]);
+  const navigationStops = useMemo(
+    () => buildPlaybackNavigationStops(pauseStops, start, end),
+    [pauseStops, start, end],
+  );
 
   const closeWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
@@ -63,44 +165,79 @@ function Playback() {
     }
   }, []);
 
+  const waitForResume = useCallback(() => {
+    if (resumePromiseRef.current) return resumePromiseRef.current;
+
+    setWaitingForResume(true);
+    const promise = new Promise<void>((resolve) => {
+      const finish = () => {
+        waitCleanupRef.current?.();
+        resolve();
+      };
+      const onClick = () => finish();
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.code === "Space" || event.key === " ") {
+          event.preventDefault();
+          finish();
+        }
+      };
+
+      waitCleanupRef.current = () => {
+        window.removeEventListener("click", onClick);
+        window.removeEventListener("keydown", onKeyDown);
+        waitCleanupRef.current = null;
+        resumePromiseRef.current = null;
+        setWaitingForResume(false);
+      };
+
+      window.addEventListener("click", onClick);
+      window.addEventListener("keydown", onKeyDown);
+    });
+    resumePromiseRef.current = promise;
+    return promise;
+  }, []);
+
+  const activatePlaybackStop = useCallback(async (stop: PlaybackNavigationStop) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const seekVersion = seekVersionRef.current + 1;
+    seekVersionRef.current = seekVersion;
+    video.pause();
+    video.currentTime = stop.time;
+    nextStopIndexRef.current = getNextPauseStopIndexAfter(pauseStops, stop.time);
+    resumingRef.current = true;
+    setActivePlaybackStop(stop);
+    setActiveSpotlight(null);
+
+    await waitForPresentedSeekFrame(video);
+    if (seekVersionRef.current !== seekVersion) return;
+
+    setActiveSpotlight(
+      stop.kind === "pause" && stop.pauseStop.spotlight
+        ? { spotlight: stop.pauseStop.spotlight, label: stop.pauseStop.label }
+        : null,
+    );
+
+    waitForResume().then(() => {
+      if (seekVersionRef.current !== seekVersion) return;
+      setActivePlaybackStop(null);
+      setActiveSpotlight(null);
+      resumingRef.current = false;
+      video.play().catch(() => {});
+    });
+  }, [pauseStops, waitForResume]);
+
   // Single effect: resolve src, load, seek, (optionally wait for click), play, show
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !file) return;
 
     let cancelled = false;
-    let waitCleanup: (() => void) | null = null;
-    const nextStopIndexRef = { current: 0 };
-    const resumingRef = { current: false };
-
-    const waitForResume = async () => {
-      setWaitingForResume(true);
-      await new Promise<void>((resolve) => {
-        if (cancelled) return resolve();
-
-        const finish = () => {
-          waitCleanup?.();
-          resolve();
-        };
-        const onClick = () => finish();
-        const onKeyDown = (event: KeyboardEvent) => {
-          if (event.code === "Space" || event.key === " ") {
-            event.preventDefault();
-            finish();
-          }
-        };
-
-        waitCleanup = () => {
-          window.removeEventListener("click", onClick);
-          window.removeEventListener("keydown", onKeyDown);
-          waitCleanup = null;
-          setWaitingForResume(false);
-        };
-
-        window.addEventListener("click", onClick);
-        window.addEventListener("keydown", onKeyDown);
-      });
-    };
+    nextStopIndexRef.current = 0;
+    resumingRef.current = false;
+    setActivePlaybackStop(null);
+    setActiveSpotlight(null);
 
     (async () => {
       // 1. Resolve file path to asset URL
@@ -179,17 +316,7 @@ function Playback() {
     const handleTimeUpdate = () => {
       const nextStop = pauseStops[nextStopIndexRef.current];
       if (nextStop && !resumingRef.current && video.currentTime >= nextStop.time - STOP_EPSILON) {
-        resumingRef.current = true;
-        nextStopIndexRef.current += 1;
-        video.pause();
-        video.currentTime = nextStop.time;
-        setActiveSpotlight(nextStop.spotlight ? { spotlight: nextStop.spotlight, label: nextStop.label } : null);
-        waitForResume().then(() => {
-          if (cancelled) return;
-          setActiveSpotlight(null);
-          resumingRef.current = false;
-          video.play().catch(() => {});
-        });
+        activatePlaybackStop({ kind: "pause", time: nextStop.time, pauseStop: nextStop });
         return;
       }
 
@@ -208,21 +335,41 @@ function Playback() {
 
     return () => {
       cancelled = true;
-      waitCleanup?.();
+      waitCleanupRef.current?.();
+      setActivePlaybackStop(null);
       setActiveSpotlight(null);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, closeWindow, showWindow]);
+  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, activatePlaybackStop, closeWindow, showWindow, waitForResume]);
 
-  // Escape to close
+  // Escape closes playback; arrows jump between clip start, pause stops, and clip end.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === "Escape") closeWindow();
+      if (e.key === "Escape") {
+        closeWindow();
+        return;
+      }
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
+      const video = videoRef.current;
+      if (!video || navigationStops.length === 0) return;
+
+      const targetStop = getAdjacentPlaybackStop(
+        navigationStops,
+        video.currentTime,
+        e.key === "ArrowLeft" ? -1 : 1,
+        activePlaybackStop,
+      );
+      if (!targetStop) return;
+      if (activePlaybackStop && isSamePlaybackStop(activePlaybackStop, targetStop)) return;
+
+      e.preventDefault();
+      activatePlaybackStop(targetStop);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeWindow]);
+  }, [activatePlaybackStop, activePlaybackStop, closeWindow, navigationStops]);
 
   if (!file) {
     return (
@@ -252,6 +399,7 @@ function Playback() {
       }}
       data-testid="playback-container"
       data-waiting-for-resume={waitingForResume}
+      data-active-stop-kind={activePlaybackStop?.kind ?? "none"}
     >
       <video
         ref={videoRef}

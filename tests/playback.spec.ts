@@ -112,4 +112,62 @@ test.describe("Playback Window", () => {
     await expect(video).toHaveAttribute("data-pause-stops", "1");
     await expect(video).toHaveAttribute("data-pause-spotlight-regions", "1");
   });
+
+  test("arrow keys jump between playback pause stops", async ({ page }) => {
+    const stops = encodeURIComponent(JSON.stringify([
+      {
+        time: 10.5,
+        label: "Explain result",
+        spotlight: {
+          regions: [
+            { type: "rectangle", x: 10, y: 12, width: 30, height: 20 },
+          ],
+        },
+      },
+    ]));
+    await page.goto(`/playback?file=test.mp4&start=5&end=30&speed=3&pauseStops=${stops}`);
+    const video = page.getByTestId("playback-video");
+    await video.evaluate((node) => {
+      (node as HTMLVideoElement).currentTime = 5;
+    });
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("playback-container")).toHaveAttribute("data-active-stop-kind", "pause");
+    await expect(page.getByTestId("playback-container")).toHaveAttribute("data-waiting-for-resume", "true");
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(10.5, 1);
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("playback-container")).toHaveAttribute("data-active-stop-kind", "end");
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(30, 1);
+
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByTestId("playback-container")).toHaveAttribute("data-active-stop-kind", "pause");
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(10.5, 1);
+  });
+
+  test("arrow keys use start and end when playback has no pause stops", async ({ page }) => {
+    await page.goto("/playback?file=test.mp4&start=5&end=30&speed=3");
+    const video = page.getByTestId("playback-video");
+    await video.evaluate((node) => {
+      (node as HTMLVideoElement).currentTime = 5;
+    });
+
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("playback-container")).toHaveAttribute("data-active-stop-kind", "end");
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(30, 1);
+
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByTestId("playback-container")).toHaveAttribute("data-active-stop-kind", "start");
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(5, 1);
+  });
 });
