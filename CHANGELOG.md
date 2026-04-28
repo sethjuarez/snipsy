@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.0](https://github.com/sethjuarez/snipsy/compare/v0.14.0...v0.15.0) (2026-04-28)
+
+
+### Features
+
+* add playback stop navigation ([4e2c1bb](https://github.com/sethjuarez/snipsy/commit/4e2c1bb08992aff33a57f962981d0c4a0a02282d))
+* add preview stop navigation ([69259ec](https://github.com/sethjuarez/snipsy/commit/69259ec56642393f95ea83155587b274b42d84c8))
+
+
+### Bug Fixes
+
+* exclude Rust target from Tailwind source scan ([9a7c4c5](https://github.com/sethjuarez/snipsy/commit/9a7c4c54e0109a8c75c249b56d43a67471da49c6))
+
 ## [0.14.0](https://github.com/sethjuarez/snipsy/compare/v0.13.0...v0.14.0) (2026-04-27)
 
 
