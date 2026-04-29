@@ -1,0 +1,67 @@
+---
+title: Authoring Video Clips
+description: Build polished video clips with pause stops, spotlights, preview navigation, and playback controls.
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Use video clips when part of your demo is better as a reliable recording: builds, deployments, product walkthroughs, or anything that is slow or risky to perform live. Snipsy lets you trim the recording, add narration beats, spotlight important areas, and rehearse the flow before presenting.
+
+## Authoring Flow
+
+<Steps>
+
+1. **Trim the clip**
+
+   Choose the source video, then set the **start** and **end** times in the clip editor. Use the frame-step controls when you need to land on an exact frame.
+
+2. **Add pause stops**
+
+   Move the playhead to a moment where you want to stop and explain something. Choose **Add pause at playhead**, then add a short label so you remember the point of the stop.
+
+3. **Add spotlights**
+
+   Choose **Add spotlight** on a pause stop, then draw one or more regions over the paused frame. During authoring, the video remains clear so it is easy to place additional regions. During preview and playback, Snipsy dims/blurs the surrounding area to guide the audience's attention.
+
+4. **Preview the clip**
+
+   Choose **Preview** to rehearse the trimmed range. Preview pauses at your pause stops and shows spotlight overlays. Use **Previous stop** / **Next stop** or the **Left** / **Right** arrow keys to jump between the clip start, pause stops, and clip end.
+
+5. **Save in place**
+
+   Choose **Save Clip** or press **Ctrl+S** (**Cmd+S** on macOS). The editor stays open and shows the save status so you can keep refining without losing your place.
+
+</Steps>
+
+<Aside type="tip">
+Think of pause stops as narration beats. A good pause stop marks the exact frame where you want to say, "Notice this part."
+</Aside>
+
+## Playback Controls
+
+When you trigger a clip during demo mode, Snipsy opens the playback window on the target monitor. You can still control the flow from the keyboard:
+
+| Context | Shortcut | Action |
+|---------|----------|--------|
+| Clip editor | **Ctrl+S** / **Cmd+S** | Save the current clip in place |
+| Clip editor preview | **Left Arrow** | Jump to the previous preview stop |
+| Clip editor preview | **Right Arrow** | Jump to the next preview stop |
+| Playback | **Left Arrow** | Jump to the previous playback stop |
+| Playback | **Right Arrow** | Jump to the next playback stop |
+| Playback pause stop | **Space** or **Click** | Resume playback |
+| Playback | **Escape** | Close the playback window |
+
+Playback stops are the clip start, each configured pause stop, and the clip end. If a clip has no pause stops, the arrow keys jump between start and end.
+
+## Spotlight Tips
+
+- Keep spotlight regions large enough to be visible from the back of a room.
+- Use multiple regions when two areas matter at the same pause stop.
+- Use short labels for pause stops so they are easy to scan while editing.
+- Preview the clip after adding spotlights to confirm the highlight aligns with the paused frame.
+
+<Aside type="note">
+Spotlights do not change the original video file. They are saved as clip metadata and rendered by Snipsy during preview and playback.
+</Aside>
