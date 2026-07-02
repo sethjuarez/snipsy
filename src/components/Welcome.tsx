@@ -126,6 +126,7 @@ function Welcome() {
                     border: "1px solid var(--color-border)",
                     color: "var(--color-text)",
                   }}
+                  data-testid="open-project"
                 >
                   <FolderOpen size={24} style={{ color: "var(--color-accent)" }} />
                   Open Project
@@ -141,6 +142,7 @@ function Welcome() {
                     border: "1px solid var(--color-border)",
                     color: "var(--color-text)",
                   }}
+                  data-testid="new-project"
                 >
                   <FolderPlus size={24} style={{ color: "var(--color-success)" }} />
                   New Project
@@ -240,6 +242,7 @@ function Welcome() {
                   onClick={showForm === "open" ? handleOpen : handleCreate}
                   className="w-full py-2 px-4 rounded font-medium text-md"
                   style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
+                  data-testid={showForm === "open" ? "open-project-submit" : "create-project-submit"}
                 >
                   {showForm === "open" ? "Open" : "Create"}
                 </button>
@@ -261,30 +264,34 @@ function Welcome() {
                 recentProjects.map((project) => {
                   const hue = hashHue(project.name);
                   return (
-                    <button
+                    <div
                       key={project.path}
                       className="group flex items-center gap-3 p-2.5 rounded-lg transition-all hover:bg-[var(--color-surface-alt)] hover:border-[var(--color-border)]"
-                      style={{ border: "1px solid transparent", background: "transparent", textAlign: "left", width: "100%" }}
-                      onClick={() => handleOpenRecent(project)}
-                      aria-label={project.name}
-                      data-testid="recent-project"
+                      style={{ border: "1px solid transparent", background: "transparent" }}
                     >
-                      {/* Color avatar */}
-                      <div
-                        className="w-8 h-8 rounded-md flex items-center justify-center text-md font-bold text-white shrink-0"
-                        style={{ backgroundColor: `hsl(${hue}, 60%, 50%)` }}
+                      <button
+                        className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                        onClick={() => handleOpenRecent(project)}
+                        aria-label={project.name}
+                        data-testid="recent-project"
                       >
-                        {project.name.charAt(0).toUpperCase()}
-                      </div>
+                        {/* Color avatar */}
+                        <div
+                          className="w-8 h-8 rounded-md flex items-center justify-center text-md font-bold text-white shrink-0"
+                          style={{ backgroundColor: `hsl(${hue}, 60%, 50%)` }}
+                        >
+                          {project.name.charAt(0).toUpperCase()}
+                        </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
-                          {project.name}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-base font-medium truncate" style={{ color: "var(--color-text)" }}>
+                            {project.name}
+                          </div>
+                          <div className="text-xs truncate" style={{ color: "var(--color-text-secondary)" }}>
+                            {project.path}
+                          </div>
                         </div>
-                        <div className="text-xs truncate" style={{ color: "var(--color-text-secondary)" }}>
-                          {project.path}
-                        </div>
-                      </div>
+                      </button>
 
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-xs flex items-center gap-1" style={{ color: "var(--color-text-secondary)" }}>
@@ -299,7 +306,7 @@ function Welcome() {
                           <X size={12} />
                         </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               )}
