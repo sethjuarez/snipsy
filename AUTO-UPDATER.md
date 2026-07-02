@@ -40,7 +40,7 @@ The `latest.json` manifest is generated automatically by `tauri-apps/tauri-actio
 
 ### Testing
 
-Playwright tests cover the update indicator UI in `tests/updateIndicator.spec.ts`:
+Auditaur full-app smoke coverage should include the update indicator UI:
 - Hidden when no update available
 - Visible with correct version/notes when update exists
 - Dropdown opens/closes correctly
