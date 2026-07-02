@@ -21,12 +21,15 @@ arboard = "3"
 xcap = "0.8"
 image = "0.25"
 base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
 # Tauri plugins
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
+tauri-plugin-auditaur = "0.4.0"
 
 # Cross-platform active window detection
 active-win-pos-rs = "0.8"

@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::models::{Script, ScriptStep};
+use tauri_plugin_auditaur::IpcTraceContext;
 
 /// Raw input event captured during recording, before consolidation.
 #[derive(Debug, Clone)]
@@ -74,11 +75,7 @@ fn capture_window_context() -> Option<WindowContext> {
 }
 
 /// Compute window-relative percentage coordinates.
-fn to_percent(
-    abs_x: f64,
-    abs_y: f64,
-    ctx: &WindowContext,
-) -> (f64, f64) {
+fn to_percent(abs_x: f64, abs_y: f64, ctx: &WindowContext) -> (f64, f64) {
     if ctx.width > 0.0 && ctx.height > 0.0 {
         let xp = ((abs_x - ctx.x) / ctx.width).clamp(0.0, 1.0);
         let yp = ((abs_y - ctx.y) / ctx.height).clamp(0.0, 1.0);
@@ -119,7 +116,9 @@ impl Default for RecorderState {
 /// Take a screenshot of the primary monitor and save it.
 fn capture_start_screenshot(project_path: &str) -> Option<String> {
     let monitors = xcap::Monitor::all().ok()?;
-    let primary = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false))?;
+    let primary = monitors
+        .into_iter()
+        .find(|m| m.is_primary().unwrap_or(false))?;
     let img = primary.capture_image().ok()?;
     let screenshots_dir = PathBuf::from(project_path).join("screenshots");
     std::fs::create_dir_all(&screenshots_dir).ok()?;
@@ -131,9 +130,11 @@ fn capture_start_screenshot(project_path: &str) -> Option<String> {
 
 /// Start recording global input events.
 #[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(state))]
 pub fn start_recording_script(
     project_path: String,
     state: tauri::State<'_, RecorderState>,
+    auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<String, String> {
     if state.recording.load(Ordering::SeqCst) {
         return Err("Already recording".into());
@@ -176,15 +177,18 @@ pub fn start_recording_script(
                     key,
                     name: event.name.clone(),
                 }),
-                rdev::EventType::KeyRelease(key) => {
-                    Some(RawEventKind::KeyRelease { key })
-                }
+                rdev::EventType::KeyRelease(key) => Some(RawEventKind::KeyRelease { key }),
                 rdev::EventType::ButtonPress(button) => {
                     let x = *lmx.lock().unwrap();
                     let y = *lmy.lock().unwrap();
                     // Capture window context NOW, at click time
                     let window_ctx = capture_window_context();
-                    Some(RawEventKind::MouseClick { x, y, button, window_ctx })
+                    Some(RawEventKind::MouseClick {
+                        x,
+                        y,
+                        button,
+                        window_ctx,
+                    })
                 }
                 rdev::EventType::ButtonRelease(button) => {
                     let x = *lmx.lock().unwrap();
@@ -196,12 +200,20 @@ pub fn start_recording_script(
                     *lmy.lock().unwrap() = y;
                     Some(RawEventKind::MouseMove { x, y })
                 }
-                rdev::EventType::Wheel { delta_x: _, delta_y } => {
+                rdev::EventType::Wheel {
+                    delta_x: _,
+                    delta_y,
+                } => {
                     let x = *lmx.lock().unwrap();
                     let y = *lmy.lock().unwrap();
                     // Capture window context NOW, at scroll time
                     let window_ctx = capture_window_context();
-                    Some(RawEventKind::Scroll { x, y, delta_y, window_ctx })
+                    Some(RawEventKind::Scroll {
+                        x,
+                        y,
+                        delta_y,
+                        window_ctx,
+                    })
                 }
             };
 
@@ -220,14 +232,8 @@ pub fn start_recording_script(
 
     // We need a way to get the events from the listener thread back.
     // Since rdev::listen blocks, we store the Arc<Mutex<Vec>> in a separate global.
-    RECORDING_EVENTS
-        .lock()
-        .unwrap()
-        .replace(events);
-    RECORDING_SCREENSHOT
-        .lock()
-        .unwrap()
-        .clone_from(&screenshot);
+    RECORDING_EVENTS.lock().unwrap().replace(events);
+    RECORDING_SCREENSHOT.lock().unwrap().clone_from(&screenshot);
 
     Ok(screenshot.unwrap_or_default())
 }
@@ -240,11 +246,13 @@ static RECORDING_SCREENSHOT: std::sync::LazyLock<Mutex<Option<String>>> =
 
 /// Stop recording and return the consolidated Script.
 #[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(state))]
 pub fn stop_recording_script(
     project_path: String,
     title: String,
     description: String,
     state: tauri::State<'_, RecorderState>,
+    auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<Script, String> {
     if !state.recording.load(Ordering::SeqCst) {
         return Err("Not recording".into());
@@ -298,15 +306,18 @@ pub fn stop_recording_script(
     let script_file = scripts_dir.join(format!("{}.json", script_id));
     let json = serde_json::to_string_pretty(&script)
         .map_err(|e| format!("Failed to serialize script: {}", e))?;
-    std::fs::write(&script_file, json)
-        .map_err(|e| format!("Failed to write script: {}", e))?;
+    std::fs::write(&script_file, json).map_err(|e| format!("Failed to write script: {}", e))?;
 
     Ok(script)
 }
 
 /// Check if currently recording.
 #[tauri::command]
-pub fn is_recording(state: tauri::State<'_, RecorderState>) -> bool {
+#[tauri_plugin_auditaur::instrument_ipc(skip(state))]
+pub fn is_recording(
+    state: tauri::State<'_, RecorderState>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> bool {
     state.recording.load(Ordering::SeqCst)
 }
 
@@ -439,7 +450,9 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
                 } else {
                     // Regular key — check if it's a printable character
                     let key_name = key_to_name(key, name);
-                    if key_name.len() == 1 && key_name.chars().next().map_or(false, |c| !c.is_control()) {
+                    if key_name.len() == 1
+                        && key_name.chars().next().map_or(false, |c| !c.is_control())
+                    {
                         // Printable character → accumulate into type buffer
                         if char_start.is_none() {
                             char_start = Some(event.timestamp);
@@ -459,7 +472,12 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
                 }
                 // Key releases are not recorded as steps
             }
-            RawEventKind::MouseClick { x, y, button, window_ctx } => {
+            RawEventKind::MouseClick {
+                x,
+                y,
+                button,
+                window_ctx,
+            } => {
                 flush_chars(&mut char_buffer, &mut steps);
                 char_start = None;
                 let (xp, yp) = window_ctx
@@ -487,7 +505,12 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
                 // and part of a drag. For now, skip standalone moves.
                 // Phase 3 can add drag detection.
             }
-            RawEventKind::Scroll { x, y, delta_y, window_ctx } => {
+            RawEventKind::Scroll {
+                x,
+                y,
+                delta_y,
+                window_ctx,
+            } => {
                 flush_chars(&mut char_buffer, &mut steps);
                 char_start = None;
 
@@ -532,10 +555,16 @@ fn consolidate_events(events: &[RawEvent]) -> Vec<ScriptStep> {
     flush_chars(&mut char_buffer, &mut steps);
 
     // Remove leading/trailing waits that are likely noise
-    while steps.first().map_or(false, |s| matches!(s, ScriptStep::Wait { .. })) {
+    while steps
+        .first()
+        .map_or(false, |s| matches!(s, ScriptStep::Wait { .. }))
+    {
         steps.remove(0);
     }
-    while steps.last().map_or(false, |s| matches!(s, ScriptStep::Wait { .. })) {
+    while steps
+        .last()
+        .map_or(false, |s| matches!(s, ScriptStep::Wait { .. }))
+    {
         steps.pop();
     }
 
@@ -719,11 +748,21 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(10),
-                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -3, window_ctx: None },
+                kind: RawEventKind::Scroll {
+                    x: 400.0,
+                    y: 200.0,
+                    delta_y: -3,
+                    window_ctx: None,
+                },
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(30),
-                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -2, window_ctx: None },
+                kind: RawEventKind::Scroll {
+                    x: 400.0,
+                    y: 200.0,
+                    delta_y: -2,
+                    window_ctx: None,
+                },
             },
         ];
         let steps = consolidate_events(&events);
@@ -745,12 +784,22 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(10),
-                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -3, window_ctx: None },
+                kind: RawEventKind::Scroll {
+                    x: 400.0,
+                    y: 200.0,
+                    delta_y: -3,
+                    window_ctx: None,
+                },
             },
             // 500ms gap — should NOT coalesce
             RawEvent {
                 timestamp: base + Duration::from_millis(510),
-                kind: RawEventKind::Scroll { x: 400.0, y: 200.0, delta_y: -2, window_ctx: None },
+                kind: RawEventKind::Scroll {
+                    x: 400.0,
+                    y: 200.0,
+                    delta_y: -2,
+                    window_ctx: None,
+                },
             },
         ];
         let steps = consolidate_events(&events);
@@ -772,20 +821,26 @@ mod tests {
             width: 800.0,
             height: 600.0,
         };
-        let events = vec![
-            RawEvent {
-                timestamp: base,
-                kind: RawEventKind::MouseClick {
-                    x: 500.0,
-                    y: 350.0,
-                    button: rdev::Button::Left,
-                    window_ctx: Some(ctx),
-                },
+        let events = vec![RawEvent {
+            timestamp: base,
+            kind: RawEventKind::MouseClick {
+                x: 500.0,
+                y: 350.0,
+                button: rdev::Button::Left,
+                window_ctx: Some(ctx),
             },
-        ];
+        }];
         let steps = consolidate_events(&events);
         assert_eq!(steps.len(), 1);
-        if let ScriptStep::Click { x, y, window_title, x_percent, y_percent, .. } = &steps[0] {
+        if let ScriptStep::Click {
+            x,
+            y,
+            window_title,
+            x_percent,
+            y_percent,
+            ..
+        } = &steps[0]
+        {
             assert_eq!(*x, 500);
             assert_eq!(*y, 350);
             assert_eq!(window_title.as_deref(), Some("VS Code"));
@@ -809,7 +864,9 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(50),
-                kind: RawEventKind::KeyRelease { key: rdev::Key::KeyH },
+                kind: RawEventKind::KeyRelease {
+                    key: rdev::Key::KeyH,
+                },
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(100),
@@ -820,7 +877,9 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(150),
-                kind: RawEventKind::KeyRelease { key: rdev::Key::Return },
+                kind: RawEventKind::KeyRelease {
+                    key: rdev::Key::Return,
+                },
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(180),
@@ -831,7 +890,9 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(200),
-                kind: RawEventKind::KeyRelease { key: rdev::Key::KeyW },
+                kind: RawEventKind::KeyRelease {
+                    key: rdev::Key::KeyW,
+                },
             },
         ];
         let steps = consolidate_events(&events);
@@ -855,7 +916,9 @@ mod tests {
             },
             RawEvent {
                 timestamp: base + Duration::from_millis(550),
-                kind: RawEventKind::KeyRelease { key: rdev::Key::KeyA },
+                kind: RawEventKind::KeyRelease {
+                    key: rdev::Key::KeyA,
+                },
             },
         ];
         let steps = consolidate_events(&events);

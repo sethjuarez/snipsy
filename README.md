@@ -185,6 +185,7 @@ Supported step actions:
 | Video playback | HTML `<video>` element + FFmpeg for transcoding | Fullscreen chromeless playback of video snippets |
 | File system | `std::fs` + `serde_json` | Read/write project JSON files and manage video assets |
 | Async runtime | `tokio` | Async operations for script execution, recording, and file I/O |
+| Observability | Auditaur | Local-first telemetry for frontend errors, console logs, Tauri events, IPC, traces, and full-app drive/smoke workflows |
 
 ### Frontend Stack
 
@@ -196,6 +197,7 @@ Supported step actions:
 - A custom timeline component for video clip editing with draggable playhead.
 - **Accessibility**: ARIA attributes (`aria-current`, `aria-label`, `aria-modal`), global `focus-visible` styles, `prefers-reduced-motion` support, and focus trapping in modals via `useFocusTrap` hook.
 - **Shared UI components**: `ErrorBoundary` (render error recovery), `ConfirmDialog` (styled replacement for `window.confirm()`), `EmptyState` (placeholder for empty lists).
+- **Observability**: `@auditaur/api` captures frontend logs, errors, Tauri invokes, Tauri events, and development drive-bridge telemetry for Auditaur.
 
 ### Global Hotkey System
 

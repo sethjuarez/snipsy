@@ -394,7 +394,7 @@ Add Rust tests for:
 6. Default timeout/interval behavior.
 7. Timeout error message includes condition details.
 
-Add Playwright tests for:
+Add Auditaur drive coverage for:
 
 1. Script form can add `waitFor`.
 2. Changing condition kind shows the correct fields.
@@ -435,7 +435,7 @@ Also fix stale docs:
 6. Add `windowTitle`.
 7. Add `process`.
 8. Add ScriptForm UI support.
-9. Add Playwright coverage.
+9. Add Auditaur drive coverage.
 10. Update docs.
 
 ## Design principle

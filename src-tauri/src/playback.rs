@@ -1,8 +1,10 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_auditaur::IpcTraceContext;
 
 use crate::models::{PauseStop, TransitionAction};
 
 #[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app))]
 pub async fn play_video(
     app: AppHandle,
     project_path: Option<String>,
@@ -18,6 +20,7 @@ pub async fn play_video(
     click_to_play: Option<bool>,
     muted: Option<bool>,
     pause_stops: Option<Vec<PauseStop>>,
+    auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
@@ -36,10 +39,22 @@ pub async fn play_video(
     };
 
     let eb = end_behavior.as_deref().unwrap_or("close");
-    let hc = if hide_cursor.unwrap_or(true) { "true" } else { "false" };
+    let hc = if hide_cursor.unwrap_or(true) {
+        "true"
+    } else {
+        "false"
+    };
     let bg = background_color.as_deref().unwrap_or("#000000");
-    let ctp = if click_to_play.unwrap_or(false) { "true" } else { "false" };
-    let mute = if muted.unwrap_or(true) { "true" } else { "false" };
+    let ctp = if click_to_play.unwrap_or(false) {
+        "true"
+    } else {
+        "false"
+    };
+    let mute = if muted.unwrap_or(true) {
+        "true"
+    } else {
+        "false"
+    };
     let pause_stops_json = pause_stops
         .as_ref()
         .filter(|stops| !stops.is_empty())
@@ -80,7 +95,10 @@ pub async fn play_video(
     // Position on selected monitor, or default to fullscreen on primary
     if let Some(ref mon_name) = target_monitor {
         if let Ok(monitors) = xcap::Monitor::all() {
-            if let Some(mon) = monitors.iter().find(|m| m.name().unwrap_or_default() == *mon_name) {
+            if let Some(mon) = monitors
+                .iter()
+                .find(|m| m.name().unwrap_or_default() == *mon_name)
+            {
                 let x = mon.x().unwrap_or(0);
                 let y = mon.y().unwrap_or(0);
                 let scale = mon.scale_factor().unwrap_or(1.0) as f64;
@@ -90,9 +108,7 @@ pub async fn play_video(
                 let logical_y = y as f64 / scale;
 
                 // Place window on the target monitor, then fullscreen it there
-                builder = builder
-                    .position(logical_x, logical_y)
-                    .fullscreen(true);
+                builder = builder.position(logical_x, logical_y).fullscreen(true);
             } else {
                 builder = builder.fullscreen(true);
             }
@@ -120,7 +136,11 @@ pub async fn play_video(
 }
 
 #[tauri::command]
-pub async fn show_playback_window(app: AppHandle) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app))]
+pub async fn show_playback_window(
+    app: AppHandle,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("playback") {
         window
             .show()
@@ -132,7 +152,11 @@ pub async fn show_playback_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn close_playback_window(app: AppHandle) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app))]
+pub async fn close_playback_window(
+    app: AppHandle,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("playback") {
         window
             .destroy()

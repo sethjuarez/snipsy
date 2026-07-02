@@ -4,6 +4,7 @@ use tauri::{
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
+use tauri_plugin_auditaur::IpcTraceContext;
 
 const TRAY_ID: &str = "snipsy-tray";
 
@@ -95,10 +96,12 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
 
 /// Switch tray to demo-mode appearance (green icon, demo menu, updated tooltip).
 #[tauri::command]
-pub fn activate_demo_tray(app: tauri::AppHandle) -> Result<(), String> {
-    let tray = app
-        .tray_by_id(TRAY_ID)
-        .ok_or("Tray icon not found")?;
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app))]
+pub fn activate_demo_tray(
+    app: tauri::AppHandle,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
+    let tray = app.tray_by_id(TRAY_ID).ok_or("Tray icon not found")?;
     let icon =
         Image::from_bytes(ICON_DEMO).map_err(|e| format!("Failed to load demo icon: {e}"))?;
     tray.set_icon(Some(icon))
@@ -113,10 +116,12 @@ pub fn activate_demo_tray(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Switch tray back to idle appearance (purple icon, idle menu).
 #[tauri::command]
-pub fn deactivate_demo_tray(app: tauri::AppHandle) -> Result<(), String> {
-    let tray = app
-        .tray_by_id(TRAY_ID)
-        .ok_or("Tray icon not found")?;
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app))]
+pub fn deactivate_demo_tray(
+    app: tauri::AppHandle,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
+    let tray = app.tray_by_id(TRAY_ID).ok_or("Tray icon not found")?;
     let icon =
         Image::from_bytes(ICON_IDLE).map_err(|e| format!("Failed to load idle icon: {e}"))?;
     tray.set_icon(Some(icon))

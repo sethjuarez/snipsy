@@ -43,19 +43,20 @@ Read `README.md` for the full product spec, data model, and architecture.
 
 The app must be testable in two distinct modes:
 
-#### 1. Frontend-Only Mode (Playwright, no Tauri backend)
+#### 1. Frontend-Only Mode (no Tauri backend)
 
-- Use **Playwright** to test the React UI in a browser.
+- Use component/unit tests for React UI behavior without launching the Tauri backend.
 - At startup, the test harness detects whether the Tauri backend (IPC/commands) is available.
 - **If the backend is NOT running**, the UI hydrates itself with **test fixture data** — mock projects, text snippets, video snippets — so that all UI flows can be exercised and validated without a running Rust process.
 - This means Tauri command calls must go through an abstraction layer (e.g., a service/adapter) that can be swapped to return mock data in test mode.
 - **What to validate**: component rendering, form interactions, navigation, state management, timeline UI, hotkey capture widget, snippet CRUD flows.
 
-#### 2. Full App Mode (Tauri + Playwright or equivalent)
+#### 2. Full App Mode (Tauri + Auditaur)
 
 - Run the full Tauri application (Rust backend + frontend).
-- Use Playwright (connecting to the WebView) or Tauri's test utilities to **click on UI elements, fill forms, and trigger actions** inside the running app.
-- **Read Rust backend output** (stdout/stderr logs) to validate that the full round trip works: UI action → Tauri command → Rust logic → side effect (file write, hotkey registration, etc.) → response back to UI.
+- Use **Auditaur** as the observability and drive platform. Prefer attach mode: start the app normally, then run `auditaur debug --app snipsy --active --require-frontend --require-drive-bridge --json watch --until-ready --timeout-seconds 120`.
+- Use `auditaur drive --app snipsy --active --json ...` through the Tauri-native drive bridge to click UI elements, fill forms, trigger actions, and capture snapshots/screenshots inside the running app.
+- **Read Auditaur telemetry** (logs, errors, IPC, events, traces, timeline, explain) to validate that the full round trip works: UI action → Tauri command → Rust logic → side effect (file write, hotkey registration, etc.) → response back to UI.
 - The test harness must be able to **control the whole app end-to-end**: open a project, create snippets, enter demo mode, trigger hotkeys, and verify results.
 - **What to validate**: IPC round trips, file I/O (project save/load), global hotkey registration/unregistration, text delivery (fast-type and paste), video window lifecycle.
 
@@ -74,4 +75,3 @@ UI Component → Service Interface → TauriBackendService (production)
 ```
 
 The active implementation is selected at startup based on whether `window.__TAURI__` (or equivalent) is available.
-

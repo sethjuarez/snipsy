@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import SpotlightOverlay from "../components/SpotlightOverlay";
+import { auditaurInvoke } from "../services/auditaur";
 import type { PauseSpotlight, PauseStop } from "../types";
 import { STOP_EPSILON, getVideoContentBox, normalizePauseStops } from "../utils/spotlight";
 
@@ -153,15 +154,13 @@ function Playback() {
 
   const closeWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("close_playback_window");
+      await auditaurInvoke("close_playback_window");
     }
   }, []);
 
   const showWindow = useCallback(async () => {
     if (window.__TAURI_INTERNALS__) {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("show_playback_window");
+      await auditaurInvoke("show_playback_window");
     }
   }, []);
 

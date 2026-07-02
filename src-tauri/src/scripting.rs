@@ -5,6 +5,7 @@ use std::process::{Child, Command};
 use std::os::windows::process::CommandExt;
 
 use crate::models::{Script, ScriptStep};
+use tauri_plugin_auditaur::IpcTraceContext;
 
 /// Resolve the full path to the ffmpeg binary.
 /// First checks the current process PATH. On Windows, if that fails, also
@@ -18,11 +19,7 @@ pub fn resolve_ffmpeg_path() -> Option<String> {
         .stderr(std::process::Stdio::null());
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    if cmd
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-    {
+    if cmd.status().map(|s| s.success()).unwrap_or(false) {
         return Some("ffmpeg".into());
     }
 
@@ -394,7 +391,12 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn run_script(project_path: String, script_id: String) -> Result<String, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub async fn run_script(
+    project_path: String,
+    script_id: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<String, String> {
     let scripts_dir = PathBuf::from(&project_path).join("scripts");
     let script_file = scripts_dir.join(format!("{}.json", script_id));
 
@@ -458,14 +460,18 @@ pub async fn run_script(project_path: String, script_id: String) -> Result<Strin
 }
 
 #[tauri::command]
-pub fn check_ffmpeg() -> bool {
+#[tauri_plugin_auditaur::instrument_ipc]
+pub fn check_ffmpeg(auditaur_trace_context: Option<IpcTraceContext>) -> bool {
     detect_ffmpeg()
 }
 
 /// Attempt to install FFmpeg using the platform package manager.
 /// Returns Ok(message) on success or Err(message) on failure.
 #[tauri::command]
-pub async fn install_ffmpeg() -> Result<String, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub async fn install_ffmpeg(
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
         // Try winget first, fall back to no-op with instructions
@@ -489,13 +495,21 @@ pub async fn install_ffmpeg() -> Result<String, String> {
         let output = Command::new("brew")
             .args(["install", "ffmpeg"])
             .output()
-            .map_err(|e| format!("Failed to run brew: {}. Please install FFmpeg manually: brew install ffmpeg", e))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to run brew: {}. Please install FFmpeg manually: brew install ffmpeg",
+                    e
+                )
+            })?;
 
         if output.status.success() {
             Ok("FFmpeg installed successfully via Homebrew.".to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("brew install failed: {}. Try running 'brew install ffmpeg' manually.", stderr))
+            Err(format!(
+                "brew install failed: {}. Try running 'brew install ffmpeg' manually.",
+                stderr
+            ))
         }
     }
 
@@ -539,13 +553,7 @@ mod tests {
     #[test]
     fn resolve_coords_uses_absolute_when_partial_info() {
         // Missing y_percent — should fall back to absolute
-        let (rx, ry) = resolve_coords(
-            500,
-            300,
-            &Some("VS Code".into()),
-            &Some(0.5),
-            &None,
-        );
+        let (rx, ry) = resolve_coords(500, 300, &Some("VS Code".into()), &Some(0.5), &None);
         assert_eq!(rx, 500);
         assert_eq!(ry, 300);
     }
