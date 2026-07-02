@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { auditaurInvoke as invoke } from "./auditaur";
 import type { BackendService, SnippetHotkey } from "./backendService";
 import type { ProjectData, MonitorInfo, TextSnippet, VideoSnippet } from "../types";
 

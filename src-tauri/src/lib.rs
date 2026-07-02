@@ -10,10 +10,24 @@ mod recorder;
 mod scripting;
 mod tray;
 
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 pub fn run() {
+    tracing_subscriber::registry()
+        .with(tauri_plugin_auditaur::tracing_layer())
+        .init();
+
     tauri::Builder::default()
         .manage(demo::AppState::default())
         .manage(recorder::RecorderState::default())
+        .plugin(
+            tauri_plugin_auditaur::Builder::new()
+                .service_name("snipsy")
+                .session_name("dev")
+                .redact_defaults(true)
+                .max_session_bytes(256 * 1024 * 1024)
+                .build(),
+        )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -33,6 +47,11 @@ pub fn run() {
             if let Err(e) = tray::restore_main_window(app.handle()) {
                 eprintln!("{e}");
             }
+
+            tracing::info!(
+                app.identifier = %app.config().identifier,
+                "Snipsy started with Auditaur instrumentation"
+            );
 
             Ok(())
         })

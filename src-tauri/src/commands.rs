@@ -5,20 +5,20 @@ use std::path::PathBuf;
 use std::os::windows::process::CommandExt;
 
 use crate::models::{Project, ProjectData, Script, TextSnippet, VideoSnippet};
+use tauri_plugin_auditaur::IpcTraceContext;
 
 #[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
 pub fn create_project(
     path: String,
     name: String,
     description: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<ProjectData, String> {
     let project_dir = PathBuf::from(&path);
     fs::create_dir_all(&project_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
-    let project = Project {
-        name,
-        description,
-    };
+    let project = Project { name, description };
 
     let project_json = serde_json::to_string_pretty(&project)
         .map_err(|e| format!("Failed to serialize project: {e}"))?;
@@ -54,7 +54,11 @@ pub fn create_project(
 }
 
 #[tauri::command]
-pub fn open_project(path: String) -> Result<ProjectData, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn open_project(
+    path: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<ProjectData, String> {
     let project_dir = PathBuf::from(&path);
 
     let project_json = fs::read_to_string(project_dir.join("project.json"))
@@ -80,7 +84,12 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
 }
 
 #[tauri::command]
-pub fn save_text_snippets(path: String, snippets: Vec<TextSnippet>) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_text_snippets(
+    path: String,
+    snippets: Vec<TextSnippet>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     let project_dir = PathBuf::from(&path);
     let json = serde_json::to_string_pretty(&snippets)
         .map_err(|e| format!("Failed to serialize text snippets: {e}"))?;
@@ -90,7 +99,12 @@ pub fn save_text_snippets(path: String, snippets: Vec<TextSnippet>) -> Result<()
 }
 
 #[tauri::command]
-pub fn save_video_snippets(path: String, snippets: Vec<VideoSnippet>) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_video_snippets(
+    path: String,
+    snippets: Vec<VideoSnippet>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     let project_dir = PathBuf::from(&path);
     let json = serde_json::to_string_pretty(&snippets)
         .map_err(|e| format!("Failed to serialize video snippets: {e}"))?;
@@ -100,7 +114,12 @@ pub fn save_video_snippets(path: String, snippets: Vec<VideoSnippet>) -> Result<
 }
 
 #[tauri::command]
-pub fn import_video(project_path: String, source_file_path: String) -> Result<String, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn import_video(
+    project_path: String,
+    source_file_path: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<String, String> {
     let project_dir = PathBuf::from(&project_path);
     let source = PathBuf::from(&source_file_path);
 
@@ -119,8 +138,7 @@ pub fn import_video(project_path: String, source_file_path: String) -> Result<St
         .to_string();
 
     let dest = videos_dir.join(&file_name);
-    fs::copy(&source, &dest)
-        .map_err(|e| format!("Failed to copy video file: {e}"))?;
+    fs::copy(&source, &dest).map_err(|e| format!("Failed to copy video file: {e}"))?;
 
     // Generate thumbnail (best-effort — don't fail import if ffmpeg missing)
     let _ = generate_thumbnail(&dest, &videos_dir);
@@ -129,13 +147,15 @@ pub fn import_video(project_path: String, source_file_path: String) -> Result<St
 }
 
 /// Generate a thumbnail for a video using ffmpeg (first frame at 1s).
-fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path) -> Result<(), String> {
+fn generate_thumbnail(
+    video_path: &std::path::Path,
+    videos_dir: &std::path::Path,
+) -> Result<(), String> {
     let ffmpeg = crate::scripting::resolve_ffmpeg_path()
         .ok_or_else(|| "ffmpeg not available".to_string())?;
 
     let thumbs_dir = videos_dir.join("thumbnails");
-    fs::create_dir_all(&thumbs_dir)
-        .map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
+    fs::create_dir_all(&thumbs_dir).map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
 
     let stem = video_path
         .file_stem()
@@ -145,16 +165,21 @@ fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path
 
     let mut cmd = std::process::Command::new(ffmpeg);
     cmd.args([
-        "-i", &video_path.to_string_lossy(),
-        "-ss", "00:00:01",
-        "-vframes", "1",
-        "-q:v", "2",
+        "-i",
+        &video_path.to_string_lossy(),
+        "-ss",
+        "00:00:01",
+        "-vframes",
+        "1",
+        "-q:v",
+        "2",
         "-y",
         &thumb_path.to_string_lossy(),
     ]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("ffmpeg not available: {e}"))?;
 
     if !output.status.success() {
@@ -166,11 +191,19 @@ fn generate_thumbnail(video_path: &std::path::Path, videos_dir: &std::path::Path
 /// Get the frame rate (FPS) of a video using ffprobe.
 /// Returns the FPS as a float, or an error if ffprobe is unavailable.
 #[tauri::command]
-pub fn get_video_fps(video_path: String) -> Result<f64, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn get_video_fps(
+    video_path: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<f64, String> {
     let ffprobe = crate::scripting::resolve_ffmpeg_path()
         .map(|p| {
             let mut pb = std::path::PathBuf::from(p);
-            pb.set_file_name(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
+            pb.set_file_name(if cfg!(windows) {
+                "ffprobe.exe"
+            } else {
+                "ffprobe"
+            });
             if pb.is_file() {
                 pb.to_string_lossy().into_owned()
             } else {
@@ -181,15 +214,20 @@ pub fn get_video_fps(video_path: String) -> Result<f64, String> {
 
     let mut cmd = std::process::Command::new(ffprobe);
     cmd.args([
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=r_frame_rate",
-        "-of", "csv=p=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=r_frame_rate",
+        "-of",
+        "csv=p=0",
         &video_path,
     ]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("ffprobe not available: {e}"))?;
 
     if !output.status.success() {
@@ -201,7 +239,11 @@ pub fn get_video_fps(video_path: String) -> Result<f64, String> {
     if let Some((num, den)) = raw.split_once('/') {
         let n: f64 = num.parse().unwrap_or(30.0);
         let d: f64 = den.parse().unwrap_or(1.0);
-        if d > 0.0 { Ok(n / d) } else { Ok(30.0) }
+        if d > 0.0 {
+            Ok(n / d)
+        } else {
+            Ok(30.0)
+        }
     } else {
         raw.parse::<f64>().or(Ok(30.0))
     }
@@ -218,7 +260,11 @@ pub struct ImportedVideoInfo {
 }
 
 #[tauri::command]
-pub fn list_imported_videos(project_path: String) -> Result<Vec<ImportedVideoInfo>, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn list_imported_videos(
+    project_path: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Vec<ImportedVideoInfo>, String> {
     let project_dir = PathBuf::from(&project_path);
     let videos_dir = project_dir.join("videos");
     if !videos_dir.exists() {
@@ -229,8 +275,8 @@ pub fn list_imported_videos(project_path: String) -> Result<Vec<ImportedVideoInf
     let video_extensions = ["mp4", "mkv", "avi", "mov", "webm", "wmv"];
 
     let mut videos = Vec::new();
-    let entries = fs::read_dir(&videos_dir)
-        .map_err(|e| format!("Failed to read videos directory: {e}"))?;
+    let entries =
+        fs::read_dir(&videos_dir).map_err(|e| format!("Failed to read videos directory: {e}"))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
@@ -238,13 +284,25 @@ pub fn list_imported_videos(project_path: String) -> Result<Vec<ImportedVideoInf
         if !path.is_file() {
             continue;
         }
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
         if !video_extensions.contains(&ext.as_str()) {
             continue;
         }
 
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let stem = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let thumb = thumbs_dir.join(format!("{stem}.jpg"));
 
         videos.push(ImportedVideoInfo {
@@ -265,7 +323,12 @@ pub fn list_imported_videos(project_path: String) -> Result<Vec<ImportedVideoInf
 
 /// Delete an imported video file and its thumbnail from the project.
 #[tauri::command]
-pub fn delete_video(project_path: String, relative_path: String) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn delete_video(
+    project_path: String,
+    relative_path: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     let project_dir = PathBuf::from(&project_path);
     let video_path = project_dir.join(&relative_path);
 
@@ -274,12 +337,14 @@ pub fn delete_video(project_path: String, relative_path: String) -> Result<(), S
     }
 
     // Delete the video file
-    fs::remove_file(&video_path)
-        .map_err(|e| format!("Failed to delete video: {e}"))?;
+    fs::remove_file(&video_path).map_err(|e| format!("Failed to delete video: {e}"))?;
 
     // Delete the thumbnail (best-effort)
     if let Some(stem) = video_path.file_stem().and_then(|s| s.to_str()) {
-        let thumb = project_dir.join("videos").join("thumbnails").join(format!("{stem}.jpg"));
+        let thumb = project_dir
+            .join("videos")
+            .join("thumbnails")
+            .join(format!("{stem}.jpg"));
         let _ = fs::remove_file(thumb);
     }
 
@@ -300,14 +365,21 @@ pub struct MonitorInfoResult {
 
 /// List all available monitors with their positions and dimensions.
 #[tauri::command]
-pub fn list_monitors() -> Result<Vec<MonitorInfoResult>, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn list_monitors(
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Vec<MonitorInfoResult>, String> {
     let monitors = xcap::Monitor::all().map_err(|e| format!("Failed to list monitors: {e}"))?;
     let mut results = Vec::new();
     for (i, m) in monitors.iter().enumerate() {
         results.push(MonitorInfoResult {
             name: {
                 let n = m.name().unwrap_or_default();
-                if n.is_empty() { format!("Monitor {}", i + 1) } else { n }
+                if n.is_empty() {
+                    format!("Monitor {}", i + 1)
+                } else {
+                    n
+                }
             },
             width: m.width().unwrap_or(0),
             height: m.height().unwrap_or(0),
@@ -321,7 +393,11 @@ pub fn list_monitors() -> Result<Vec<MonitorInfoResult>, String> {
 
 /// Capture a small preview screenshot of a monitor and return it as a base64-encoded JPEG.
 #[tauri::command]
-pub fn capture_monitor_preview(monitor_name: String) -> Result<String, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn capture_monitor_preview(
+    monitor_name: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<String, String> {
     use base64::Engine;
     use image::imageops::FilterType;
     use std::io::{BufWriter, Cursor};
@@ -350,7 +426,12 @@ pub fn capture_monitor_preview(monitor_name: String) -> Result<String, String> {
         let writer = BufWriter::new(&mut cursor);
         let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(writer, 80);
         encoder
-            .encode(&rgb, rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
+            .encode(
+                &rgb,
+                rgb.width(),
+                rgb.height(),
+                image::ExtendedColorType::Rgb8,
+            )
             .map_err(|e| format!("JPEG encode failed: {e}"))?;
     }
 
@@ -358,7 +439,12 @@ pub fn capture_monitor_preview(monitor_name: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn save_script(project_path: String, script: Script) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_script(
+    project_path: String,
+    script: Script,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     let scripts_dir = PathBuf::from(&project_path).join("scripts");
     fs::create_dir_all(&scripts_dir)
         .map_err(|e| format!("Failed to create scripts directory: {e}"))?;
@@ -371,7 +457,11 @@ pub fn save_script(project_path: String, script: Script) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn load_scripts(project_path: String) -> Result<Vec<Script>, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn load_scripts(
+    project_path: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Vec<Script>, String> {
     let scripts_dir = PathBuf::from(&project_path).join("scripts");
     if !scripts_dir.exists() {
         return Ok(vec![]);
@@ -385,8 +475,8 @@ pub fn load_scripts(project_path: String) -> Result<Vec<Script>, String> {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "json") {
-            let content =
-                fs::read_to_string(&path).map_err(|e| format!("Failed to read script file: {e}"))?;
+            let content = fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read script file: {e}"))?;
             let script: Script = serde_json::from_str(&content)
                 .map_err(|e| format!("Failed to parse script file: {e}"))?;
             scripts.push(script);
@@ -397,7 +487,12 @@ pub fn load_scripts(project_path: String) -> Result<Vec<Script>, String> {
 }
 
 #[tauri::command]
-pub fn delete_script(project_path: String, id: String) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn delete_script(
+    project_path: String,
+    id: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     let file_path = PathBuf::from(&project_path)
         .join("scripts")
         .join(format!("{}.json", id));
@@ -422,6 +517,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test Project".into(),
             "A test description".into(),
+            None,
         );
         assert!(result.is_ok());
         let data = result.unwrap();
@@ -437,7 +533,7 @@ mod tests {
         assert!(project_path.join("scripts").is_dir());
 
         // Open should return the same data
-        let opened = open_project(project_path.to_string_lossy().into_owned());
+        let opened = open_project(project_path.to_string_lossy().into_owned(), None);
         assert!(opened.is_ok());
         let opened_data = opened.unwrap();
         assert_eq!(opened_data.project.name, "Test Project");
@@ -451,6 +547,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -467,10 +564,11 @@ mod tests {
         save_text_snippets(
             project_path.to_string_lossy().into_owned(),
             snippets.clone(),
+            None,
         )
         .unwrap();
 
-        let data = open_project(project_path.to_string_lossy().into_owned()).unwrap();
+        let data = open_project(project_path.to_string_lossy().into_owned(), None).unwrap();
         assert_eq!(data.text_snippets.len(), 1);
         assert_eq!(data.text_snippets[0].title, "Hello");
         assert_eq!(data.text_snippets[0].delivery, DeliveryMethod::FastType);
@@ -484,6 +582,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -509,10 +608,11 @@ mod tests {
         save_video_snippets(
             project_path.to_string_lossy().into_owned(),
             snippets.clone(),
+            None,
         )
         .unwrap();
 
-        let data = open_project(project_path.to_string_lossy().into_owned()).unwrap();
+        let data = open_project(project_path.to_string_lossy().into_owned(), None).unwrap();
         assert_eq!(data.video_snippets.len(), 1);
         assert_eq!(data.video_snippets[0].title, "Build Demo");
         assert_eq!(data.video_snippets[0].speed, 2.0);
@@ -520,7 +620,7 @@ mod tests {
 
     #[test]
     fn open_nonexistent_project_errors() {
-        let result = open_project("/tmp/nonexistent-project-12345".into());
+        let result = open_project("/tmp/nonexistent-project-12345".into(), None);
         assert!(result.is_err());
     }
 
@@ -532,6 +632,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -542,6 +643,7 @@ mod tests {
         let result = import_video(
             project_path.to_string_lossy().into_owned(),
             source_file.to_string_lossy().into_owned(),
+            None,
         );
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "videos/test-video.mp4");
@@ -558,12 +660,14 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
         let result = import_video(
             project_path.to_string_lossy().into_owned(),
             "/nonexistent/video.mp4".into(),
+            None,
         );
         assert!(result.is_err());
     }
@@ -576,6 +680,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -587,6 +692,7 @@ mod tests {
         let result = delete_video(
             project_path.to_string_lossy().into_owned(),
             "videos/test.mp4".into(),
+            None,
         );
         assert!(result.is_ok());
         assert!(!video_file.exists());
@@ -600,6 +706,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -613,6 +720,7 @@ mod tests {
         let result = delete_video(
             project_path.to_string_lossy().into_owned(),
             "videos/demo.mp4".into(),
+            None,
         );
         assert!(result.is_ok());
         assert!(!video_file.exists());
@@ -627,12 +735,14 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
         let result = delete_video(
             project_path.to_string_lossy().into_owned(),
             "videos/nonexistent.mp4".into(),
+            None,
         );
         assert!(result.is_err());
     }
@@ -645,6 +755,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -668,10 +779,11 @@ mod tests {
         save_script(
             project_path.to_string_lossy().into_owned(),
             script.clone(),
+            None,
         )
         .unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
         assert_eq!(scripts.len(), 1);
         assert_eq!(scripts[0].id, "script-1");
         assert_eq!(scripts[0].title, "Build Demo Script");
@@ -686,6 +798,7 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
@@ -700,22 +813,19 @@ mod tests {
             recorded_at: None,
         };
 
-        save_script(
-            project_path.to_string_lossy().into_owned(),
-            script,
-        )
-        .unwrap();
+        save_script(project_path.to_string_lossy().into_owned(), script, None).unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
         assert_eq!(scripts.len(), 1);
 
         delete_script(
             project_path.to_string_lossy().into_owned(),
             "script-del".into(),
+            None,
         )
         .unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
         assert_eq!(scripts.len(), 0);
     }
 
@@ -727,10 +837,11 @@ mod tests {
             project_path.to_string_lossy().into_owned(),
             "Test".into(),
             "Test".into(),
+            None,
         )
         .unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned()).unwrap();
+        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
         assert!(scripts.is_empty());
     }
 }

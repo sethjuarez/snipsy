@@ -1,8 +1,9 @@
-use enigo::{Enigo, Keyboard, Settings, Key, Direction};
+use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use std::thread;
 use std::time::Duration;
 
 use crate::focus;
+use tauri_plugin_auditaur::IpcTraceContext;
 
 // ─── Platform input blocking ────────────────────────────────────────────────
 // Primary: BlockInput (needs admin). Fallback: ClipCursor (locks mouse in place).
@@ -10,9 +11,9 @@ use crate::focus;
 #[cfg(target_os = "windows")]
 fn block_input(block: bool) {
     use windows::Win32::Foundation::POINT;
+    use windows::Win32::Foundation::RECT;
     use windows::Win32::UI::Input::KeyboardAndMouse::BlockInput;
     use windows::Win32::UI::WindowsAndMessaging::{ClipCursor, GetCursorPos};
-    use windows::Win32::Foundation::RECT;
 
     unsafe {
         if block {
@@ -22,7 +23,12 @@ fn block_input(block: bool) {
                 // Fallback: lock mouse cursor to a 1px rect at current position
                 let mut pt = POINT::default();
                 let _ = GetCursorPos(&mut pt);
-                let rect = RECT { left: pt.x, top: pt.y, right: pt.x + 1, bottom: pt.y + 1 };
+                let rect = RECT {
+                    left: pt.x,
+                    top: pt.y,
+                    right: pt.x + 1,
+                    bottom: pt.y + 1,
+                };
                 let _ = ClipCursor(Some(&rect));
             }
         } else {
@@ -90,13 +96,16 @@ pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
         }
 
         if ch == '\n' {
-            enigo.key(Key::Return, Direction::Click)
+            enigo
+                .key(Key::Return, Direction::Click)
                 .map_err(|e| format!("Failed to press Return: {e}"))?;
         } else if ch == '\t' {
-            enigo.key(Key::Tab, Direction::Click)
+            enigo
+                .key(Key::Tab, Direction::Click)
                 .map_err(|e| format!("Failed to press Tab: {e}"))?;
         } else {
-            enigo.text(&ch.to_string())
+            enigo
+                .text(&ch.to_string())
                 .map_err(|e| format!("Failed to type character '{ch}': {e}"))?;
         }
         thread::sleep(Duration::from_millis(type_delay_ms as u64));
@@ -109,8 +118,8 @@ pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
 /// Deliver text using paste (clipboard + Ctrl+V).
 /// Blocks user input briefly during the paste action.
 pub fn deliver_paste(text: &str) -> Result<(), String> {
-    let mut clipboard = arboard::Clipboard::new()
-        .map_err(|e| format!("Failed to access clipboard: {e}"))?;
+    let mut clipboard =
+        arboard::Clipboard::new().map_err(|e| format!("Failed to access clipboard: {e}"))?;
     clipboard
         .set_text(text)
         .map_err(|e| format!("Failed to set clipboard text: {e}"))?;
@@ -130,21 +139,27 @@ pub fn deliver_paste(text: &str) -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        enigo.key(Key::Meta, Direction::Press)
+        enigo
+            .key(Key::Meta, Direction::Press)
             .map_err(|e| format!("Failed to press Meta: {e}"))?;
-        enigo.key(Key::Unicode('v'), Direction::Click)
+        enigo
+            .key(Key::Unicode('v'), Direction::Click)
             .map_err(|e| format!("Failed to press V: {e}"))?;
-        enigo.key(Key::Meta, Direction::Release)
+        enigo
+            .key(Key::Meta, Direction::Release)
             .map_err(|e| format!("Failed to release Meta: {e}"))?;
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        enigo.key(Key::Control, Direction::Press)
+        enigo
+            .key(Key::Control, Direction::Press)
             .map_err(|e| format!("Failed to press Control: {e}"))?;
-        enigo.key(Key::Unicode('v'), Direction::Click)
+        enigo
+            .key(Key::Unicode('v'), Direction::Click)
             .map_err(|e| format!("Failed to press V: {e}"))?;
-        enigo.key(Key::Control, Direction::Release)
+        enigo
+            .key(Key::Control, Direction::Release)
             .map_err(|e| format!("Failed to release Control: {e}"))?;
     }
 
@@ -153,7 +168,13 @@ pub fn deliver_paste(text: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn deliver_text(text: String, method: String, type_delay: Option<u32>) -> Result<(), String> {
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn deliver_text(
+    text: String,
+    method: String,
+    type_delay: Option<u32>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     match method.as_str() {
         "fast-type" => deliver_fast_type(&text, type_delay.unwrap_or(30)),
         "paste" => deliver_paste(&text),
@@ -167,7 +188,7 @@ mod tests {
 
     #[test]
     fn deliver_text_rejects_unknown_method() {
-        let result = deliver_text("hello".into(), "unknown".into(), None);
+        let result = deliver_text("hello".into(), "unknown".into(), None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown delivery method"));
     }

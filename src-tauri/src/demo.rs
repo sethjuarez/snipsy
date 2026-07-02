@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use tauri_plugin_auditaur::IpcTraceContext;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// A snippet hotkey registration for demo mode
@@ -59,10 +60,12 @@ impl Default for AppState {
 }
 
 #[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app, state))]
 pub fn enter_demo_mode(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
     hotkeys: Vec<SnippetHotkey>,
+    auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
 
@@ -83,7 +86,10 @@ pub fn enter_demo_mode(
 
         if hk.snippet_type == "text" {
             let text = hk.text.clone().unwrap_or_default();
-            let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+            let delivery = hk
+                .delivery
+                .clone()
+                .unwrap_or_else(|| "fast-type".to_string());
             let type_delay = hk.type_delay;
 
             let result = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
@@ -92,6 +98,7 @@ pub fn enter_demo_mode(
                         text.clone(),
                         delivery.clone(),
                         type_delay,
+                        None,
                     );
                 }
             });
@@ -102,7 +109,10 @@ pub fn enter_demo_mode(
                     hk.hotkey
                 );
                 let text = hk.text.clone().unwrap_or_default();
-                let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+                let delivery = hk
+                    .delivery
+                    .clone()
+                    .unwrap_or_else(|| "fast-type".to_string());
                 let type_delay = hk.type_delay;
 
                 let _ = crate::keyboard_hook::register_hook_fallback(
@@ -112,6 +122,7 @@ pub fn enter_demo_mode(
                             text.clone(),
                             delivery.clone(),
                             type_delay,
+                            None,
                         );
                     }),
                 );
@@ -155,8 +166,9 @@ pub fn enter_demo_mode(
                             hide_cursor,
                             background_color,
                             click_to_play,
-                             muted,
+                            muted,
                             pause_stops,
+                            None,
                         )
                         .await
                         {
@@ -213,6 +225,7 @@ pub fn enter_demo_mode(
                                 click_to_play,
                                 muted,
                                 pause_stops,
+                                None,
                             )
                             .await
                             {
@@ -229,9 +242,11 @@ pub fn enter_demo_mode(
 }
 
 #[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(app, state))]
 pub fn exit_demo_mode(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
+    auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
     demo.active = false;
@@ -248,7 +263,11 @@ pub fn exit_demo_mode(
 }
 
 #[tauri::command]
-pub fn is_demo_mode(state: tauri::State<AppState>) -> Result<bool, String> {
+#[tauri_plugin_auditaur::instrument_ipc(err, skip(state))]
+pub fn is_demo_mode(
+    state: tauri::State<AppState>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<bool, String> {
     let demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
     Ok(demo.active)
 }
