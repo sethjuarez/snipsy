@@ -34,6 +34,15 @@ const DEFAULT_SAVE_STATE: ClipEditorSaveState = {
   readinessText: "Needs required fields",
   saveStatus: "idle",
 };
+type ConfirmDialogState = {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  testId?: string;
+  onConfirm: () => void;
+};
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
@@ -61,7 +70,7 @@ function App() {
   const [showScriptForm, setShowScriptForm] = useState(false);
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
   const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -204,6 +213,58 @@ function App() {
     setEditingScript(undefined);
   };
 
+  const closeActiveEditor = useCallback(() => {
+    handleCancel();
+    handleVideoCancel();
+    handleScriptCancel();
+    setClipEditingVideo(null);
+    setEditingVideoSnippet(undefined);
+    setClipSaveState(DEFAULT_SAVE_STATE);
+    setTextSnippetSaveState(DEFAULT_SAVE_STATE);
+    setVideoSnippetSaveState(DEFAULT_SAVE_STATE);
+    setScriptSaveState(DEFAULT_SAVE_STATE);
+  }, []);
+
+  const requestCloseActiveEditor = useCallback(() => {
+    const activeSaveState = clipEditingVideo
+      ? clipSaveState
+      : showForm
+        ? textSnippetSaveState
+        : showVideoForm
+          ? videoSnippetSaveState
+          : showScriptForm
+            ? scriptSaveState
+            : null;
+
+    if (!activeSaveState || activeSaveState.saveStatus === "saved") {
+      closeActiveEditor();
+      return;
+    }
+
+    setConfirmDialog({
+      title: "Discard changes?",
+      message: "You have changes in this editor that have not been saved. Close anyway and discard them?",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      danger: true,
+      testId: "discard-changes-dialog",
+      onConfirm: () => {
+        closeActiveEditor();
+        setConfirmDialog(null);
+      },
+    });
+  }, [
+    clipEditingVideo,
+    clipSaveState,
+    closeActiveEditor,
+    scriptSaveState,
+    showForm,
+    showScriptForm,
+    showVideoForm,
+    textSnippetSaveState,
+    videoSnippetSaveState,
+  ]);
+
   // -- Recording handlers --
   const handleStartRecording = useCallback(async () => {
     if (!projectPath) return;
@@ -333,13 +394,7 @@ function App() {
                 setShowScriptForm(true);
               }
             }}
-            onCloseForm={() => {
-              handleCancel();
-              handleVideoCancel();
-              handleScriptCancel();
-              setClipEditingVideo(null);
-              setEditingVideoSnippet(undefined);
-            }}
+            onCloseForm={requestCloseActiveEditor}
             saveAction={clipEditingVideo
               ? {
                 label: "Save Clip",
@@ -570,9 +625,12 @@ function App() {
         <ConfirmDialog
           title={confirmDialog.title}
           message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+          danger={confirmDialog.danger}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
-          data-testid="confirm-delete-dialog"
+          data-testid={confirmDialog.testId ?? "confirm-delete-dialog"}
         />
       )}
 
@@ -755,7 +813,7 @@ function ContentHeader({
 
   const secondaryAction: ToolbarAction | undefined = showForm
     ? {
-      label: "Cancel",
+      label: "Close",
       icon: <XIcon size={12} />,
       onClick: onCloseForm,
       testId: saveAction?.cancelTestId,

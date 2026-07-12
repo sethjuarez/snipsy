@@ -1,4 +1,4 @@
-import { forwardRef, useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle } from "react";
+import { forwardRef, useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle, useLayoutEffect } from "react";
 import { Play, Pause, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw, MousePointerClick } from "lucide-react";
 import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
@@ -16,6 +16,7 @@ import {
   pointerToVideoPoint,
   regionToBox,
   type Point,
+  type Rect,
 } from "../utils/spotlight";
 
 const backend = getBackend();
@@ -23,6 +24,15 @@ const MIN_SPOTLIGHT_REGION_SIZE = 2;
 const SPOTLIGHT_COLOR_PRESETS = ["#facc15", "#38bdf8", "#34d399", "#fb7185", "#c084fc", "#fb923c"];
 
 type SpotlightResizeHandle = "nw" | "ne" | "sw" | "se";
+type TimelineSelection =
+  | { type: "clip" }
+  | { type: "start" }
+  | { type: "end" }
+  | { type: "moment"; index: number };
+type TimelineNavigationPoint =
+  | { type: "start"; time: number; label: string }
+  | { type: "moment"; time: number; index: number; label: string }
+  | { type: "end"; time: number; label: string };
 type PreviewNavigationStop =
   | { kind: "start"; time: number }
   | { kind: "pause"; time: number; pauseStop: PauseStop }
@@ -44,6 +54,17 @@ type SpotlightManipulation =
       startRegion: RectanglePauseSpotlightRegion;
     };
 type ClipInspectorTab = "clip" | "playback" | "moments";
+
+function areRectsEqual(a: Rect | null, b: Rect | null) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    Math.abs(a.left - b.left) < 0.5 &&
+    Math.abs(a.top - b.top) < 0.5 &&
+    Math.abs(a.width - b.width) < 0.5 &&
+    Math.abs(a.height - b.height) < 0.5
+  );
+}
 
 // Hold-to-repeat: fires callback on mousedown, then repeats with acceleration.
 // Uses a ref so the interval always calls the latest callback (avoids stale closures).
@@ -128,13 +149,6 @@ function getRemainingPreviewPauseStopsAfter(
     .filter((stop): stop is Extract<PreviewNavigationStop, { kind: "pause" }> =>
       stop.kind === "pause" && stop.time > time + STOP_EPSILON)
     .map((stop) => stop.pauseStop);
-}
-
-function getPreviewStopLabel(stop: PreviewNavigationStop | null) {
-  if (!stop) return "";
-  if (stop.kind === "start") return "clip start";
-  if (stop.kind === "end") return "clip end";
-  return stop.pauseStop.label || `pause at ${formatTime(stop.time, true)}`;
 }
 
 function isEditableKeyboardTarget(target: EventTarget | null) {
@@ -262,6 +276,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const timelineRef = useRef<HTMLDivElement>(null);
   const previewStopsRef = useRef<PauseStop[]>([]);
   const spotlightManipulationCleanupRef = useRef<(() => void) | null>(null);
+  const scrubFrameRef = useRef<number | null>(null);
+  const scrubTimeRef = useRef<number | null>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [startTime, setStartTime] = useState(existingClip?.startTime ?? 0);
@@ -302,6 +318,9 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [capturingPreview, setCapturingPreview] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
   const [inspectorTab, setInspectorTab] = useState<ClipInspectorTab>("clip");
+  const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({ type: "clip" });
+  const [showAllMoments, setShowAllMoments] = useState(false);
+  const [videoContentBox, setVideoContentBox] = useState<Rect | null>(null);
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, existingClip?.id);
 
   const videoSrc = video.absolutePath && convertFileSrc
@@ -389,48 +408,255 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     };
   }, [endTime]);
 
+  useEffect(() => {
+    return () => {
+      if (scrubFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrubFrameRef.current);
+      }
+    };
+  }, []);
+
+  const updateVideoContentBox = useCallback(() => {
+    const vid = videoRef.current;
+    const nextBox = vid && vid.clientWidth > 0 && vid.clientHeight > 0 ? getVideoContentBox(vid) : null;
+    setVideoContentBox((currentBox) => areRectsEqual(currentBox, nextBox) ? currentBox : nextBox);
+  }, []);
+
+  useLayoutEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) {
+      setVideoContentBox(null);
+      return;
+    }
+
+    updateVideoContentBox();
+    const frame = window.requestAnimationFrame(updateVideoContentBox);
+    const observer = new ResizeObserver(updateVideoContentBox);
+    observer.observe(vid);
+    if (vid.parentElement) observer.observe(vid.parentElement);
+
+    vid.addEventListener("loadedmetadata", updateVideoContentBox);
+    vid.addEventListener("loadeddata", updateVideoContentBox);
+    window.addEventListener("resize", updateVideoContentBox);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      vid.removeEventListener("loadedmetadata", updateVideoContentBox);
+      vid.removeEventListener("loadeddata", updateVideoContentBox);
+      window.removeEventListener("resize", updateVideoContentBox);
+    };
+  }, [editingSpotlightIndex, updateVideoContentBox, videoSrc]);
+
   // Timeline drag handlers
-  const getTimeFromMouseEvent = useCallback((e: MouseEvent | React.MouseEvent) => {
+  const getTimeFromPointerPosition = useCallback((clientX: number) => {
     const bar = timelineRef.current;
     if (!bar || duration <= 0) return null;
     const rect = bar.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
     return (x / rect.width) * duration;
   }, [duration]);
 
-  useEffect(() => {
-    if (!dragging) return;
+  const seekToTime = useCallback((time: number) => {
+    const clamped = Math.min(duration || time, Math.max(0, time));
+    if (videoRef.current) {
+      if (!videoRef.current.paused) {
+        videoRef.current.pause();
+        setPlaying(false);
+      }
+      videoRef.current.currentTime = clamped;
+    }
+    setCurrentTime(clamped);
+    setActivePreviewStop(null);
+  }, [duration]);
 
-    const onMove = (e: MouseEvent) => {
-      const t = getTimeFromMouseEvent(e);
+  const scrubVideoToTime = useCallback((time: number) => {
+    const clamped = Math.min(duration || time, Math.max(0, time));
+    scrubTimeRef.current = clamped;
+
+    if (scrubFrameRef.current !== null) return;
+    scrubFrameRef.current = window.requestAnimationFrame(() => {
+      scrubFrameRef.current = null;
+      const nextTime = scrubTimeRef.current;
+      scrubTimeRef.current = null;
+      if (nextTime === null) return;
+
+      const vid = videoRef.current;
+      if (vid) {
+        if (!vid.paused) {
+          vid.pause();
+          setPlaying(false);
+        }
+        if (Math.abs(vid.currentTime - nextTime) > 0.001) {
+          vid.currentTime = nextTime;
+        }
+      }
+      setCurrentTime(nextTime);
+      setActivePreviewStop(null);
+    });
+  }, [duration]);
+
+  const selectMoment = useCallback((index: number) => {
+    const stop = pauseStops[index];
+    if (!stop) return;
+    setTimelineSelection({ type: "moment", index });
+    setInspectorTab("moments");
+    setShowAllMoments(false);
+    seekToTime(stop.time);
+  }, [pauseStops, seekToTime]);
+
+  const selectBoundary = useCallback((boundary: "start" | "end") => {
+    const time = boundary === "start" ? startTime : endTime;
+    setTimelineSelection({ type: boundary });
+    setInspectorTab("clip");
+    setShowAllMoments(false);
+    setActiveHandle(boundary);
+    setEditingSpotlightIndex(null);
+    setSelectedSpotlightRegion(null);
+    setDrawingStart(null);
+    setDraftRegion(null);
+    setSpotlightManipulation(null);
+    seekToTime(time);
+  }, [endTime, seekToTime, startTime]);
+
+  const selectClip = useCallback(() => {
+    setTimelineSelection({ type: "clip" });
+    setInspectorTab("clip");
+    setShowAllMoments(false);
+    setEditingSpotlightIndex(null);
+    setSelectedSpotlightRegion(null);
+    setDrawingStart(null);
+    setDraftRegion(null);
+    setSpotlightManipulation(null);
+  }, []);
+
+  const handleTimelineClick = useCallback((e: React.MouseEvent) => {
+    const t = getTimeFromPointerPosition(e.clientX);
+    if (t === null) return;
+    seekToTime(t);
+  }, [getTimeFromPointerPosition, seekToTime]);
+
+  const beginTimelineScrub = useCallback((event: PointerEvent) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    if ((event.target as HTMLElement | null)?.closest("[data-timeline-interactive='true']")) return;
+    event.preventDefault();
+    const t = getTimeFromPointerPosition(event.clientX);
+    if (t === null) return;
+    selectClip();
+    scrubVideoToTime(t);
+
+    const activePointerId = event.pointerId;
+    const timeline = timelineRef.current;
+    if (timeline) {
+      try {
+        timeline.setPointerCapture(activePointerId);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "NotFoundError")) {
+          throw error;
+        }
+      }
+    }
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== activePointerId) return;
+      moveEvent.preventDefault();
+      const nextTime = getTimeFromPointerPosition(moveEvent.clientX);
+      if (nextTime === null) return;
+      scrubVideoToTime(nextTime);
+    };
+    const onUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== activePointerId) return;
+      upEvent.preventDefault();
+      if (scrubFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrubFrameRef.current);
+        scrubFrameRef.current = null;
+      }
+      const finalTime = scrubTimeRef.current;
+      scrubTimeRef.current = null;
+      if (finalTime !== null) seekToTime(finalTime);
+      if (timeline?.hasPointerCapture(activePointerId)) {
+        timeline.releasePointerCapture(activePointerId);
+      }
+      timeline?.removeEventListener("pointermove", onPointerMove);
+      timeline?.removeEventListener("pointerup", onUp);
+      timeline?.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    timeline?.addEventListener("pointermove", onPointerMove);
+    timeline?.addEventListener("pointerup", onUp);
+    timeline?.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }, [getTimeFromPointerPosition, scrubVideoToTime, seekToTime, selectClip]);
+
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+    timeline.addEventListener("pointerdown", beginTimelineScrub, { capture: true });
+    return () => timeline.removeEventListener("pointerdown", beginTimelineScrub, { capture: true });
+  }, [beginTimelineScrub]);
+
+  const beginBoundaryDrag = useCallback((boundary: "start" | "end", e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!e.isPrimary || e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    selectBoundary(boundary);
+    setDragging(boundary);
+
+    const updateBoundary = (event: PointerEvent) => {
+      if (event.pointerId !== e.pointerId) return;
+      const t = getTimeFromPointerPosition(event.clientX);
       if (t === null) return;
-      if (dragging === "start") {
-        const clamped = Math.min(t, endTime - 0.1);
-        setStartTime(Math.max(0, clamped));
-        if (videoRef.current) videoRef.current.currentTime = Math.max(0, clamped);
+      if (boundary === "start") {
+        const val = Math.max(0, Math.min(t, endTime - frameDuration));
+        setStartTime(val);
+        setTimelineSelection({ type: "start" });
+        setCurrentTime(val);
+        if (videoRef.current) videoRef.current.currentTime = val;
       } else {
-        const clamped = Math.max(t, startTime + 0.1);
-        const val = Math.min(duration, clamped);
+        const val = Math.min(duration, Math.max(t, startTime + frameDuration));
         setEndTime(val);
+        setTimelineSelection({ type: "end" });
+        setCurrentTime(val);
         if (videoRef.current) videoRef.current.currentTime = val;
       }
     };
-    const onUp = () => setDragging(null);
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+    const stopBoundaryDrag = (event: PointerEvent) => {
+      if (event.pointerId !== e.pointerId) return;
+      setDragging(null);
+      window.removeEventListener("pointermove", updateBoundary);
+      window.removeEventListener("pointerup", stopBoundaryDrag);
+      window.removeEventListener("pointercancel", stopBoundaryDrag);
     };
-  }, [dragging, startTime, endTime, duration, getTimeFromMouseEvent]);
 
-  const handleTimelineClick = useCallback((e: React.MouseEvent) => {
-    const t = getTimeFromMouseEvent(e);
+    window.addEventListener("pointermove", updateBoundary);
+    window.addEventListener("pointerup", stopBoundaryDrag);
+    window.addEventListener("pointercancel", stopBoundaryDrag);
+  }, [duration, endTime, frameDuration, getTimeFromPointerPosition, selectBoundary, startTime]);
+
+  const addPauseStopAtTime = useCallback((rawTime: number) => {
+    const time = Math.min(Math.max(rawTime, startTime + frameDuration), endTime - frameDuration);
+    if (!Number.isFinite(time) || time <= startTime || time >= endTime) return;
+
+    setPauseStops((stops) => {
+      const normalized = normalizePauseStops([...stops, { time }], startTime, endTime);
+      const selectedIndex = normalized.findIndex((stop) => Math.abs(stop.time - time) <= STOP_EPSILON);
+      setTimelineSelection({ type: "moment", index: Math.max(0, selectedIndex) });
+      return normalized;
+    });
+    setShowAllMoments(false);
+    seekToTime(time);
+    setInspectorTab("moments");
+  }, [endTime, frameDuration, seekToTime, startTime]);
+
+  const handleTimelineDoubleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement | null)?.closest("[data-timeline-interactive='true']")) return;
+    const t = getTimeFromPointerPosition(e.clientX);
     if (t === null) return;
-    if (videoRef.current) videoRef.current.currentTime = t;
-    setCurrentTime(t);
-  }, [getTimeFromMouseEvent]);
+    addPauseStopAtTime(t);
+  }, [addPauseStopAtTime, getTimeFromPointerPosition]);
 
   const nudgeHandle = (handle: "start" | "end", direction: 1 | -1) => {
     const vid = videoRef.current;
@@ -470,33 +696,29 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     setCurrentTime(val);
   };
 
-  const setStartToPlayhead = () => {
-    const val = Math.max(0, Math.min(currentTime, endTime - frameDuration));
-    setStartTime(val);
-    setActiveHandle("start");
-  };
-
-  const setEndToPlayhead = () => {
-    const val = Math.min(duration, Math.max(currentTime, startTime + frameDuration));
-    setEndTime(val);
-    setActiveHandle("end");
-  };
-
   const handleTimelineKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowLeft") {
       e.preventDefault();
-      nudgeHandle(activeHandle, -1);
+      if (e.shiftKey) nudgePlayhead(-1);
+      else nudgeHandle(activeHandle, -1);
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
-      nudgeHandle(activeHandle, 1);
+      if (e.shiftKey) nudgePlayhead(1);
+      else nudgeHandle(activeHandle, 1);
+    } else if (e.key === "[" || e.key === ",") {
+      e.preventDefault();
+      navigateTimelinePoint(-1);
+    } else if (e.key === "]" || e.key === ".") {
+      e.preventDefault();
+      navigateTimelinePoint(1);
     }
   };
 
   // Hold-to-repeat bindings for each frame-step button
-  const holdStartBack = useHoldRepeat(() => { setActiveHandle("start"); nudgeHandle("start", -1); });
-  const holdStartFwd  = useHoldRepeat(() => { setActiveHandle("start"); nudgeHandle("start", 1); });
-  const holdEndBack   = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", -1); });
-  const holdEndFwd    = useHoldRepeat(() => { setActiveHandle("end"); nudgeHandle("end", 1); });
+  const holdStartBack = useHoldRepeat(() => { setTimelineSelection({ type: "start" }); setActiveHandle("start"); nudgeHandle("start", -1); });
+  const holdStartFwd  = useHoldRepeat(() => { setTimelineSelection({ type: "start" }); setActiveHandle("start"); nudgeHandle("start", 1); });
+  const holdEndBack   = useHoldRepeat(() => { setTimelineSelection({ type: "end" }); setActiveHandle("end"); nudgeHandle("end", -1); });
+  const holdEndFwd    = useHoldRepeat(() => { setTimelineSelection({ type: "end" }); setActiveHandle("end"); nudgeHandle("end", 1); });
   const holdPlayheadBack = useHoldRepeat(() => nudgePlayhead(-1));
   const holdPlayheadFwd = useHoldRepeat(() => nudgePlayhead(1));
   const previewNavigationStops = useMemo(
@@ -547,11 +769,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   }, [activePreviewStop, currentTime, playing, previewNavigationStops]);
 
   const addPauseStop = useCallback(() => {
-    const time = Math.min(Math.max(currentTime, startTime + frameDuration), endTime - frameDuration);
-    if (!Number.isFinite(time) || time <= startTime || time >= endTime) return;
-    setPauseStops((stops) => normalizePauseStops([...stops, { time }], startTime, endTime));
-    setInspectorTab("moments");
-  }, [currentTime, startTime, endTime, frameDuration]);
+    addPauseStopAtTime(currentTime);
+  }, [addPauseStopAtTime, currentTime]);
 
   const updatePauseStop = (index: number, field: "time" | "label", value: string | number) => {
     setPauseStops((stops) => {
@@ -560,12 +779,19 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
         ...updated[index],
         [field]: field === "time" ? Number(value) : value,
       };
-      return updated;
+      const normalized = normalizePauseStops(updated, startTime, endTime);
+      if (field === "time") {
+        const nextIndex = normalized.findIndex((stop) => Math.abs(stop.time - Number(value)) <= STOP_EPSILON);
+        setTimelineSelection({ type: "moment", index: Math.max(0, nextIndex) });
+        seekToTime(Number(value));
+      }
+      return normalized;
     });
   };
 
   const removePauseStop = (index: number) => {
     setPauseStops((stops) => stops.filter((_, i) => i !== index));
+    setTimelineSelection({ type: "start" });
     if (editingSpotlightIndex === index) {
       setEditingSpotlightIndex(null);
       setSelectedSpotlightRegion(null);
@@ -582,6 +808,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       setCurrentTime(stop.time);
       setPlaying(false);
     }
+    setTimelineSelection({ type: "moment", index });
     setEditingSpotlightIndex(index);
     setInspectorTab("moments");
     setSelectedSpotlightRegion(stop.spotlight?.regions.length ? 0 : null);
@@ -607,6 +834,55 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       return updated;
     });
     finishSpotlightEdit();
+  };
+
+  useEffect(() => {
+    if (timelineSelection.type !== "moment") return;
+    if (timelineSelection.index < pauseStops.length) return;
+    setTimelineSelection(pauseStops.length > 0 ? { type: "moment", index: pauseStops.length - 1 } : { type: "start" });
+  }, [pauseStops.length, timelineSelection]);
+
+  const timelineNavigationPoints: TimelineNavigationPoint[] = [
+    { type: "start", time: startTime, label: "Start" },
+    ...pauseStops.map((stop, index): TimelineNavigationPoint => ({
+      type: "moment",
+      time: stop.time,
+      index,
+      label: stop.label?.trim() || `Moment ${index + 1}`,
+    })),
+    { type: "end", time: endTime, label: "End" },
+  ];
+
+  const getTimelineNavigationTarget = (direction: -1 | 1) => {
+    const selectedIndex = timelineNavigationPoints.findIndex((point) => {
+      if (timelineSelection.type === "clip") return false;
+      if (point.type !== timelineSelection.type) return false;
+      if (point.type !== "moment") return true;
+      return timelineSelection.type === "moment" && timelineSelection.index === point.index;
+    });
+    if (selectedIndex >= 0) {
+      return timelineNavigationPoints[selectedIndex + direction] ?? null;
+    }
+
+    if (direction === -1) {
+      for (let index = timelineNavigationPoints.length - 1; index >= 0; index -= 1) {
+        if (timelineNavigationPoints[index].time < currentTime - STOP_EPSILON) return timelineNavigationPoints[index];
+      }
+      return null;
+    }
+
+    return timelineNavigationPoints.find((point) => point.time > currentTime + STOP_EPSILON) ?? null;
+  };
+
+  const selectTimelinePoint = (point: TimelineNavigationPoint) => {
+    if (point.type === "moment") selectMoment(point.index);
+    else selectBoundary(point.type);
+  };
+
+  const navigateTimelinePoint = (direction: -1 | 1) => {
+    const target = getTimelineNavigationTarget(direction);
+    if (!target) return;
+    selectTimelinePoint(target);
   };
 
   const setSpotlightLabelVisible = (index: number, showLabel: boolean) => {
@@ -907,11 +1183,20 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const canStepPlayhead = playheadMinTime <= playheadMaxTime;
   const canStepPlayheadBack = canStepPlayhead && currentTime > playheadMinTime;
   const canStepPlayheadFwd = canStepPlayhead && currentTime < playheadMaxTime;
+  const selectedMomentIndex =
+    timelineSelection.type === "moment" && pauseStops[timelineSelection.index]
+      ? timelineSelection.index
+      : null;
+  const selectedMoment = selectedMomentIndex !== null ? pauseStops[selectedMomentIndex] : null;
+  const shouldShowMomentList = pauseStops.length > 0 && (showAllMoments || selectedMomentIndex === null);
+  const previousTimelinePoint = getTimelineNavigationTarget(-1);
+  const nextTimelinePoint = getTimelineNavigationTarget(1);
+  const canNavigatePreviousMoment = previousTimelinePoint !== null;
+  const canNavigateNextMoment = nextTimelinePoint !== null;
   const editingSpotlightStop = editingSpotlightIndex !== null ? pauseStops[editingSpotlightIndex] : null;
   const editingSpotlight = editingSpotlightStop?.spotlight;
   const editingSpotlightColor =
     normalizeHexColor(editingSpotlight?.style?.borderColor) ?? DEFAULT_SPOTLIGHT_STYLE.borderColor;
-  const videoContentBox = videoRef.current ? getVideoContentBox(videoRef.current) : null;
   const draftBox = draftRegion && videoContentBox ? regionToBox(draftRegion, videoContentBox) : null;
   const selectedSpotlightRegionData =
     selectedSpotlightRegion !== null ? editingSpotlight?.regions[selectedSpotlightRegion] : null;
@@ -919,23 +1204,6 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     selectedSpotlightRegionData && videoContentBox
       ? regionToBox(selectedSpotlightRegionData, videoContentBox)
       : null;
-  const isPreviewActive = playing || activePreviewStop !== null;
-  const previousPreviewStop = isPreviewActive
-    ? getAdjacentPreviewStop(previewNavigationStops, currentTime, -1, activePreviewStop)
-    : null;
-  const nextPreviewStop = isPreviewActive
-    ? getAdjacentPreviewStop(previewNavigationStops, currentTime, 1, activePreviewStop)
-    : null;
-  const canJumpPreviewBack =
-    Boolean(previousPreviewStop) &&
-    (activePreviewStop
-      ? !isSamePreviewStop(previousPreviewStop!, activePreviewStop)
-      : Math.abs(previousPreviewStop!.time - currentTime) > STOP_EPSILON);
-  const canJumpPreviewForward =
-    Boolean(nextPreviewStop) &&
-    (activePreviewStop
-      ? !isSamePreviewStop(nextPreviewStop!, activePreviewStop)
-      : Math.abs(nextPreviewStop!.time - currentTime) > STOP_EPSILON);
   const readinessItems = [
     { label: "Name", ready: Boolean(title.trim()) },
     { label: "Hotkey", ready: hotkeyStatus.state === "available" },
@@ -963,6 +1231,134 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       data-preview-stop-kind={activePreviewStop?.kind ?? "none"}
     >
       <div className="flex flex-1 min-h-0 gap-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {editingSpotlightIndex !== null && (
+          <div
+            className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded text-xs"
+            style={{
+              backgroundColor: "var(--color-surface)",
+              color: "var(--color-text)",
+              border: "1px solid var(--color-border)",
+              boxShadow: "0 12px 28px rgba(0, 0, 0, 0.35)",
+            }}
+            data-testid="spotlight-editor-toolbar"
+          >
+            <span className="mr-1 font-medium">
+              {editingSpotlightStop?.label
+                ? `Spotlight: ${editingSpotlightStop.label}`
+                : `Spotlight at ${formatTime(editingSpotlightStop?.time ?? currentTime, true)}`}
+            </span>
+            <span style={{ color: "var(--color-text-secondary)" }}>
+              {selectedSpotlightRegion === null ? "Draw a rectangle" : "Drag to move or resize"}
+            </span>
+            {editingSpotlight && editingSpotlight.regions.length > 1 && (
+              <div
+                className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5"
+                style={{ backgroundColor: "var(--color-surface-inset)" }}
+                data-testid="spotlight-region-tabs"
+              >
+                <span style={{ color: "var(--color-text-secondary)" }}>Regions</span>
+                {editingSpotlight.regions.map((_, regionIndex) => (
+                  <button
+                    key={regionIndex}
+                    type="button"
+                    className="min-w-5 rounded px-1 py-0.5"
+                    style={{
+                      backgroundColor:
+                        selectedSpotlightRegion === regionIndex ? "var(--color-accent)" : "transparent",
+                      color:
+                        selectedSpotlightRegion === regionIndex
+                          ? "var(--color-text-on-accent)"
+                          : "var(--color-text)",
+                    }}
+                    onClick={() => setSelectedSpotlightRegion(regionIndex)}
+                    data-testid={`spotlight-region-tab-${regionIndex}`}
+                  >
+                    {regionIndex + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+            {editingSpotlight && (
+              <>
+                <label
+                  className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Shared by all spotlight regions for this pause stop"
+                >
+                  Color
+                  <input
+                    type="color"
+                    value={editingSpotlightColor}
+                    onChange={(e) => setSpotlightColor(editingSpotlightIndex, e.target.value)}
+                    className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                    data-testid="spotlight-color"
+                  />
+                </label>
+                <div className="flex items-center gap-1">
+                  {SPOTLIGHT_COLOR_PRESETS.map((color, presetIndex) => (
+                    <button
+                      key={color}
+                      type="button"
+                      aria-label={`Use spotlight color ${color}`}
+                      className="h-5 w-5 rounded-full border"
+                      style={{
+                        minWidth: 20,
+                        minHeight: 20,
+                        backgroundColor: color,
+                        borderColor: editingSpotlightColor === color ? "var(--color-text)" : "rgba(255,255,255,0.65)",
+                        boxShadow: editingSpotlightColor === color ? `0 0 10px ${color}` : undefined,
+                      }}
+                      onClick={() => setSpotlightColor(editingSpotlightIndex, color)}
+                      data-testid={`spotlight-color-preset-${presetIndex}`}
+                    />
+                  ))}
+                </div>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editingSpotlight.showLabel !== false}
+                    onChange={(e) => setSpotlightLabelVisible(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-show-label"
+                  />
+                  Show label
+                </label>
+              </>
+            )}
+            <button
+              type="button"
+              className="px-2 py-0.5 rounded"
+              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+              onClick={() => setSelectedSpotlightRegion(null)}
+              data-testid="spotlight-add-region"
+            >
+              Add region
+            </button>
+            <button
+              type="button"
+              className="px-2 py-0.5 rounded disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+              disabled={selectedSpotlightRegion === null}
+              onClick={deleteSelectedSpotlightRegion}
+              data-testid="spotlight-delete-region"
+            >
+              Delete region
+            </button>
+            <button
+              type="button"
+              className="px-2 py-0.5 rounded"
+              style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
+              onClick={finishSpotlightEdit}
+              data-testid="spotlight-done"
+            >
+              Done
+            </button>
+          </div>
+        )}
       {/* Video — fills all available space */}
       <div className="relative flex-1 min-h-0 rounded-lg overflow-hidden" style={{ backgroundColor: "var(--color-surface)" }}>
         <video
@@ -1057,133 +1453,9 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 data-testid="editor-spotlight-draft"
               />
             )}
-            <div
-              className="absolute left-2 right-2 top-2 flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded text-xs"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--color-surface) 92%, transparent)",
-                color: "var(--color-text)",
-                border: "1px solid var(--color-border)",
-                zIndex: 50,
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <span className="mr-1 font-medium">
-                {editingSpotlightStop?.label
-                  ? `Spotlight: ${editingSpotlightStop.label}`
-                  : `Spotlight at ${formatTime(editingSpotlightStop?.time ?? currentTime, true)}`}
-              </span>
-              <span style={{ color: "var(--color-text-secondary)" }}>
-                {selectedSpotlightRegion === null ? "Draw a rectangle" : "Drag to move or resize"}
-              </span>
-              {editingSpotlight && editingSpotlight.regions.length > 1 && (
-                <div
-                  className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5"
-                  style={{ backgroundColor: "var(--color-surface-inset)" }}
-                  data-testid="spotlight-region-tabs"
-                >
-                  <span style={{ color: "var(--color-text-secondary)" }}>Regions</span>
-                  {editingSpotlight.regions.map((_, regionIndex) => (
-                    <button
-                      key={regionIndex}
-                      type="button"
-                      className="min-w-5 rounded px-1 py-0.5"
-                      style={{
-                        backgroundColor:
-                          selectedSpotlightRegion === regionIndex ? "var(--color-accent)" : "transparent",
-                        color:
-                          selectedSpotlightRegion === regionIndex
-                            ? "var(--color-text-on-accent)"
-                            : "var(--color-text)",
-                      }}
-                      onClick={() => setSelectedSpotlightRegion(regionIndex)}
-                      data-testid={`spotlight-region-tab-${regionIndex}`}
-                    >
-                      {regionIndex + 1}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {editingSpotlight && (
-                <>
-                  <label
-                    className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded"
-                    style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-                    title="Shared by all spotlight regions for this pause stop"
-                  >
-                    Color
-                    <input
-                      type="color"
-                      value={editingSpotlightColor}
-                      onChange={(e) => setSpotlightColor(editingSpotlightIndex, e.target.value)}
-                      className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
-                      data-testid="spotlight-color"
-                    />
-                  </label>
-                  <div className="flex items-center gap-1">
-                    {SPOTLIGHT_COLOR_PRESETS.map((color, presetIndex) => (
-                      <button
-                        key={color}
-                        type="button"
-                        aria-label={`Use spotlight color ${color}`}
-                        className="h-5 w-5 rounded-full border"
-                        style={{
-                          minWidth: 20,
-                          minHeight: 20,
-                          backgroundColor: color,
-                          borderColor: editingSpotlightColor === color ? "var(--color-text)" : "rgba(255,255,255,0.65)",
-                          boxShadow: editingSpotlightColor === color ? `0 0 10px ${color}` : undefined,
-                        }}
-                        onClick={() => setSpotlightColor(editingSpotlightIndex, color)}
-                        data-testid={`spotlight-color-preset-${presetIndex}`}
-                      />
-                    ))}
-                  </div>
-                  <label
-                    className="flex items-center gap-1 px-2 py-0.5 rounded"
-                    style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={editingSpotlight.showLabel !== false}
-                      onChange={(e) => setSpotlightLabelVisible(editingSpotlightIndex, e.target.checked)}
-                      className="accent-[var(--color-accent)]"
-                      data-testid="spotlight-show-label"
-                    />
-                    Show label
-                  </label>
-                </>
-              )}
-              <button
-                type="button"
-                className="px-2 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-                onClick={() => setSelectedSpotlightRegion(null)}
-                data-testid="spotlight-add-region"
-              >
-                Add region
-              </button>
-              <button
-                type="button"
-                className="px-2 py-0.5 rounded disabled:opacity-50"
-                style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-                disabled={selectedSpotlightRegion === null}
-                onClick={deleteSelectedSpotlightRegion}
-                data-testid="spotlight-delete-region"
-              >
-                Delete region
-              </button>
-              <button
-                type="button"
-                className="px-2 py-0.5 rounded"
-                style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-                onClick={finishSpotlightEdit}
-                data-testid="spotlight-done"
-              >
-                Done
-              </button>
-            </div>
           </div>
         )}
+      </div>
       </div>
 
       <aside
@@ -1384,21 +1656,123 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           <section data-testid="pause-stops-panel">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Moments</h3>
-              <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                {pauseStops.length} moment{pauseStops.length === 1 ? "" : "s"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                  {pauseStops.length} moment{pauseStops.length === 1 ? "" : "s"}
+                </span>
+                {selectedMomentIndex !== null && pauseStops.length > 1 && (
+                  <button
+                    type="button"
+                    className="rounded px-2 py-0.5 text-xs"
+                    style={{
+                      color: "var(--color-text)",
+                      backgroundColor: showAllMoments ? "var(--color-surface)" : "var(--color-surface-inset)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                    onClick={() => setShowAllMoments((show) => !show)}
+                    data-testid="moments-show-all-toggle"
+                  >
+                    {showAllMoments ? "Selected only" : "Show all"}
+                  </button>
+                )}
+              </div>
             </div>
+            {selectedMoment && selectedMomentIndex !== null && (
+              <div
+                className="mb-3 space-y-2 rounded p-2"
+                style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-accent)" }}
+                data-testid="selected-moment-editor"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold" style={{ color: "var(--color-accent)" }}>
+                    Selected moment {selectedMomentIndex + 1}
+                  </span>
+                  <span className="text-xs font-mono" style={{ color: "var(--color-text-secondary)" }}>
+                    {formatTime(selectedMoment.time, true)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={Number(selectedMoment.time.toFixed(3))}
+                    min={startTime}
+                    max={endTime}
+                    step={frameDuration}
+                    onChange={(e) => updatePauseStop(selectedMomentIndex, "time", Number(e.target.value))}
+                    className="w-20 px-1 py-0.5 rounded text-sm font-mono"
+                    style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                    aria-label="Selected moment time"
+                    data-testid="selected-moment-time"
+                  />
+                  <input
+                    type="text"
+                    value={selectedMoment.label ?? ""}
+                    onChange={(e) => updatePauseStop(selectedMomentIndex, "label", e.target.value)}
+                    placeholder="Moment label"
+                    className="min-w-0 flex-1 px-1 py-0.5 rounded text-sm"
+                    style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                    data-testid="selected-moment-label"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => startSpotlightEdit(selectedMomentIndex)}
+                    className="flex-1 px-2 py-0.5 rounded text-sm"
+                    style={{
+                      color: selectedMoment.spotlight ? "var(--color-text-on-accent)" : "var(--color-text)",
+                      backgroundColor: selectedMoment.spotlight ? "var(--color-accent)" : "var(--color-surface)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                    data-testid="selected-moment-spotlight"
+                  >
+                    {selectedMoment.spotlight ? `Edit spotlight (${selectedMoment.spotlight.regions.length})` : "Add spotlight"}
+                  </button>
+                  {selectedMoment.spotlight && (
+                    <button
+                      type="button"
+                      onClick={() => removeSpotlight(selectedMomentIndex)}
+                      className="px-2 py-0.5 rounded text-sm"
+                      style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface)" }}
+                      data-testid="selected-moment-clear-spotlight"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removePauseStop(selectedMomentIndex)}
+                    className="px-2 py-0.5 rounded text-sm"
+                    style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface)" }}
+                    data-testid="selected-moment-delete"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
             {pauseStops.length === 0 ? (
               <p className="text-sm" style={{ color: "var(--color-text-secondary)" }} data-testid="pause-stops-empty">
-                Move the playhead inside the clip and add a moment.
+                Scrub the timeline, then add a moment at the playhead.
               </p>
-            ) : (
+            ) : shouldShowMomentList ? (
               <div className="space-y-2" data-testid="pause-stops-list">
                 {pauseStops.map((stop, index) => (
                   <div
                     key={`${stop.time}-${index}`}
-                    className="space-y-2 rounded p-2"
-                    style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+                    onClick={() => selectMoment(index)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      selectMoment(index);
+                    }}
+                    className="space-y-2 rounded p-2 cursor-pointer"
+                    style={{
+                      backgroundColor: selectedMomentIndex === index ? "color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-inset))" : "var(--color-surface-inset)",
+                      border: `1px solid ${selectedMomentIndex === index ? "var(--color-accent)" : "var(--color-border)"}`,
+                    }}
                     data-testid={`pause-stop-${index}`}
                   >
                     <div className="flex items-center gap-1.5">
@@ -1415,10 +1789,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                         data-testid={`pause-stop-time-${index}`}
                       />
                       <button
-                        onClick={() => {
-                          const vid = videoRef.current;
-                          if (vid) vid.currentTime = stop.time;
-                          setCurrentTime(stop.time);
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectMoment(index);
                         }}
                         className="px-2 py-0.5 rounded text-sm"
                         style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
@@ -1427,7 +1801,11 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                         Go
                       </button>
                       <button
-                        onClick={() => removePauseStop(index)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePauseStop(index);
+                        }}
                         className="ml-auto px-1 text-sm"
                         style={{ color: "var(--color-danger)" }}
                         aria-label={`Remove pause stop ${index + 1}`}
@@ -1447,7 +1825,11 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                     />
                     <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => startSpotlightEdit(index)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startSpotlightEdit(index);
+                        }}
                         className="flex-1 px-2 py-0.5 rounded text-sm"
                         style={{
                           color: stop.spotlight ? "var(--color-text-on-accent)" : "var(--color-text)",
@@ -1460,7 +1842,11 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                       </button>
                       {stop.spotlight && (
                         <button
-                          onClick={() => removeSpotlight(index)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeSpotlight(index);
+                          }}
                           className="px-1 text-sm"
                           style={{ color: "var(--color-danger)" }}
                           aria-label={`Remove spotlight ${index + 1}`}
@@ -1473,7 +1859,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
           </section>
           )}
 
@@ -1512,9 +1898,16 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             ref={timelineRef}
             tabIndex={0}
             className="relative flex-1 h-7 rounded cursor-pointer select-none outline-none"
-            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}
+            style={{
+              backgroundColor: "var(--color-surface-inset)",
+              border: "1px solid var(--color-border)",
+              touchAction: "none",
+            }}
             onClick={handleTimelineClick}
+            onDoubleClick={handleTimelineDoubleClick}
             onKeyDown={handleTimelineKeyDown}
+            data-testid="clip-timeline"
+            aria-label="Clip timeline. Drag to scrub, double-click to add a moment."
           >
           {/* Selection region */}
           <div
@@ -1526,6 +1919,74 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
               opacity: 0.25,
             }}
           />
+          <button
+            type="button"
+            className="absolute top-0 bottom-0 z-30 cursor-col-resize rounded"
+            style={{
+              left: `${selectionLeft}%`,
+              transform: "translateX(-50%)",
+              width: 14,
+              minWidth: 14,
+              minHeight: 0,
+              padding: 0,
+              backgroundColor: "transparent",
+              border: 0,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              selectBoundary("start");
+            }}
+            onPointerDown={(e) => beginBoundaryDrag("start", e)}
+            title={`Drag Start at ${formatTime(startTime, true)}`}
+            aria-label={`Select clip start at ${formatTime(startTime, true)}`}
+            data-timeline-interactive="true"
+            data-testid="timeline-start-marker"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute top-1 bottom-1 rounded-full"
+              style={{
+                left: 5,
+                width: 4,
+                backgroundColor: timelineSelection.type === "start" ? "var(--color-accent)" : "var(--color-text-secondary)",
+                boxShadow: timelineSelection.type === "start" ? "0 0 0 2px var(--color-surface)" : undefined,
+              }}
+            />
+          </button>
+          <button
+            type="button"
+            className="absolute top-0 bottom-0 z-30 cursor-col-resize rounded"
+            style={{
+              left: `${selectionLeft + selectionWidth}%`,
+              transform: "translateX(-50%)",
+              width: 14,
+              minWidth: 14,
+              minHeight: 0,
+              padding: 0,
+              backgroundColor: "transparent",
+              border: 0,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              selectBoundary("end");
+            }}
+            onPointerDown={(e) => beginBoundaryDrag("end", e)}
+            title={`Drag End at ${formatTime(endTime, true)}`}
+            aria-label={`Select clip end at ${formatTime(endTime, true)}`}
+            data-timeline-interactive="true"
+            data-testid="timeline-end-marker"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute top-1 bottom-1 rounded-full"
+              style={{
+                left: 5,
+                width: 4,
+                backgroundColor: timelineSelection.type === "end" ? "var(--color-accent)" : "var(--color-text-secondary)",
+                boxShadow: timelineSelection.type === "end" ? "0 0 0 2px var(--color-surface)" : undefined,
+              }}
+            />
+          </button>
           {/* Playhead */}
           <div
             className="absolute bottom-0 flex flex-col items-center pointer-events-none"
@@ -1544,21 +2005,72 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             {/* Vertical line */}
             <div className="w-0.5 flex-1" style={{ backgroundColor: "var(--color-danger, #ef4444)" }} />
           </div>
+          <button
+            type="button"
+            aria-label="Add moment at playhead"
+            title="Add moment at playhead"
+            data-timeline-interactive="true"
+            data-testid="timeline-add-moment"
+            disabled={currentTime <= startTime || currentTime >= endTime}
+            className="absolute z-30 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold disabled:opacity-40"
+            style={{
+              left: `${playheadPos}%`,
+              top: -22,
+              transform: "translateX(-50%)",
+              minWidth: 20,
+              minHeight: 20,
+              padding: 0,
+              backgroundColor: "var(--color-accent)",
+              color: "var(--color-text-on-accent)",
+              border: "1px solid var(--color-border)",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              addPauseStop();
+            }}
+          >
+            +
+          </button>
           {/* Moment markers */}
           {pauseStops.map((stop, index) => {
             const left = duration > 0 ? (stop.time / duration) * 100 : 0;
+            const selected = selectedMomentIndex === index;
             return (
-              <div
+              <button
+                type="button"
                 key={`${stop.time}-${index}`}
-                className="absolute top-0 bottom-0 w-0.5 pointer-events-none z-20"
+                className="absolute top-0 bottom-0 z-20 flex items-center justify-center"
                 style={{
                   left: `${left}%`,
-                  backgroundColor: "var(--color-warning)",
                   transform: "translateX(-50%)",
+                  width: 18,
+                  minWidth: 18,
+                  minHeight: 0,
+                  padding: 0,
+                  border: 0,
+                  backgroundColor: "transparent",
                 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectMoment(index);
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
                 title={`Moment at ${formatTime(stop.time, true)}`}
+                aria-label={`Select moment ${index + 1} at ${formatTime(stop.time, true)}`}
+                data-timeline-interactive="true"
                 data-testid={`pause-stop-marker-${index}`}
-              />
+              >
+                <span
+                  className="block rounded-full"
+                  style={{
+                    width: selected ? 12 : 8,
+                    height: selected ? 20 : 14,
+                    backgroundColor: stop.spotlight ? "var(--color-warning)" : "var(--color-accent)",
+                    border: selected ? "2px solid var(--color-text)" : "2px solid var(--color-surface)",
+                    boxShadow: stop.spotlight ? "0 0 8px var(--color-warning)" : undefined,
+                  }}
+                />
+              </button>
             );
           })}
           {/* Start handle */}
@@ -1574,7 +2086,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
               border: 0,
               padding: 0,
             }}
-            onMouseDown={(e) => { e.stopPropagation(); setActiveHandle("start"); setDragging("start"); }}
+            data-timeline-interactive="true"
+            onPointerDown={(e) => beginBoundaryDrag("start", e)}
             data-testid="clip-start"
           />
           {/* End handle */}
@@ -1590,7 +2103,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
               border: 0,
               padding: 0,
             }}
-            onMouseDown={(e) => { e.stopPropagation(); setActiveHandle("end"); setDragging("end"); }}
+            data-timeline-interactive="true"
+            onPointerDown={(e) => beginBoundaryDrag("end", e)}
             data-testid="clip-end"
           />
           {/* Time labels on the bar */}
@@ -1632,31 +2146,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
         </div>
 
         {/* Row 1: Clip duration + target playback time + Preview */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-sm shrink-0" style={{ color: "var(--color-text-secondary)" }}>
             Clip: {formatTime(clipDuration)}
           </span>
-          <button
-            type="button"
-            onClick={setStartToPlayhead}
-            disabled={currentTime >= endTime - frameDuration}
-            className="px-2 py-1 rounded text-sm disabled:opacity-40"
-            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
-            data-testid="set-start-to-playhead"
-          >
-            Set start
-          </button>
-          <button
-            type="button"
-            onClick={setEndToPlayhead}
-            disabled={currentTime <= startTime + frameDuration}
-            className="px-2 py-1 rounded text-sm disabled:opacity-40"
-            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
-            data-testid="set-end-to-playhead"
-          >
-            Set end
-          </button>
-          <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>→</span>
           <div className="flex items-center gap-1.5">
             <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Play in</span>
             <input
@@ -1685,16 +2178,18 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           <div className="flex-1" />
           <button
             type="button"
-            onClick={() => jumpToPreviewStop(-1)}
-            disabled={!canJumpPreviewBack}
-            className="flex items-center gap-1 px-2.5 py-1 rounded text-sm font-medium disabled:opacity-40"
+            onClick={() => navigateTimelinePoint(-1)}
+            disabled={!canNavigatePreviousMoment}
+            className="flex h-7 w-7 items-center justify-center rounded disabled:opacity-40"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
-            title={previousPreviewStop ? `Previous preview stop: ${getPreviewStopLabel(previousPreviewStop)}` : "Start preview to jump between stops"}
-            data-testid="preview-previous-stop"
+            title={previousTimelinePoint ? `Previous: ${previousTimelinePoint.label} at ${formatTime(previousTimelinePoint.time, true)}` : "No previous timeline point"}
+            aria-label="Previous timeline point"
+            data-testid="timeline-previous-moment"
           >
-            <ChevronLeft size={11} /> Previous stop
+            <ChevronLeft size={13} />
           </button>
           <button
+            type="button"
             onClick={handlePreview}
             className="flex items-center gap-1.5 px-3 py-1 rounded text-sm font-medium"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
@@ -1705,14 +2200,15 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           </button>
           <button
             type="button"
-            onClick={() => jumpToPreviewStop(1)}
-            disabled={!canJumpPreviewForward}
-            className="flex items-center gap-1 px-2.5 py-1 rounded text-sm font-medium disabled:opacity-40"
+            onClick={() => navigateTimelinePoint(1)}
+            disabled={!canNavigateNextMoment}
+            className="flex h-7 w-7 items-center justify-center rounded disabled:opacity-40"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
-            title={nextPreviewStop ? `Next preview stop: ${getPreviewStopLabel(nextPreviewStop)}` : "Start preview to jump between stops"}
-            data-testid="preview-next-stop"
+            title={nextTimelinePoint ? `Next: ${nextTimelinePoint.label} at ${formatTime(nextTimelinePoint.time, true)}` : "No next timeline point"}
+            aria-label="Next timeline point"
+            data-testid="timeline-next-moment"
           >
-            Next stop <ChevronRight size={11} />
+            <ChevronRight size={13} />
           </button>
           <div
             className="flex items-center gap-1 rounded px-1 py-0.5"
@@ -1734,7 +2230,6 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             >
               <ChevronLeft size={12} />
             </button>
-            <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Playhead</span>
             <span
               className="min-w-14 text-center text-xs font-mono rounded px-1 py-0.5"
               style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface)" }}
@@ -1761,13 +2256,16 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             </button>
           </div>
           <button
+            type="button"
             onClick={addPauseStop}
             disabled={currentTime <= startTime || currentTime >= endTime}
-            className="flex items-center gap-1.5 px-3 py-1 rounded text-sm font-medium disabled:opacity-50"
+            className="flex h-7 w-7 items-center justify-center rounded disabled:opacity-50"
             style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+            title="Add moment at playhead"
+            aria-label="Add moment at playhead"
             data-testid="add-pause-stop"
           >
-            <MousePointerClick size={11} /> Add moment
+            <MousePointerClick size={13} />
           </button>
         </div>
 
