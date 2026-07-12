@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.17.0](https://github.com/sethjuarez/snipsy/compare/v0.16.0...v0.17.0) (2026-07-12)
+
+
+### Features
+
+* polish macOS app experience ([03ef0a5](https://github.com/sethjuarez/snipsy/commit/03ef0a5a93e396ae722e81141282a4ad3f8dfe2d))
+* polish macOS app experience ([b9076e8](https://github.com/sethjuarez/snipsy/commit/b9076e8408928101deec8cabd281b62038d001cc))
+
+
+### Bug Fixes
+
+* align Tauri API dependency ([daf9029](https://github.com/sethjuarez/snipsy/commit/daf9029757a774d55399e85f37bbc7a02f9a55c5))
+* align Tauri API dependency ([eed5a96](https://github.com/sethjuarez/snipsy/commit/eed5a96cb4d9d6c0a86c34af4cd79c802e94bc62))
+
+
+### Miscellaneous
+
+* merge main into macOS polish branch ([cb252a2](https://github.com/sethjuarez/snipsy/commit/cb252a2531bbe5a51072a5c7d92323d9a00e91a1))
+
 ## [0.16.0](https://github.com/sethjuarez/snipsy/compare/v0.15.0...v0.16.0) (2026-07-12)
 
 
