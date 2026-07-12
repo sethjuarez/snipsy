@@ -223,7 +223,7 @@ fn schedule_transition_actions(actions: Vec<TransitionAction>, video_duration_se
             elapsed = trigger_time;
 
             if let Err(e) = execute_action(&action) {
-                eprintln!("Transition action error: {}", e);
+                tracing::error!(error = %e, "Transition action failed");
             }
         }
     });

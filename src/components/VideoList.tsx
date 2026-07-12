@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { forwardRef, useState, useEffect, useMemo, useCallback, useImperativeHandle } from "react";
 import { getBackend } from "../services";
-import { FileVideo, Upload, Scissors, Film, Trash2 } from "lucide-react";
+import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
+import { FileVideo, Scissors, Film, Trash2 } from "lucide-react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import type { ImportedVideo, VideoSnippet } from "../types";
 
@@ -8,18 +9,30 @@ const backend = getBackend();
 
 // Convert local file path to a URL the webview can load (only in Tauri context)
 let convertFileSrc: ((path: string) => string) | null = null;
-import("@tauri-apps/api/core")
-  .then((mod) => { if (mod?.isTauri?.()) convertFileSrc = mod.convertFileSrc; })
-  .catch(() => {});
+if (isTauriRuntime()) {
+  convertFileSrc = tauriFileSrc;
+}
 
 interface VideoListProps {
   projectPath: string;
   videoSnippets: VideoSnippet[];
   onCreateClip: (video: ImportedVideo) => void;
   onDeleteVideo: (video: ImportedVideo) => void;
+  onToolbarStateChange?: (state: VideoListToolbarState) => void;
 }
 
-function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: VideoListProps) {
+export interface VideoListHandle {
+  importVideo: () => void;
+}
+
+export interface VideoListToolbarState {
+  importing: boolean;
+}
+
+const VideoList = forwardRef<VideoListHandle, VideoListProps>(function VideoList(
+  { projectPath, videoSnippets, onCreateClip, onDeleteVideo, onToolbarStateChange },
+  ref,
+) {
   const [videos, setVideos] = useState<ImportedVideo[]>([]);
   const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<ImportedVideo | null>(null);
@@ -37,7 +50,7 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
     return counts;
   }, [videoSnippets]);
 
-  const handleImport = async () => {
+  const handleImport = useCallback(async () => {
     const filePath = await backend.selectVideoFile();
     if (!filePath) return;
 
@@ -49,7 +62,13 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
     } finally {
       setImporting(false);
     }
-  };
+  }, [projectPath]);
+
+  useImperativeHandle(ref, () => ({ importVideo: handleImport }), [handleImport]);
+
+  useEffect(() => {
+    onToolbarStateChange?.({ importing });
+  }, [importing, onToolbarStateChange]);
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
@@ -62,20 +81,6 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-md font-medium" style={{ color: "var(--color-text-secondary)" }}>Videos</h3>
-        <button
-          onClick={handleImport}
-          disabled={importing}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-base rounded disabled:opacity-50"
-          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-          data-testid="import-video"
-        >
-          <Upload size={12} />
-          {importing ? "Importing..." : "Import Video"}
-        </button>
-      </div>
-
       {videos.length === 0 ? (
         <p
           className="text-center py-8 text-base"
@@ -169,7 +174,7 @@ function VideoList({ projectPath, videoSnippets, onCreateClip, onDeleteVideo }: 
       )}
     </div>
   );
-}
+});
 
 function DeleteVideoDialog({ video, clipCount, onCancel, onConfirm }: {
   video: ImportedVideo;

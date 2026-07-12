@@ -99,6 +99,7 @@ function TextCardInner({
           {...dragProps.attributes}
           {...(dragProps.listeners ?? {})}
           data-testid="drag-handle"
+          aria-label={`Reorder ${snippet.title}`}
         >
           <GripVertical size={12} />
         </button>
@@ -199,6 +200,7 @@ function VideoCardInner({
           {...dragProps.attributes}
           {...(dragProps.listeners ?? {})}
           data-testid="drag-handle"
+          aria-label={`Reorder ${snippet.title}`}
         >
           <GripVertical size={12} />
         </button>

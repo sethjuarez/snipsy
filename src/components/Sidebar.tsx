@@ -1,4 +1,4 @@
-import { Home, LayoutDashboard, FileText, Film, Video, ScrollText, type LucideIcon } from "lucide-react";
+import { Home, LayoutDashboard, FileText, Film, Video, ScrollText, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
 
 export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "scripts";
 
@@ -11,9 +11,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Overview", Icon: LayoutDashboard },
   { id: "text-snippets", label: "Text", Icon: FileText },
-  { id: "video-snippets", label: "Clips", Icon: Film },
   { id: "videos", label: "Videos", Icon: Video },
-  { id: "scripts", label: "Scripts", Icon: ScrollText },
+  { id: "video-snippets", label: "Clips", Icon: Film },
+  { id: "scripts", label: "Automations", Icon: ScrollText },
 ];
 
 interface SidebarProps {
@@ -21,9 +21,10 @@ interface SidebarProps {
   onViewChange: (view: AppView) => void;
   onGoHome?: () => void;
   collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
-function Sidebar({ activeView, onViewChange, onGoHome, collapsed = false }: SidebarProps) {
+function Sidebar({ activeView, onViewChange, onGoHome, collapsed = false, onCollapsedChange }: SidebarProps) {
   return (
     <nav
       className="no-select flex flex-col shrink-0 overflow-hidden"
@@ -33,7 +34,22 @@ function Sidebar({ activeView, onViewChange, onGoHome, collapsed = false }: Side
         borderRight: "1px solid var(--color-border)",
       }}
       data-testid="sidebar"
+      aria-label={collapsed ? "Main navigation collapsed" : "Main navigation"}
     >
+      <div className="p-1.5" style={{ borderBottom: "1px solid var(--color-border)" }}>
+        <button
+          type="button"
+          onClick={() => onCollapsedChange?.(!collapsed)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded text-base font-medium w-full text-left"
+          style={{ color: "var(--color-text-secondary)" }}
+          data-testid="sidebar-collapse-toggle"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          {!collapsed && <span>Collapse</span>}
+        </button>
+      </div>
       <div className="flex flex-col gap-0.5 p-1.5 flex-1">
         {NAV_ITEMS.map((item) => {
           const isActive = activeView === item.id;

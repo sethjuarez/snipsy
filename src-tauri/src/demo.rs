@@ -104,9 +104,10 @@ pub fn enter_demo_mode(
             });
 
             if let Err(e) = result {
-                eprintln!(
-                    "RegisterHotKey failed for '{}': {e} — falling back to low-level hook",
-                    hk.hotkey
+                tracing::warn!(
+                    hotkey = %hk.hotkey,
+                    error = %e,
+                    "RegisterHotKey failed; falling back to low-level hook"
                 );
                 let text = hk.text.clone().unwrap_or_default();
                 let delivery = hk
@@ -172,16 +173,17 @@ pub fn enter_demo_mode(
                         )
                         .await
                         {
-                            eprintln!("Video playback error: {e}");
+                            tracing::error!(error = %e, "Video playback hotkey action failed");
                         }
                     });
                 }
             });
 
             if let Err(e) = result {
-                eprintln!(
-                    "RegisterHotKey failed for '{}': {e} — falling back to low-level hook",
-                    hk.hotkey
+                tracing::warn!(
+                    hotkey = %hk.hotkey,
+                    error = %e,
+                    "RegisterHotKey failed; falling back to low-level hook"
                 );
                 let app2 = app.clone();
                 let project_path = hk.project_path.clone();
@@ -229,7 +231,10 @@ pub fn enter_demo_mode(
                             )
                             .await
                             {
-                                eprintln!("Video playback error (hook fallback): {e}");
+                                tracing::error!(
+                                    error = %e,
+                                    "Video playback low-level hook fallback action failed"
+                                );
                             }
                         });
                     }),

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Monitor } from "lucide-react";
 import type { Script, ScriptStep } from "../types";
 
 interface ScriptFormProps {
   script?: Script;
   onSave: (script: Script) => void;
-  onCancel: () => void;
+  onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
 }
 
 const EMPTY_STEP: ScriptStep = { action: "wait", duration: 1000 };
@@ -24,18 +24,31 @@ function createDefaultStep(action: string): ScriptStep {
       return { action: "launch", target: "" };
     case "scroll":
       return { action: "scroll", delta: -3 };
+    case "move":
+      return { action: "move", x: 0, y: 0 };
     default:
       return EMPTY_STEP;
   }
 }
 
-function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
+function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
   const [title, setTitle] = useState(script?.title ?? "");
   const [description, setDescription] = useState(script?.description ?? "");
   const [outputVideo, setOutputVideo] = useState(
     script?.outputVideo ?? "videos/output.mp4",
   );
   const [steps, setSteps] = useState<ScriptStep[]>(script?.steps ?? []);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const coordinateStepCount = steps.filter((step) =>
+    step.action === "click" || step.action === "move" || (step.action === "scroll" && (step.x !== undefined || step.y !== undefined)),
+  ).length;
+  const canSave = Boolean(title.trim()) && Boolean(outputVideo.trim());
+  const readinessText = canSave
+    ? "Ready"
+    : `Needs ${[
+      !title.trim() ? "Name" : null,
+      !outputVideo.trim() ? "Run output" : null,
+    ].filter(Boolean).join(", ")}`;
 
   const addStep = () => {
     setSteps([...steps, structuredClone(EMPTY_STEP)]);
@@ -63,7 +76,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !outputVideo.trim()) return;
+    if (!canSave) return;
 
     onSave({
       id: script?.id ?? crypto.randomUUID(),
@@ -75,11 +88,21 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       startScreenshot: script?.startScreenshot,
       recordedAt: script?.recordedAt,
     });
+    setSaveStatus("saved");
   };
+
+  useEffect(() => {
+    if (saveStatus === "saved") setSaveStatus("unsaved");
+  }, [title, description, outputVideo, steps]);
+
+  useEffect(() => {
+    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
 
   return (
     <form
       onSubmit={handleSubmit}
+      id="script-editor-form"
       className="space-y-4"
       data-testid="script-form"
     >
@@ -99,14 +122,14 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label htmlFor="script-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Title
+            Name
           </label>
           <input
             id="script-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Script title"
+            placeholder="Automation name"
             required
             className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
@@ -115,14 +138,14 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
         </div>
         <div>
           <label htmlFor="script-output" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Output Video
+            Run Output
           </label>
           <input
             id="script-output"
             type="text"
             value={outputVideo}
             onChange={(e) => setOutputVideo(e.target.value)}
-            placeholder="videos/output.mp4"
+            placeholder="videos/automation-output.mp4"
             required
             className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
@@ -147,10 +170,35 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
         />
       </div>
 
+      <div
+        className="grid grid-cols-3 gap-2 rounded-lg p-3"
+        style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border-subtle)" }}
+        data-testid="automation-builder-summary"
+      >
+        <div>
+          <div className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>Workflow</div>
+          <div className="text-base" style={{ color: "var(--color-text)" }}>
+            {steps.length} step{steps.length === 1 ? "" : "s"}
+          </div>
+        </div>
+        <div>
+          <div className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>Portability</div>
+          <div className="text-base" style={{ color: coordinateStepCount > 0 ? "var(--color-warning)" : "var(--color-success)" }}>
+            {coordinateStepCount > 0 ? `${coordinateStepCount} coordinate step${coordinateStepCount === 1 ? "" : "s"}` : "Portable"}
+          </div>
+        </div>
+        <div>
+          <div className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>Recording</div>
+          <div className="text-base" style={{ color: "var(--color-text)" }}>
+            Optional run artifact
+          </div>
+        </div>
+      </div>
+
       <div data-testid="script-steps-section">
         <div className="flex items-center justify-between mb-2">
           <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Steps
+            Workflow Steps
           </label>
           <button
             type="button"
@@ -164,7 +212,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
         </div>
         {steps.length === 0 && (
           <p className="text-base" style={{ color: "var(--color-text-secondary)" }} data-testid="no-steps">
-            No steps yet. Add steps to define the script.
+            No steps yet. Add steps to define the automation.
           </p>
         )}
         {steps.map((step, index) => (
@@ -187,6 +235,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
               <option value="click">Click</option>
               <option value="launch">Launch</option>
               <option value="scroll">Scroll</option>
+              <option value="move">Move Pointer</option>
             </select>
 
             {step.action === "wait" && (
@@ -239,7 +288,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
                 data-testid={`step-key-${index}`}
               />
             )}
-            {step.action === "click" && (
+            {(step.action === "click" || step.action === "move") && (
               <>
                 <input
                   type="number"
@@ -298,6 +347,7 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
               className="text-base"
               style={{ color: "var(--color-danger)" }}
               data-testid={`step-remove-${index}`}
+              aria-label={`Remove step ${index + 1}`}
             >
               ✕
             </button>
@@ -305,25 +355,6 @@ function ScriptForm({ script, onSave, onCancel }: ScriptFormProps) {
         ))}
       </div>
 
-      <div className="flex gap-3 pt-2">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded font-medium text-md"
-          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-          data-testid="script-save"
-        >
-          {script ? "Update" : "Create"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded font-medium text-md"
-          style={{ backgroundColor: "var(--color-surface-alt)", color: "var(--color-text)" }}
-          data-testid="script-cancel"
-        >
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }

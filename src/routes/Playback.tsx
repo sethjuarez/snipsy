@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import SpotlightOverlay from "../components/SpotlightOverlay";
-import { auditaurInvoke } from "../services/auditaur";
+import { auditaurInvoke, isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import type { PauseSpotlight, PauseStop } from "../types";
 import { STOP_EPSILON, getVideoContentBox, normalizePauseStops } from "../utils/spotlight";
 
@@ -153,13 +153,13 @@ function Playback() {
   );
 
   const closeWindow = useCallback(async () => {
-    if (window.__TAURI_INTERNALS__) {
+    if (isTauriRuntime()) {
       await auditaurInvoke("close_playback_window");
     }
   }, []);
 
   const showWindow = useCallback(async () => {
-    if (window.__TAURI_INTERNALS__) {
+    if (isTauriRuntime()) {
       await auditaurInvoke("show_playback_window");
     }
   }, []);
@@ -241,10 +241,9 @@ function Playback() {
     (async () => {
       // 1. Resolve file path to asset URL
       let src = file;
-      try {
-        const mod = await import("@tauri-apps/api/core");
-        if (mod?.isTauri?.()) src = mod.convertFileSrc(file);
-      } catch { /* use raw path */ }
+      if (isTauriRuntime()) {
+        src = tauriFileSrc(file);
+      }
 
       if (cancelled) return;
       video.src = src;

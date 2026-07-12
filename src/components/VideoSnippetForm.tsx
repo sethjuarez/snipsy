@@ -1,35 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import type { VideoSnippet, TransitionAction } from "../types";
+import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 
 interface VideoSnippetFormProps {
   snippet?: VideoSnippet;
   onSave: (snippet: VideoSnippet) => void;
-  onCancel: () => void;
+  hotkeyOwners?: HotkeyOwner[];
+  onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
 }
 
-function formatKeyCombo(e: KeyboardEvent): string {
-  const parts: string[] = [];
-  if (e.ctrlKey || e.metaKey) parts.push("CmdOrControl");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.altKey) parts.push("Alt");
-
-  const code = e.code;
-  if (!["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"].includes(code)) {
-    if (code.startsWith("Digit")) {
-      parts.push(code.slice(5));
-    } else if (code.startsWith("Key")) {
-      parts.push(code.slice(3));
-    } else if (code.startsWith("Numpad")) {
-      parts.push("num" + code.slice(6));
-    } else {
-      parts.push(code);
-    }
-  }
-
-  return parts.join("+");
-}
-
-function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) {
+function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange }: VideoSnippetFormProps) {
   const [title, setTitle] = useState(snippet?.title ?? "");
   const [description, setDescription] = useState(snippet?.description ?? "");
   const [videoFile, setVideoFile] = useState(snippet?.videoFile ?? "");
@@ -44,6 +24,15 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   const [muted, setMuted] = useState(snippet?.muted !== false);
   const [pauseStops] = useState(snippet?.pauseStops);
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
+  const canSave = Boolean(title.trim()) && Boolean(videoFile.trim()) && hotkeyStatus.state === "available";
+  const readinessText = canSave
+    ? "Ready"
+    : `Needs ${[
+      !title.trim() ? "Title" : null,
+      !videoFile.trim() ? "Video file" : null,
+      hotkeyStatus.state !== "available" ? "Hotkey" : null,
+    ].filter(Boolean).join(", ")}`;
 
   const addTransitionAction = () => {
     setTransitionActions([
@@ -80,7 +69,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   );
 
   const saveSnippet = () => {
-    if (!title.trim() || !hotkey || !videoFile) return;
+    if (!canSave) return;
 
     onSave({
       id: snippet?.id ?? crypto.randomUUID(),
@@ -109,6 +98,10 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions]);
 
   useEffect(() => {
+    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || capturingHotkey) return;
       event.preventDefault();
@@ -119,11 +112,12 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
   });
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" data-testid="video-snippet-form">
+    <form id="video-snippet-editor-form" onSubmit={handleSubmit} className="space-y-4" data-testid="video-snippet-form">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Title</label>
+          <label htmlFor="video-snippet-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Title</label>
           <input
+            id="video-snippet-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -135,8 +129,9 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Video File</label>
+          <label htmlFor="video-snippet-file" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Video File</label>
           <input
+            id="video-snippet-file"
             type="text"
             value={videoFile}
             onChange={(e) => setVideoFile(e.target.value)}
@@ -150,8 +145,9 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       </div>
 
       <div>
-        <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Description</label>
+        <label htmlFor="video-snippet-description" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Description</label>
         <input
+          id="video-snippet-description"
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -164,8 +160,9 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Start (s)</label>
+          <label htmlFor="video-snippet-start" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Start (s)</label>
           <input
+            id="video-snippet-start"
             type="number"
             value={startTime}
             onChange={(e) => setStartTime(Number(e.target.value))}
@@ -177,8 +174,9 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>End (s)</label>
+          <label htmlFor="video-snippet-end" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>End (s)</label>
           <input
+            id="video-snippet-end"
             type="number"
             value={endTime}
             onChange={(e) => setEndTime(Number(e.target.value))}
@@ -190,8 +188,9 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
           />
         </div>
         <div>
-          <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Speed</label>
+          <label htmlFor="video-snippet-speed" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Speed</label>
           <select
+            id="video-snippet-speed"
             value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
             className="w-full px-3 py-2 rounded text-md"
@@ -208,8 +207,9 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
       </div>
 
       <div>
-        <label className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Hotkey</label>
+        <label htmlFor="video-snippet-hotkey" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>Hotkey</label>
         <input
+          id="video-snippet-hotkey"
           type="text"
           value={capturingHotkey ? "Press a key combo..." : hotkey}
           readOnly
@@ -223,7 +223,23 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
             : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }
           }
           data-testid="video-snippet-hotkey"
+          aria-describedby="video-snippet-hotkey-status"
         />
+        <p
+          id="video-snippet-hotkey-status"
+          className="mt-1 text-sm"
+          style={{
+            color:
+              hotkeyStatus.state === "available"
+                ? "var(--color-success)"
+                : hotkeyStatus.state === "conflict" || hotkeyStatus.state === "invalid"
+                  ? "var(--color-danger)"
+                  : "var(--color-text-secondary)",
+          }}
+          data-testid="video-snippet-hotkey-status"
+        >
+          {hotkeyStatus.message}
+        </p>
       </div>
 
       <div className="flex items-center gap-2">
@@ -321,6 +337,7 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
               className="text-base"
               style={{ color: "var(--color-danger)" }}
               data-testid={`transition-remove-${index}`}
+              aria-label={`Remove transition action ${index + 1}`}
             >
               ✕
             </button>
@@ -328,32 +345,6 @@ function VideoSnippetForm({ snippet, onSave, onCancel }: VideoSnippetFormProps) 
         ))}
       </div>
 
-      <div className="flex gap-3 pt-2">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded font-medium text-md"
-          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-          data-testid="video-snippet-save"
-        >
-          {snippet ? "Update" : "Create"}
-        </button>
-        <span
-          className="flex items-center text-sm"
-          style={{ color: saveStatus === "saved" ? "var(--color-success)" : "var(--color-text-secondary)" }}
-          data-testid="video-snippet-save-status"
-        >
-          {saveStatus === "saved" ? "Saved" : saveStatus === "unsaved" ? "Unsaved" : ""}
-        </span>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded font-medium text-md"
-          style={{ backgroundColor: "var(--color-surface-alt)", color: "var(--color-text)" }}
-          data-testid="video-snippet-cancel"
-        >
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }

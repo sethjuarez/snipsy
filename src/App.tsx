@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useProjectStore } from "./stores/projectStore";
 import { useUpdateStore } from "./stores/updateStore";
-import { Plus, AlertTriangle, X as XIcon, Circle, Square } from "lucide-react";
+import { Plus, AlertTriangle, X as XIcon, Circle, Square, CheckCircle, Radio, Save, Upload } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -10,20 +10,39 @@ import TrayHint from "./components/TrayHint";
 import FFmpegHelper from "./components/FFmpegHelper";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
-import VideoList from "./components/VideoList";
-import ClipEditor from "./components/ClipEditor";
+import VideoList, { type VideoListHandle, type VideoListToolbarState } from "./components/VideoList";
+import ClipEditor, { type ClipEditorHandle, type ClipEditorSaveState } from "./components/ClipEditor";
 import VideoSnippetList from "./components/VideoSnippetList";
 import HotkeyOverview from "./components/HotkeyOverview";
 import VideoSnippetForm from "./components/VideoSnippetForm";
-import ScriptList from "./components/ScriptList";
+import ScriptList, { type AutomationRunHistoryItem } from "./components/ScriptList";
 import ScriptForm from "./components/ScriptForm";
 import ConfirmDialog from "./components/ConfirmDialog";
+import SectionToolbar, { type ToolbarAction } from "./components/SectionToolbar";
+import ToastViewport, { type ToastMessage, type ToastTone } from "./components/ToastViewport";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { getBackend } from "./services";
+import { auditaurListen } from "./services/auditaur";
+import { collectHotkeyOwners } from "./utils/hotkeys";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
 const backend = getBackend();
+
+const DEFAULT_SAVE_STATE: ClipEditorSaveState = {
+  canSave: false,
+  readinessText: "Needs required fields",
+  saveStatus: "idle",
+};
+type ConfirmDialogState = {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  testId?: string;
+  onConfirm: () => void;
+};
 
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
@@ -51,12 +70,32 @@ function App() {
   const [showScriptForm, setShowScriptForm] = useState(false);
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
   const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showRecordingDialog, setShowRecordingDialog] = useState(false);
+  const [runningScriptId, setRunningScriptId] = useState<string | null>(null);
+  const [automationRunHistory, setAutomationRunHistory] = useState<AutomationRunHistoryItem[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const clipEditorRef = useRef<ClipEditorHandle>(null);
+  const [clipSaveState, setClipSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
+  const [textSnippetSaveState, setTextSnippetSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
+  const [videoSnippetSaveState, setVideoSnippetSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
+  const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
+  const videoListRef = useRef<VideoListHandle>(null);
+  const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
   const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
   const loadScripts = useProjectStore((s) => s.loadScripts);
+  const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, scripts);
+
+  const showToast = useCallback((title: string, detail?: string, tone: ToastTone = "info") => {
+    const id = crypto.randomUUID();
+    setToasts((current) => [...current, { id, title, detail, tone }].slice(-4));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 6000);
+  }, []);
 
   // Auto-open last project on startup
   useEffect(() => {
@@ -68,10 +107,11 @@ function App() {
   // Listen for tray "Exit Demo Mode" event
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    import("@tauri-apps/api/event")
-      .then((mod) => mod.listen("exit-demo-mode", () => { exitDemoMode(); }))
+    auditaurListen("exit-demo-mode", () => { exitDemoMode(); })
       .then((fn) => { unlisten = fn; })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        console.warn("Failed to register exit-demo-mode listener", error);
+      });
     return () => unlisten?.();
   }, [exitDemoMode]);
 
@@ -155,8 +195,8 @@ function App() {
   };
   const handleScriptDelete = (id: string) => {
     setConfirmDialog({
-      title: "Delete Script?",
-      message: "This will permanently delete this script. This action cannot be undone.",
+      title: "Delete Automation?",
+      message: "This will permanently delete this automation. This action cannot be undone.",
       onConfirm: () => {
         deleteScriptFromStore(id);
         setConfirmDialog(null);
@@ -173,6 +213,58 @@ function App() {
     setEditingScript(undefined);
   };
 
+  const closeActiveEditor = useCallback(() => {
+    handleCancel();
+    handleVideoCancel();
+    handleScriptCancel();
+    setClipEditingVideo(null);
+    setEditingVideoSnippet(undefined);
+    setClipSaveState(DEFAULT_SAVE_STATE);
+    setTextSnippetSaveState(DEFAULT_SAVE_STATE);
+    setVideoSnippetSaveState(DEFAULT_SAVE_STATE);
+    setScriptSaveState(DEFAULT_SAVE_STATE);
+  }, []);
+
+  const requestCloseActiveEditor = useCallback(() => {
+    const activeSaveState = clipEditingVideo
+      ? clipSaveState
+      : showForm
+        ? textSnippetSaveState
+        : showVideoForm
+          ? videoSnippetSaveState
+          : showScriptForm
+            ? scriptSaveState
+            : null;
+
+    if (!activeSaveState || activeSaveState.saveStatus === "saved") {
+      closeActiveEditor();
+      return;
+    }
+
+    setConfirmDialog({
+      title: "Discard changes?",
+      message: "You have changes in this editor that have not been saved. Close anyway and discard them?",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      danger: true,
+      testId: "discard-changes-dialog",
+      onConfirm: () => {
+        closeActiveEditor();
+        setConfirmDialog(null);
+      },
+    });
+  }, [
+    clipEditingVideo,
+    clipSaveState,
+    closeActiveEditor,
+    scriptSaveState,
+    showForm,
+    showScriptForm,
+    showVideoForm,
+    textSnippetSaveState,
+    videoSnippetSaveState,
+  ]);
+
   // -- Recording handlers --
   const handleStartRecording = useCallback(async () => {
     if (!projectPath) return;
@@ -180,9 +272,9 @@ function App() {
       await backend.startRecordingScript(projectPath);
       setIsRecording(true);
     } catch (e) {
-      alert(`Failed to start recording: ${e}`);
+      showToast("Failed to start recording", String(e), "error");
     }
-  }, [projectPath]);
+  }, [projectPath, showToast]);
 
   const handleStopRecording = useCallback(async () => {
     if (!projectPath) return;
@@ -197,19 +289,45 @@ function App() {
       setShowRecordingDialog(false);
       await loadScripts();
     } catch (e) {
-      alert(`Failed to save recording: ${e}`);
+      showToast("Failed to save recording", String(e), "error");
     }
-  }, [projectPath, loadScripts]);
+  }, [projectPath, loadScripts, showToast]);
 
   const handleRunScript = useCallback(async (scriptId: string) => {
     if (!projectPath) return;
+    const scriptTitle = scripts.find((script) => script.id === scriptId)?.title ?? "Automation";
+    setRunningScriptId(scriptId);
     try {
       const outputVideo = await backend.runScript(projectPath, scriptId);
-      alert(`Script completed! Output saved to: ${outputVideo}`);
+      showToast("Automation completed", `Output saved to ${outputVideo}`, "success");
+      const historyItem: AutomationRunHistoryItem = {
+        scriptId,
+        title: scriptTitle,
+        status: "success",
+        message: `Output saved to ${outputVideo}`,
+        completedAt: new Date().toISOString(),
+      };
+      setAutomationRunHistory((items) => [
+        historyItem,
+        ...items,
+      ].slice(0, 10));
     } catch (e) {
-      alert(`Script execution failed: ${e}`);
+      showToast("Automation failed", String(e), "error");
+      const historyItem: AutomationRunHistoryItem = {
+        scriptId,
+        title: scriptTitle,
+        status: "error",
+        message: String(e),
+        completedAt: new Date().toISOString(),
+      };
+      setAutomationRunHistory((items) => [
+        historyItem,
+        ...items,
+      ].slice(0, 10));
+    } finally {
+      setRunningScriptId(null);
     }
-  }, [projectPath]);
+  }, [projectPath, scripts, showToast]);
 
   const handleToggleDemo = () => {
     if (demoMode) exitDemoMode();
@@ -236,7 +354,7 @@ function App() {
       <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} onViewChange={(view) => {
+        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={(view) => {
           if (clipEditingVideo) {
             setClipEditingVideo(null);
             setEditingVideoSnippet(undefined);
@@ -276,13 +394,42 @@ function App() {
                 setShowScriptForm(true);
               }
             }}
-            onCloseForm={() => {
-              handleCancel();
-              handleVideoCancel();
-              handleScriptCancel();
-              setClipEditingVideo(null);
-              setEditingVideoSnippet(undefined);
-            }}
+            onCloseForm={requestCloseActiveEditor}
+            saveAction={clipEditingVideo
+              ? {
+                label: "Save Clip",
+                state: clipSaveState,
+                onClick: () => clipEditorRef.current?.save(),
+                testId: "clip-save",
+                cancelTestId: "clip-cancel",
+              }
+              : showForm
+                ? {
+                  label: editingSnippet ? "Update" : "Create",
+                  state: textSnippetSaveState,
+                  form: "text-snippet-editor-form",
+                  testId: "snippet-save",
+                  cancelTestId: "snippet-cancel",
+                }
+                : showVideoForm
+                  ? {
+                    label: editingVideoSnippet ? "Update" : "Create",
+                    state: videoSnippetSaveState,
+                    form: "video-snippet-editor-form",
+                    testId: "video-snippet-save",
+                    cancelTestId: "video-snippet-cancel",
+                  }
+                  : showScriptForm
+                    ? {
+                      label: editingScript ? "Update" : "Create",
+                      state: scriptSaveState,
+                      form: "script-editor-form",
+                      testId: "script-save",
+                      cancelTestId: "script-cancel",
+                    }
+                    : undefined}
+            videoImporting={videoListToolbarState.importing}
+            onImportVideo={() => videoListRef.current?.importVideo()}
           />
 
           {/* Scrollable content — use overflow-hidden when clip editor is active */}
@@ -290,8 +437,11 @@ function App() {
             {clipEditingVideo && projectPath ? (
               <div className="h-full rounded-lg p-4" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                 <ClipEditor
+                  ref={clipEditorRef}
                   video={clipEditingVideo}
                   existingClip={editingVideoSnippet}
+                  hotkeyOwners={hotkeyOwners}
+                  onSaveStateChange={setClipSaveState}
                   onSave={(clip) => {
                     if (editingVideoSnippet) {
                       // Update existing snippet
@@ -313,36 +463,46 @@ function App() {
                       setEditingVideoSnippet(newSnippet);
                     }
                   }}
-                  onCancel={() => {
-                    setClipEditingVideo(null);
-                    setEditingVideoSnippet(undefined);
-                  }}
                 />
               </div>
             ) : (
             <>
             {activeView === "home" && (
-              <HotkeyOverview
-                textSnippets={textSnippets}
-                videoSnippets={videoSnippets}
-                onPlayVideo={playVideo}
-                onEditText={(snippet) => {
-                  setActiveView("text-snippets");
-                  handleEdit(snippet);
-                }}
-                onEditVideo={(snippet) => {
-                  setActiveView("video-snippets");
-                  handleVideoEdit(snippet);
-                }}
-                onDeleteText={handleDelete}
-                onDeleteVideo={handleVideoDelete}
-              />
+              <div className="space-y-4">
+                <DemoReadinessPanel
+                  textCount={textSnippets.length}
+                  videoCount={videoSnippets.length}
+                  automationCount={scripts.length}
+                  demoMode={demoMode}
+                  ffmpegAvailable={ffmpegAvailable}
+                />
+                <HotkeyOverview
+                  textSnippets={textSnippets}
+                  videoSnippets={videoSnippets}
+                  onPlayVideo={playVideo}
+                  onEditText={(snippet) => {
+                    setActiveView("text-snippets");
+                    handleEdit(snippet);
+                  }}
+                  onEditVideo={(snippet) => {
+                    setActiveView("video-snippets");
+                    handleVideoEdit(snippet);
+                  }}
+                  onDeleteText={handleDelete}
+                  onDeleteVideo={handleVideoDelete}
+                />
+              </div>
             )}
 
             {activeView === "text-snippets" && (
               showForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
-                  <TextSnippetForm snippet={editingSnippet} onSave={handleSave} onCancel={handleCancel} />
+                  <TextSnippetForm
+                    snippet={editingSnippet}
+                    onSave={handleSave}
+                    hotkeyOwners={hotkeyOwners}
+                    onSaveStateChange={setTextSnippetSaveState}
+                  />
                 </div>
               ) : (
                 <TextSnippetList snippets={textSnippets} onEdit={handleEdit} onDelete={handleDelete} onReorder={setTextSnippets} />
@@ -351,8 +511,10 @@ function App() {
 
             {activeView === "videos" && projectPath && (
               <VideoList
+                ref={videoListRef}
                 projectPath={projectPath}
                 videoSnippets={videoSnippets}
+                onToolbarStateChange={setVideoListToolbarState}
                 onCreateClip={(video) => setClipEditingVideo(video)}
                 onDeleteVideo={(video) => {
                   // Remove all clips associated with this video
@@ -364,7 +526,12 @@ function App() {
             {activeView === "video-snippets" && (
               showVideoForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
-                  <VideoSnippetForm snippet={editingVideoSnippet} onSave={handleVideoSave} onCancel={handleVideoCancel} />
+                  <VideoSnippetForm
+                    snippet={editingVideoSnippet}
+                    onSave={handleVideoSave}
+                    hotkeyOwners={hotkeyOwners}
+                    onSaveStateChange={setVideoSnippetSaveState}
+                  />
                 </div>
               ) : (
                 <VideoSnippetList
@@ -422,10 +589,21 @@ function App() {
                 )}
                 {showScriptForm ? (
                   <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
-                    <ScriptForm script={editingScript} onSave={handleScriptSave} onCancel={handleScriptCancel} />
+                    <ScriptForm
+                      script={editingScript}
+                      onSave={handleScriptSave}
+                      onSaveStateChange={setScriptSaveState}
+                    />
                   </div>
                 ) : (
-                  <ScriptList scripts={scripts} onEdit={handleScriptEdit} onDelete={handleScriptDelete} onRun={handleRunScript} />
+                  <ScriptList
+                    scripts={scripts}
+                    onEdit={handleScriptEdit}
+                    onDelete={handleScriptDelete}
+                    onRun={handleRunScript}
+                    runningScriptId={runningScriptId}
+                    runHistory={automationRunHistory}
+                  />
                 )}
               </>
             )}
@@ -438,14 +616,21 @@ function App() {
 
       <TrayHint />
       <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} onFfmpegClick={() => setShowFfmpegHelper(true)} />
+      <ToastViewport
+        toasts={toasts}
+        onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
+      />
 
       {confirmDialog && (
         <ConfirmDialog
           title={confirmDialog.title}
           message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+          danger={confirmDialog.danger}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
-          data-testid="confirm-delete-dialog"
+          data-testid={confirmDialog.testId ?? "confirm-delete-dialog"}
         />
       )}
 
@@ -459,13 +644,86 @@ function App() {
   );
 }
 
+function DemoReadinessPanel({
+  textCount,
+  videoCount,
+  automationCount,
+  demoMode,
+  ffmpegAvailable,
+}: {
+  textCount: number;
+  videoCount: number;
+  automationCount: number;
+  demoMode: boolean;
+  ffmpegAvailable: boolean | null;
+}) {
+  const deliverableCount = textCount + videoCount;
+  const ready = deliverableCount > 0;
+
+  return (
+    <section
+      className="rounded-lg p-4"
+      style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
+      data-testid="demo-readiness-panel"
+      aria-label="Demo readiness"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-md font-semibold flex items-center gap-2" style={{ color: "var(--color-text)" }}>
+            <Radio size={16} style={{ color: demoMode ? "var(--color-danger)" : "var(--color-accent)" }} />
+            {demoMode ? "Demo Mode is live" : "Demo readiness"}
+          </h3>
+          <p className="text-base mt-1" style={{ color: "var(--color-text-secondary)" }}>
+            Demo Mode hides Snipsy to the tray and listens for your configured hotkeys.
+          </p>
+        </div>
+        <span
+          className="text-sm px-2 py-1 rounded font-medium"
+          style={{
+            backgroundColor: demoMode ? "var(--color-danger)" : ready ? "var(--color-success)" : "var(--color-surface-inset)",
+            color: demoMode || ready ? "var(--color-text-on-accent)" : "var(--color-text-secondary)",
+          }}
+          data-testid="demo-readiness-status"
+        >
+          {demoMode ? "Live" : ready ? "Ready" : "Needs hotkeys"}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        <ReadinessItem ready={textCount > 0} label={`${textCount} text hotkey${textCount === 1 ? "" : "s"}`} />
+        <ReadinessItem ready={videoCount > 0} label={`${videoCount} clip hotkey${videoCount === 1 ? "" : "s"}`} />
+        <ReadinessItem ready={automationCount > 0} label={`${automationCount} automation${automationCount === 1 ? "" : "s"}`} />
+      </div>
+      {ffmpegAvailable === false && (
+        <p className="text-sm mt-3 flex items-center gap-1" style={{ color: "var(--color-warning)" }} data-testid="demo-readiness-warning">
+          <AlertTriangle size={13} /> FFmpeg is missing, so automation run recordings may not be available.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ReadinessItem({ ready, label }: { ready: boolean; label: string }) {
+  return (
+    <div
+      className="flex items-center gap-2 rounded px-3 py-2 text-base"
+      style={{ backgroundColor: "var(--color-surface-inset)", color: ready ? "var(--color-text)" : "var(--color-text-secondary)" }}
+    >
+      {ready
+        ? <CheckCircle size={14} style={{ color: "var(--color-success)" }} />
+        : <Circle size={10} style={{ color: "var(--color-text-secondary)" }} />
+      }
+      <span>{label}</span>
+    </div>
+  );
+}
+
 /* ── Content header with title + add button ── */
 const VIEW_LABELS: Record<AppView, string> = {
   home: "Hotkey Overview",
   "text-snippets": "Text Snippets",
   videos: "Videos",
   "video-snippets": "Video Clips",
-  scripts: "Scripts",
+  scripts: "Automations",
 };
 
 function ContentHeader({
@@ -477,6 +735,9 @@ function ContentHeader({
   onStopRecord,
   onAdd,
   onCloseForm,
+  saveAction,
+  videoImporting,
+  onImportVideo,
 }: {
   view: AppView;
   editLabel?: string;
@@ -486,67 +747,94 @@ function ContentHeader({
   onStopRecord?: () => void;
   onAdd: () => void;
   onCloseForm: () => void;
+  videoImporting?: boolean;
+  onImportVideo?: () => void;
+  saveAction?: {
+    label: string;
+    state: ClipEditorSaveState;
+    testId: string;
+    cancelTestId: string;
+    onClick?: () => void;
+    form?: string;
+  };
 }) {
   const canAdd = view !== "videos" && view !== "home";
+  const actions: ToolbarAction[] = [];
+
+  if (view === "scripts" && !showForm && !isRecording) {
+    actions.push({
+      label: "Record",
+      icon: <Circle size={10} fill="currentColor" />,
+      onClick: onRecord,
+      testId: "record-script",
+      tone: "danger",
+    });
+  }
+
+  if (view === "scripts" && isRecording) {
+    actions.push({
+      label: "Stop",
+      icon: <Square size={10} fill="currentColor" />,
+      onClick: onStopRecord,
+      testId: "stop-recording-header",
+      tone: "danger",
+    });
+  }
+
+  const primaryAction: ToolbarAction | undefined = showForm && saveAction
+    ? {
+      label: saveAction.label,
+      icon: <Save size={12} />,
+      onClick: saveAction.onClick,
+      form: saveAction.form,
+      type: saveAction.form ? "submit" : "button",
+      disabled: !saveAction.state.canSave,
+      testId: saveAction.testId,
+      tone: "primary",
+    }
+    : view === "videos" && !showForm
+      ? {
+      label: videoImporting ? "Importing..." : "Import Video",
+      icon: <Upload size={12} />,
+      onClick: onImportVideo,
+      disabled: videoImporting,
+      testId: "import-video",
+      tone: "primary",
+    }
+    : canAdd && !showForm
+    ? {
+        label: "Add",
+        icon: <Plus size={12} />,
+        onClick: onAdd,
+        testId: view === "text-snippets" ? "add-snippet" : view === "video-snippets" ? "add-video-snippet" : "add-script",
+        tone: "primary",
+      }
+      : undefined;
+
+  const secondaryAction: ToolbarAction | undefined = showForm
+    ? {
+      label: "Close",
+      icon: <XIcon size={12} />,
+      onClick: onCloseForm,
+      testId: saveAction?.cancelTestId,
+      tone: "secondary",
+    }
+    : undefined;
 
   return (
-    <div
-      className="flex items-center justify-between px-4 shrink-0"
-      style={{
-        height: 40,
-        borderBottom: "1px solid var(--color-border)",
-        backgroundColor: "var(--color-surface)",
-      }}
-    >
-      <h2 className="text-md font-semibold truncate" style={{ color: "var(--color-text)" }}>
-        {editLabel ?? VIEW_LABELS[view]}
-      </h2>
-      <div className="flex items-center gap-2">
-        {view === "scripts" && !showForm && !isRecording && (
-          <button
-            onClick={onRecord}
-            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
-            style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
-            data-testid="record-script"
-          >
-            <Circle size={10} fill="currentColor" /> Record
-          </button>
-        )}
-        {view === "scripts" && isRecording && (
-          <button
-            onClick={onStopRecord}
-            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium animate-pulse"
-            style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
-            data-testid="stop-recording-header"
-          >
-            <Square size={10} fill="currentColor" /> Stop
-          </button>
-        )}
-        {canAdd && !showForm && (
-          <button
-            onClick={onAdd}
-            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
-            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-            data-testid={
-              view === "text-snippets" ? "add-snippet" :
-              view === "video-snippets" ? "add-video-snippet" :
-              "add-script"
-            }
-          >
-            <Plus size={12} /> Add
-          </button>
-        )}
-        {showForm && (
-          <button
-            onClick={onCloseForm}
-            className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
-            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
-          >
-            <XIcon size={12} /> Cancel
-          </button>
-        )}
-      </div>
-    </div>
+    <SectionToolbar
+      title={editLabel ?? VIEW_LABELS[view]}
+      status={showForm
+        ? saveAction?.state.saveStatus === "saved" ? "Saved" : saveAction?.state.readinessText
+        : undefined}
+      statusTestId={saveAction?.testId === "clip-save"
+        ? "clip-readiness"
+        : saveAction?.testId ? `${saveAction.testId}-status` : undefined}
+      statusTone={showForm && saveAction?.state.canSave ? "success" : "muted"}
+      actions={actions}
+      primaryAction={primaryAction}
+      secondaryAction={secondaryAction}
+    />
   );
 }
 
@@ -568,7 +856,7 @@ function RecordingSaveDialog({
       data-testid="recording-save-dialog"
     >
       <h3 className="text-md font-semibold mb-3" style={{ color: "var(--color-text)" }}>
-        Save Recorded Script
+        Save Recorded Automation
       </h3>
       <div className="space-y-3">
         <div>
@@ -577,7 +865,7 @@ function RecordingSaveDialog({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="My Recorded Script"
+            placeholder="My Recorded Automation"
             className="w-full rounded px-3 py-1.5 text-base"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="recording-title"
@@ -610,7 +898,7 @@ function RecordingSaveDialog({
             style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
             data-testid="recording-save"
           >
-            Save Script
+            Save Automation
           </button>
         </div>
       </div>

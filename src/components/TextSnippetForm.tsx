@@ -1,37 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import type { TextSnippet, DeliveryMethod } from "../types";
+import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 
 interface TextSnippetFormProps {
   snippet?: TextSnippet;
   onSave: (snippet: TextSnippet) => void;
-  onCancel: () => void;
+  hotkeyOwners?: HotkeyOwner[];
+  onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
 }
 
-function formatKeyCombo(e: KeyboardEvent): string {
-  const parts: string[] = [];
-  if (e.ctrlKey || e.metaKey) parts.push("CmdOrControl");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.altKey) parts.push("Alt");
-
-  // Use e.code (physical key) instead of e.key (produced character)
-  // so Shift+1 gives "1" not "!"
-  const code = e.code;
-  if (!["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"].includes(code)) {
-    if (code.startsWith("Digit")) {
-      parts.push(code.slice(5)); // Digit1 → 1
-    } else if (code.startsWith("Key")) {
-      parts.push(code.slice(3)); // KeyA → A
-    } else if (code.startsWith("Numpad")) {
-      parts.push("num" + code.slice(6)); // Numpad1 → num1
-    } else {
-      parts.push(code); // F1, Space, etc.
-    }
-  }
-
-  return parts.join("+");
-}
-
-function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
+function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange }: TextSnippetFormProps) {
   const [title, setTitle] = useState(snippet?.title ?? "");
   const [description, setDescription] = useState(snippet?.description ?? "");
   const [text, setText] = useState(snippet?.text ?? "");
@@ -44,6 +22,14 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
   );
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
+  const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available";
+  const readinessText = canSave
+    ? "Ready"
+    : `Needs ${[
+      !title.trim() ? "Title" : null,
+      hotkeyStatus.state !== "available" ? "Hotkey" : null,
+    ].filter(Boolean).join(", ")}`;
 
   const handleHotkeyCapture = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -60,7 +46,7 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
   );
 
   const saveSnippet = () => {
-    if (!title.trim() || !hotkey) return;
+    if (!canSave) return;
 
     onSave({
       id: snippet?.id ?? crypto.randomUUID(),
@@ -84,6 +70,10 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
   }, [title, description, text, hotkey, delivery, typeDelay]);
 
   useEffect(() => {
+    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || capturingHotkey) return;
       event.preventDefault();
@@ -94,7 +84,7 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
   });
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" data-testid="snippet-form">
+    <form id="text-snippet-editor-form" onSubmit={handleSubmit} className="space-y-4" data-testid="snippet-form">
       <div>
         <label htmlFor="snippet-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
           Title
@@ -163,8 +153,24 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
               ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
               : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="snippet-hotkey"
+            aria-describedby="snippet-hotkey-status"
           />
         </div>
+        <p
+          id="snippet-hotkey-status"
+          className="mt-1 text-sm"
+          style={{
+            color:
+              hotkeyStatus.state === "available"
+                ? "var(--color-success)"
+                : hotkeyStatus.state === "conflict" || hotkeyStatus.state === "invalid"
+                  ? "var(--color-danger)"
+                  : "var(--color-text-secondary)",
+          }}
+          data-testid="snippet-hotkey-status"
+        >
+          {hotkeyStatus.message}
+        </p>
       </div>
 
       <div>
@@ -216,32 +222,6 @@ function TextSnippetForm({ snippet, onSave, onCancel }: TextSnippetFormProps) {
         </div>
       )}
 
-      <div className="flex gap-3 pt-2">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded font-medium text-md"
-          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-          data-testid="snippet-save"
-        >
-          {snippet ? "Update" : "Create"}
-        </button>
-        <span
-          className="flex items-center text-sm"
-          style={{ color: saveStatus === "saved" ? "var(--color-success)" : "var(--color-text-secondary)" }}
-          data-testid="snippet-save-status"
-        >
-          {saveStatus === "saved" ? "Saved" : saveStatus === "unsaved" ? "Unsaved" : ""}
-        </span>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded font-medium text-md"
-          style={{ backgroundColor: "var(--color-surface-alt)", color: "var(--color-text)" }}
-          data-testid="snippet-cancel"
-        >
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }
