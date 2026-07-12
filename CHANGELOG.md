@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.16.0](https://github.com/sethjuarez/snipsy/compare/v0.15.0...v0.16.0) (2026-07-12)
+
+
+### Features
+
+* add Auditaur observability integration ([9bd643b](https://github.com/sethjuarez/snipsy/commit/9bd643bcc5eb6661da2c8816b4d21eff72d832ba))
+* polish clip editor smoke workflow ([12aaa26](https://github.com/sethjuarez/snipsy/commit/12aaa26135a26e5967159adf871fcf91ede2e36d))
+
+
+### Bug Fixes
+
+* resolve recent project nested button warning ([ac4d949](https://github.com/sethjuarez/snipsy/commit/ac4d949c51398acfd8ee8ddf4882e8892442dc1b))
+
+
+### Documentation
+
+* add scripts conditional waits handoff ([bbac2cf](https://github.com/sethjuarez/snipsy/commit/bbac2cf5b663e2ea1cafde78ac66f4cd66e5b186))
+* document Auditaur testing workflow ([a74607d](https://github.com/sethjuarez/snipsy/commit/a74607d7d7e608d8ab5a10fcc83950526d1111ab))
+* document video authoring controls ([59f6849](https://github.com/sethjuarez/snipsy/commit/59f6849c77e9dd1e686a1f8cf3773292640f0c33))
+
 ## [0.15.0](https://github.com/sethjuarez/snipsy/compare/v0.14.0...v0.15.0) (2026-04-28)
 
 
