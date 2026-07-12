@@ -45,7 +45,7 @@ pub fn run() {
             tray::init_tray(app.handle())?;
 
             if let Err(e) = tray::restore_main_window(app.handle()) {
-                eprintln!("{e}");
+                tracing::warn!(error = %e, "Failed to restore main window during setup");
             }
 
             tracing::info!(

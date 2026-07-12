@@ -97,6 +97,9 @@ function SpotlightOverlay({
               top: region.top,
               width: region.width,
               height: region.height,
+              minWidth: 0,
+              minHeight: 0,
+              padding: 0,
               border: `${selected ? style.borderWidth + 1 : style.borderWidth}px solid ${style.borderColor}`,
               boxShadow: style.glow
                 ? `0 0 0 1px rgba(255,255,255,0.45), 0 0 22px ${style.borderColor}, inset 0 0 18px rgba(250,204,21,0.18)`

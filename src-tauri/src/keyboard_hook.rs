@@ -228,9 +228,11 @@ pub fn register_hook_fallback(accelerator: &str, callback: HookCallback) -> Resu
 
     let mut state = HOOK_STATE.lock().unwrap();
     state.bindings.insert(key, callback);
-    eprintln!(
-        "Registered low-level hook fallback for '{}' (vk={:#X}, mods={:#X})",
-        accelerator, key.0, key.1
+    tracing::info!(
+        accelerator = %accelerator,
+        virtual_key = key.0,
+        modifiers = key.1,
+        "Registered low-level hook fallback"
     );
     Ok(())
 }

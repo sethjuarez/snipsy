@@ -230,9 +230,11 @@ fn resolve_coords(
             let resolved_y = (wy + yp * wh) as i32;
             return (resolved_x, resolved_y);
         }
-        eprintln!(
-            "Window '{}' not found, falling back to absolute coords ({}, {})",
-            title, abs_x, abs_y
+        tracing::warn!(
+            window_title = %title,
+            abs_x,
+            abs_y,
+            "Script target window not found; falling back to absolute coordinates"
         );
     }
     (abs_x, abs_y)
@@ -449,7 +451,7 @@ pub async fn run_script(
     // Execute steps
     for (i, step) in script.steps.iter().enumerate() {
         if let Err(e) = execute_step(step) {
-            eprintln!("Step {} failed: {}", i, e);
+            tracing::error!(step_index = i, error = %e, "Script step failed");
         }
     }
 

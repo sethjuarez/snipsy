@@ -67,7 +67,7 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
             }
             "show" => {
                 if let Err(e) = restore_main_window(app_handle) {
-                    eprintln!("{e}");
+                    tracing::warn!(error = %e, "Failed to restore main window from tray menu");
                 }
             }
             "quit" => {
@@ -84,7 +84,7 @@ pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
             {
                 let app_handle = tray.app_handle();
                 if let Err(e) = restore_main_window(app_handle) {
-                    eprintln!("{e}");
+                    tracing::warn!(error = %e, "Failed to restore main window from tray click");
                 }
             }
         })
