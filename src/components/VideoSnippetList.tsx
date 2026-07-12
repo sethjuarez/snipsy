@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Play, Keyboard, Monitor, MousePointer, MousePointer2Off, MousePointerClick, Volume2, VolumeOff } from "lucide-react";
 import EmptyState from "./EmptyState";
 import type { VideoSnippet } from "../types";
+import { displayHotkey } from "../utils/hotkeys";
 
 interface VideoSnippetListProps {
   snippets: VideoSnippet[];
@@ -45,7 +46,7 @@ function VideoSnippetList({ snippets, onEdit, onDelete, onPlay }: VideoSnippetLi
               </h3>
               <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
                 <Keyboard size={10} />
-                {snippet.hotkey}
+                {displayHotkey(snippet.hotkey)}
               </span>
               <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
                 ~{parseFloat(snippet.speed.toPrecision(3))}×

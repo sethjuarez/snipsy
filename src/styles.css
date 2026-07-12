@@ -59,6 +59,8 @@
 
   /* Layout */
   --titlebar-height: 40px;
+  --macos-titlebar-height: 46px;
+  --macos-traffic-light-space: 92px;
   --statusbar-height: 26px;
   --sidebar-width: 200px;
   --sidebar-collapsed-width: 48px;

@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff, Pencil, Trash2 } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
+import { displayHotkey } from "../utils/hotkeys";
 
 interface HotkeyOverviewProps {
   textSnippets: TextSnippet[];
@@ -153,7 +154,7 @@ function TextCardInner({
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
         >
           <Keyboard size={11} />
-          {snippet.hotkey}
+          {displayHotkey(snippet.hotkey)}
         </span>
         <span
           className="text-xs ml-auto shrink-0 px-1.5 py-0.5 rounded flex items-center gap-1"
@@ -264,7 +265,7 @@ function VideoCardInner({
           style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
         >
           <Keyboard size={11} />
-          {snippet.hotkey}
+          {displayHotkey(snippet.hotkey)}
         </span>
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <span

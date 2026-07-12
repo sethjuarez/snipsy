@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_auditaur::IpcTraceContext;
 
 use crate::models::{PauseStop, TransitionAction};
@@ -39,22 +39,7 @@ pub async fn play_video(
     };
 
     let eb = end_behavior.as_deref().unwrap_or("close");
-    let hc = if hide_cursor.unwrap_or(true) {
-        "true"
-    } else {
-        "false"
-    };
     let bg = background_color.as_deref().unwrap_or("#000000");
-    let ctp = if click_to_play.unwrap_or(false) {
-        "true"
-    } else {
-        "false"
-    };
-    let mute = if muted.unwrap_or(true) {
-        "true"
-    } else {
-        "false"
-    };
     let pause_stops_json = pause_stops
         .as_ref()
         .filter(|stops| !stops.is_empty())
@@ -62,24 +47,44 @@ pub async fn play_video(
         .transpose()
         .map_err(|e| format!("Failed to serialize pause stops: {}", e))?
         .unwrap_or_default();
-    let url = format!(
-        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}&clickToPlay={}&muted={}&pauseStops={}",
-        urlencoded(&abs_path),
+    let url = build_playback_url(
+        &abs_path,
         start_time,
         end_time,
         speed,
         eb,
-        hc,
-        urlencoded(bg),
-        ctp,
-        mute,
-        urlencoded(&pause_stops_json)
+        hide_cursor.unwrap_or(true),
+        bg,
+        click_to_play.unwrap_or(false),
+        muted.unwrap_or(true),
+        &pause_stops_json,
     );
 
+    create_playback_window(
+        app,
+        url,
+        target_monitor,
+        bg,
+        hide_cursor.unwrap_or(true),
+        transition_actions,
+        (end_time - start_time) / speed,
+    )
+    .await
+}
+
+async fn create_playback_window(
+    app: AppHandle,
+    url: String,
+    target_monitor: Option<String>,
+    background_color: &str,
+    hide_cursor: bool,
+    transition_actions: Option<Vec<TransitionAction>>,
+    video_duration: f64,
+) -> Result<(), String> {
     let init_script = format!(
         "window.__IS_PLAYBACK = true;\
-         document.documentElement.style.background = '{bg}';\
-         document.body.style.background = '{bg}';",
+         document.documentElement.style.background = '{background_color}';\
+         document.body.style.background = '{background_color}';",
     );
 
     let mut builder = WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))
@@ -92,7 +97,13 @@ pub async fn play_video(
         .skip_taskbar(true)
         .visible(false);
 
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.visible_on_all_workspaces(true);
+    }
+
     // Position on selected monitor, or default to fullscreen on primary
+    let mut positioned_on_target_monitor = false;
     if let Some(ref mon_name) = target_monitor {
         if let Ok(monitors) = xcap::Monitor::all() {
             if let Some(mon) = monitors
@@ -103,19 +114,19 @@ pub async fn play_video(
                 let y = mon.y().unwrap_or(0);
                 let scale = mon.scale_factor().unwrap_or(1.0) as f64;
 
-                // xcap returns physical coords; Tauri position() takes logical coords
+                // xcap returns physical coords; Tauri position() takes logical coords.
                 let logical_x = x as f64 / scale;
                 let logical_y = y as f64 / scale;
 
-                // Place window on the target monitor, then fullscreen it there
-                builder = builder.position(logical_x, logical_y).fullscreen(true);
-            } else {
-                builder = builder.fullscreen(true);
+                builder = builder.position(logical_x, logical_y);
+                positioned_on_target_monitor = true;
             }
-        } else {
-            builder = builder.fullscreen(true);
         }
-    } else {
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = positioned_on_target_monitor;
         builder = builder.fullscreen(true);
     }
 
@@ -123,16 +134,64 @@ pub async fn play_video(
         .build()
         .map_err(|e| format!("Failed to create playback window: {}", e))?;
 
+    apply_playback_fullscreen(&window)?;
+    tracing::info!(
+        target_monitor = target_monitor.as_deref().unwrap_or("primary"),
+        positioned_on_target_monitor,
+        "Playback window created fullscreen"
+    );
+
     // Use native cursor visibility so the OS hides/shows the cursor reliably
-    let _ = window.set_cursor_visible(!hide_cursor.unwrap_or(true));
+    let _ = window.set_cursor_visible(!hide_cursor);
 
     // Schedule transition actions if any
     if let Some(actions) = transition_actions {
-        let video_duration = (end_time - start_time) / speed;
         schedule_transition_actions(actions, video_duration);
     }
 
     Ok(())
+}
+
+fn apply_playback_fullscreen(window: &WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        return window
+            .set_simple_fullscreen(true)
+            .map_err(|e| format!("Failed to fullscreen playback window: {}", e));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        Ok(())
+    }
+}
+
+fn build_playback_url(
+    abs_path: &str,
+    start_time: f64,
+    end_time: f64,
+    speed: f64,
+    end_behavior: &str,
+    hide_cursor: bool,
+    background_color: &str,
+    click_to_play: bool,
+    muted: bool,
+    pause_stops_json: &str,
+) -> String {
+    format!(
+        "/playback?file={}&start={}&end={}&speed={}&endBehavior={}&hideCursor={}&bg={}&clickToPlay={}&muted={}&pauseStops={}",
+        urlencoded(&abs_path),
+        start_time,
+        end_time,
+        speed,
+        end_behavior,
+        hide_cursor,
+        urlencoded(background_color),
+        click_to_play,
+        muted,
+        urlencoded(pause_stops_json)
+    )
 }
 
 #[tauri::command]
@@ -268,6 +327,27 @@ mod tests {
         assert_eq!(
             urlencoded(r#"[{"time":10.5,"label":"Explain"}]"#),
             "%5B%7B%22time%22%3A10.5%2C%22label%22%3A%22Explain%22%7D%5D"
+        );
+    }
+
+    #[test]
+    fn test_build_playback_url_uses_boolean_values() {
+        let url = build_playback_url(
+            "/tmp/demo clip.mp4",
+            1.25,
+            5.5,
+            1.0,
+            "freeze",
+            false,
+            "#101010",
+            true,
+            false,
+            r#"[{"time":2}]"#,
+        );
+
+        assert_eq!(
+            url,
+            "/playback?file=/tmp/demo%20clip.mp4&start=1.25&end=5.5&speed=1&endBehavior=freeze&hideCursor=false&bg=%23101010&clickToPlay=true&muted=false&pauseStops=%5B%7B%22time%22%3A2%7D%5D"
         );
     }
 
