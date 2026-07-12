@@ -24,6 +24,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners } from "./utils/hotkeys";
+import { traySurfaceName } from "./utils/platform";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
@@ -674,7 +675,7 @@ function DemoReadinessPanel({
             {demoMode ? "Demo Mode is live" : "Demo readiness"}
           </h3>
           <p className="text-base mt-1" style={{ color: "var(--color-text-secondary)" }}>
-            Demo Mode hides Snipsy to the tray and listens for your configured hotkeys.
+            Demo Mode hides Snipsy to the {traySurfaceName()} and listens for your configured hotkeys.
           </p>
         </div>
         <span

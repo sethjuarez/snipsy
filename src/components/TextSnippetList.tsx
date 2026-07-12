@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { TextSnippet } from "../types";
+import { displayHotkey } from "../utils/hotkeys";
 
 interface TextSnippetListProps {
   snippets: TextSnippet[];
@@ -75,7 +76,7 @@ function SortableSnippetItem({
           </h3>
           <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
             <Keyboard size={10} />
-            {snippet.hotkey}
+            {displayHotkey(snippet.hotkey)}
           </span>
           <span
             className="text-sm px-2 py-0.5 rounded"

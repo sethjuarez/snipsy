@@ -8,8 +8,39 @@ use tauri_plugin_auditaur::IpcTraceContext;
 
 const TRAY_ID: &str = "snipsy-tray";
 
+#[cfg(not(target_os = "macos"))]
 static ICON_IDLE: &[u8] = include_bytes!("../icons/tray-idle.png");
+#[cfg(not(target_os = "macos"))]
 static ICON_DEMO: &[u8] = include_bytes!("../icons/tray-demo.png");
+#[cfg(target_os = "macos")]
+static ICON_IDLE_TEMPLATE: &[u8] = include_bytes!("../icons/tray-idle-template.png");
+#[cfg(target_os = "macos")]
+static ICON_DEMO_TEMPLATE: &[u8] = include_bytes!("../icons/tray-demo-template.png");
+
+#[cfg(target_os = "macos")]
+const TRAY_ICON_AS_TEMPLATE: bool = true;
+#[cfg(not(target_os = "macos"))]
+const TRAY_ICON_AS_TEMPLATE: bool = false;
+
+#[cfg(target_os = "macos")]
+fn idle_icon_bytes() -> &'static [u8] {
+    ICON_IDLE_TEMPLATE
+}
+
+#[cfg(not(target_os = "macos"))]
+fn idle_icon_bytes() -> &'static [u8] {
+    ICON_IDLE
+}
+
+#[cfg(target_os = "macos")]
+fn demo_icon_bytes() -> &'static [u8] {
+    ICON_DEMO_TEMPLATE
+}
+
+#[cfg(not(target_os = "macos"))]
+fn demo_icon_bytes() -> &'static [u8] {
+    ICON_DEMO
+}
 
 pub fn restore_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
@@ -53,12 +84,13 @@ fn build_demo_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, String> {
 /// Create the always-on tray icon at app startup. Call from `setup()`.
 pub fn init_tray(app: &tauri::AppHandle) -> Result<(), String> {
     let menu = build_idle_menu(app)?;
-    let icon =
-        Image::from_bytes(ICON_IDLE).map_err(|e| format!("Failed to load tray icon: {e}"))?;
+    let icon = Image::from_bytes(idle_icon_bytes())
+        .map_err(|e| format!("Failed to load tray icon: {e}"))?;
 
     TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Snipsy")
         .icon(icon)
+        .icon_as_template(TRAY_ICON_AS_TEMPLATE)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| match event.id.as_ref() {
@@ -102,9 +134,9 @@ pub fn activate_demo_tray(
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     let tray = app.tray_by_id(TRAY_ID).ok_or("Tray icon not found")?;
-    let icon =
-        Image::from_bytes(ICON_DEMO).map_err(|e| format!("Failed to load demo icon: {e}"))?;
-    tray.set_icon(Some(icon))
+    let icon = Image::from_bytes(demo_icon_bytes())
+        .map_err(|e| format!("Failed to load demo icon: {e}"))?;
+    tray.set_icon_with_as_template(Some(icon), TRAY_ICON_AS_TEMPLATE)
         .map_err(|e| format!("Failed to set tray icon: {e}"))?;
     tray.set_tooltip(Some("Snipsy — Demo Mode Active"))
         .map_err(|e| format!("Failed to set tooltip: {e}"))?;
@@ -122,9 +154,9 @@ pub fn deactivate_demo_tray(
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     let tray = app.tray_by_id(TRAY_ID).ok_or("Tray icon not found")?;
-    let icon =
-        Image::from_bytes(ICON_IDLE).map_err(|e| format!("Failed to load idle icon: {e}"))?;
-    tray.set_icon(Some(icon))
+    let icon = Image::from_bytes(idle_icon_bytes())
+        .map_err(|e| format!("Failed to load idle icon: {e}"))?;
+    tray.set_icon_with_as_template(Some(icon), TRAY_ICON_AS_TEMPLATE)
         .map_err(|e| format!("Failed to set tray icon: {e}"))?;
     tray.set_tooltip(Some("Snipsy"))
         .map_err(|e| format!("Failed to set tooltip: {e}"))?;

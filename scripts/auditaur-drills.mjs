@@ -286,6 +286,22 @@ function seedDrillProjectFiles() {
         },
       ],
     },
+    {
+      id: "drill-playback-clip",
+      title: "Fullscreen Playback Clip",
+      description: "Short clip used to validate the playback window.",
+      videoFile: "videos/smoke-1080p.mp4",
+      startTime: 0.25,
+      endTime: 1.25,
+      hotkey: "CmdOrControl+Shift+3",
+      speed: 1,
+      endBehavior: "close",
+      hideCursor: true,
+      backgroundColor: "#000000",
+      clickToPlay: false,
+      muted: true,
+      pauseStops: [],
+    },
   ], null, 2)}\n`);
 
   report.seededProject = {
@@ -553,6 +569,39 @@ function runMacCompatibilityDrills() {
   }
 }
 
+function runPlaybackWindowDrill() {
+  optionalClick('[data-testid="nav-home"]');
+  waitForSelector('[data-testid="overview-play-drill-playback-clip"]');
+  click('[data-testid="overview-play-drill-playback-clip"]');
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 2500)"]);
+
+  const ipcResult = run("auditaur", ["ipc", ...telemetryArgs(), "--limit", "80"], {
+    label: "playback IPC telemetry",
+  });
+  const ipcRows = JSON.parse(ipcResult.stdout);
+  const playVideoIpc = ipcRows.find((row) => row.command === "play_video");
+  const showPlaybackIpc = ipcRows.find((row) => row.command === "show_playback_window");
+  assertCondition(
+    playVideoIpc?.status === "OK" && showPlaybackIpc?.status === "OK",
+    "playback window opens through IPC",
+    { playVideoIpc, showPlaybackIpc },
+  );
+
+  const logsResult = run("auditaur", ["logs", ...telemetryArgs(), "--limit", "200"], {
+    label: "playback fullscreen logs",
+  });
+  const logs = JSON.parse(logsResult.stdout);
+  const fullscreenLog = logs.find((row) => {
+    const message = row.bodyJson?.message ?? row.body ?? "";
+    return String(message).includes("Playback window created fullscreen");
+  });
+  assertCondition(
+    Boolean(fullscreenLog),
+    "playback window records fullscreen creation trace",
+    { fullscreenLog },
+  );
+}
+
 function waitForAnySelector(selectors, timeoutMs = 10_000) {
   const attempts = Math.max(1, Math.ceil(timeoutMs / 500));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -631,6 +680,7 @@ click('[data-testid="nav-scripts"]');
 waitForAnySelector(['[data-testid="script-empty-state"]', '[data-testid="script-list"]']);
 
 runClipEditorDrills();
+runPlaybackWindowDrill();
 runMacCompatibilityDrills();
 
 run("auditaur", ["ipc", ...telemetryArgs()], { label: "IPC telemetry" });

@@ -1,7 +1,25 @@
 import { useState } from "react";
 import { Info, X } from "lucide-react";
+import { isMacPlatform } from "../utils/platform";
 
 const STORAGE_KEY = "snipsy-tray-hint-dismissed";
+
+function getTrayHintCopy() {
+  if (isMacPlatform()) {
+    return (
+      <>
+        <strong>Tip:</strong> Keep Snipsy available from the macOS menu bar while demo mode is active.
+      </>
+    );
+  }
+
+  return (
+    <>
+      <strong>Tip:</strong> Pin Snipsy to your system tray for easy access.
+      Right-click taskbar -&gt; Taskbar settings -&gt; Other system tray icons -&gt; toggle <em>Snipsy</em> on.
+    </>
+  );
+}
 
 /**
  * One-time hint banner telling the user how to pin Snipsy's tray icon.
@@ -31,8 +49,7 @@ export default function TrayHint() {
     >
       <Info size={12} className="shrink-0" style={{ color: "var(--color-accent, #6366f1)" }} />
       <span className="flex-1">
-        <strong>Tip:</strong> Pin Snipsy to your system tray for easy access.
-        Right-click taskbar → Taskbar settings → Other system tray icons → toggle <em>Snipsy</em> on.
+        {getTrayHintCopy()}
       </span>
       <button
         onClick={dismiss}

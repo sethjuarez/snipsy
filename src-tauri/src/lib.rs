@@ -34,14 +34,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             use tauri::Manager;
-            // Set the window icon explicitly so it shows in the taskbar during dev
+            // Set the window icon explicitly so it shows in the platform shell during dev
             if let Some(main_window) = app.get_webview_window("main") {
                 if let Some(icon) = app.default_window_icon() {
                     let _ = main_window.set_icon(icon.clone());
                 }
             }
 
-            // Always-on system tray icon
+            // Always-on tray/menu bar icon
             tray::init_tray(app.handle())?;
 
             if let Err(e) = tray::restore_main_window(app.handle()) {

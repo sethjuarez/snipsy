@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert } from "lucide-react";
 import { getBackend } from "../services";
+import { isMacPlatform } from "../utils/platform";
 import appIcon from "../assets/icon.png";
 
 
@@ -11,8 +12,14 @@ interface TitleBarProps {
   onToggleDemo: () => void;
 }
 
+function isInteractiveTitlebarTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [data-titlebar-interactive='true']"));
+}
+
 function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
+  const isMac = isMacPlatform();
   const [maximized, setMaximized] = useState(false);
   const [elevated, setElevated] = useState(true); // assume true until checked
 
@@ -63,20 +70,34 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
     getBackend().relaunchAsAdmin().catch(() => {});
   }, []);
 
+  const handleTitlebarMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (!appWindow || event.button !== 0 || isInteractiveTitlebarTarget(event.target)) return;
+
+    if (event.detail === 2) {
+      appWindow.toggleMaximize?.().catch?.(() => {});
+      return;
+    }
+
+    appWindow.startDragging?.().catch?.(() => {});
+  }, [appWindow]);
+
+  const titlebarHeight = isMac ? "var(--macos-titlebar-height)" : "var(--titlebar-height)";
+
   return (
     <div
       data-tauri-drag-region
+      onMouseDown={handleTitlebarMouseDown}
       className="no-select flex items-center justify-between shrink-0"
       style={{
-        height: "var(--titlebar-height)",
+        height: titlebarHeight,
         backgroundColor: "var(--color-surface-toolbar)",
         borderBottom: "1px solid var(--color-border)",
-        padding: "0 12px",
+        padding: isMac ? "0 12px 0 var(--macos-traffic-light-space)" : "0 12px",
       }}
     >
       {/* Left: App icon + name + project (draggable) */}
       <div data-tauri-drag-region className="flex items-center gap-2 shrink-0">
-        <img src={appIcon} alt="" className="w-4 h-4" draggable={false} />
+        {!isMac && <img src={appIcon} alt="" className="w-4 h-4" draggable={false} />}
         <span data-tauri-drag-region className="font-semibold text-md" style={{ color: "var(--color-text)" }}>
           Snipsy
         </span>
@@ -141,34 +162,38 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
 
         </div>
 
-        {/* Separator */}
-        <div className="w-px h-4 mx-1 shrink-0" style={{ backgroundColor: "var(--color-border)" }} />
+        {!isMac && (
+          <>
+            {/* Separator */}
+            <div className="w-px h-4 mx-1 shrink-0" style={{ backgroundColor: "var(--color-border)" }} />
 
-        {/* Window controls */}
-        <button
-          onClick={minimize}
-          className="inline-flex items-center justify-center w-11 hover:opacity-80"
-          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)" }}
-          aria-label="Minimize"
-        >
-          <Minus size={14} />
-        </button>
-        <button
-          onClick={toggleMaximize}
-          className="inline-flex items-center justify-center w-11 hover:opacity-80"
-          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)" }}
-          aria-label="Maximize"
-        >
-          {maximized ? <Copy size={11} /> : <Square size={11} />}
-        </button>
-        <button
-          onClick={close}
-          className="inline-flex items-center justify-center w-11 hover:bg-red-500 hover:text-white transition-colors"
-          style={{ height: "var(--titlebar-height)", color: "var(--color-text-secondary)" }}
-          aria-label="Close"
-        >
-          <X size={14} />
-        </button>
+            {/* Window controls */}
+            <button
+              onClick={minimize}
+              className="inline-flex items-center justify-center w-11 hover:opacity-80"
+              style={{ height: titlebarHeight, color: "var(--color-text-secondary)" }}
+              aria-label="Minimize"
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              onClick={toggleMaximize}
+              className="inline-flex items-center justify-center w-11 hover:opacity-80"
+              style={{ height: titlebarHeight, color: "var(--color-text-secondary)" }}
+              aria-label="Maximize"
+            >
+              {maximized ? <Copy size={11} /> : <Square size={11} />}
+            </button>
+            <button
+              onClick={close}
+              className="inline-flex items-center justify-center w-11 hover:bg-red-500 hover:text-white transition-colors"
+              style={{ height: titlebarHeight, color: "var(--color-text-secondary)" }}
+              aria-label="Close"
+            >
+              <X size={14} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

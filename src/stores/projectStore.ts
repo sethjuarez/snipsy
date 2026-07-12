@@ -250,7 +250,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     } catch (e) {
       console.error("activateDemoTray failed:", e);
     }
-    // Hide window to system tray
+    // Hide window to the platform background surface.
     try {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       await getCurrentWindow().hide();
@@ -271,7 +271,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     } catch (e) {
       console.error("deactivateDemoTray failed:", e);
     }
-    // Show window back from tray
+    // Show window from the platform background surface.
     try {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();

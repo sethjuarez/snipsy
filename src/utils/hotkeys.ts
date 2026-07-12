@@ -1,3 +1,5 @@
+import { isMacPlatform } from "./platform";
+
 export type HotkeyKind = "text" | "video" | "automation";
 
 export interface HotkeyOwner {
@@ -52,6 +54,26 @@ export function normalizeHotkey(hotkey: string): string {
   return hotkey.trim().toLowerCase();
 }
 
+export function displayHotkey(hotkey: string): string {
+  const macPlatform = isMacPlatform();
+  const primaryModifier = macPlatform ? "Command" : "Ctrl";
+  return hotkey
+    .split("+")
+    .map((part) => {
+      const trimmed = part.trim();
+      const normalized = trimmed.toLowerCase();
+      if (normalized === "cmdorcontrol" || normalized === "commandorcontrol") {
+        return primaryModifier;
+      }
+      if (macPlatform && normalized === "alt") {
+        return "Option";
+      }
+      return trimmed;
+    })
+    .filter(Boolean)
+    .join("+");
+}
+
 export function validateHotkey(
   hotkey: string,
   owners: HotkeyOwner[],
@@ -66,7 +88,7 @@ export function validateHotkey(
   const hasModifier = parts.some((part) => MODIFIER_NAMES.has(part));
   const hasKey = parts.some((part) => !MODIFIER_NAMES.has(part));
   if (!hasModifier || !hasKey) {
-    return { state: "invalid", message: "Use at least one modifier plus one key, like CmdOrControl+Shift+1." };
+    return { state: "invalid", message: `Use at least one modifier plus one key, like ${displayHotkey("CmdOrControl+Shift+1")}.` };
   }
 
   const conflict = owners.find((owner) => owner.id !== currentId && normalizeHotkey(owner.hotkey) === normalized);
