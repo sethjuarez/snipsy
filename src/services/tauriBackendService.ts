@@ -1,5 +1,5 @@
 import { auditaurInvoke as invoke } from "./auditaur";
-import type { BackendService, SnippetHotkey } from "./backendService";
+import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
 import type { ProjectData, MonitorInfo, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
@@ -121,12 +121,18 @@ export class TauriBackendService implements BackendService {
     return invoke("run_script", { projectPath, scriptId });
   }
 
-  async checkFfmpeg(): Promise<boolean> {
-    return invoke("check_ffmpeg");
+  async checkFfmpeg(): Promise<FfmpegStatus> {
+    return invoke<FfmpegStatus>("check_ffmpeg");
   }
 
-  async installFfmpeg(): Promise<string> {
-    return invoke("install_ffmpeg");
+  async setFfmpegPaths(
+    ffmpegExecutablePath: string | null,
+    ffprobeExecutablePath: string | null,
+  ): Promise<FfmpegStatus> {
+    return invoke<FfmpegStatus>("set_ffmpeg_paths", {
+      ffmpegExecutablePath,
+      ffprobeExecutablePath,
+    });
   }
 
   async activateDemoTray(): Promise<void> {
