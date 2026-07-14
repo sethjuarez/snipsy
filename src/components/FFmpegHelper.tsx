@@ -1,9 +1,8 @@
-import { useState } from "react";
-import { Download, RefreshCw, RotateCcw, ExternalLink, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ExternalLink, FolderOpen, RefreshCw, RotateCcw, X, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { getBackend } from "../services";
+import type { FfmpegStatus } from "../services/backendService";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-
-type InstallState = "idle" | "installing" | "success" | "error";
 
 interface FFmpegHelperProps {
   onClose: () => void;
@@ -13,60 +12,68 @@ interface FFmpegHelperProps {
 const backend = getBackend();
 
 function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
-  const [installState, setInstallState] = useState<InstallState>("idle");
+  const [status, setStatus] = useState<FfmpegStatus | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [saving, setSaving] = useState<"ffmpeg" | "ffprobe" | null>(null);
+  const [selectedPaths, setSelectedPaths] = useState<{ ffmpeg: string | null; ffprobe: string | null }>({
+    ffmpeg: null,
+    ffprobe: null,
+  });
   const [message, setMessage] = useState("");
-  const [checking, setChecking] = useState(false);
   const trapRef = useFocusTrap<HTMLDivElement>();
 
-  const handleInstall = async () => {
-    setInstallState("installing");
+  const refresh = async () => {
+    setChecking(true);
     setMessage("");
     try {
-      const result = await backend.installFfmpeg();
-      setInstallState("success");
-      setMessage(result);
-
-      // Auto-recheck — the running process might already see the new PATH
-      const available = await backend.checkFfmpeg();
-      if (available) {
-        onFixed();
-        return;
-      }
-
-      // PATH change won't be visible until restart — do it automatically
-      setMessage("FFmpeg installed! Restarting Snipsy to pick up the new PATH…");
-      try {
-        const { relaunch } = await import("@tauri-apps/plugin-process");
-        await relaunch();
-      } catch {
-        setMessage("FFmpeg installed! Please close and reopen Snipsy to finish setup.");
-      }
-    } catch (err) {
-      setInstallState("error");
-      setMessage(typeof err === "string" ? err : (err as Error).message || "Installation failed.");
+      const nextStatus = await backend.checkFfmpeg();
+      setStatus(nextStatus);
+      if (nextStatus.available) onFixed();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not check FFmpeg status.");
+    } finally {
+      setChecking(false);
     }
   };
 
-  const handleRestart = async () => {
-    try {
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
-    } catch {
-      setMessage("Please close and reopen Snipsy manually.");
-    }
-  };
+  useEffect(() => {
+    void refresh();
+  }, []);
 
-  const handleRecheck = async () => {
-    setChecking(true);
+  const locateTool = async (tool: "ffmpeg" | "ffprobe") => {
+    setSaving(tool);
+    setMessage("");
     try {
-      const available = await backend.checkFfmpeg();
-      if (available) {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selection = await open({ multiple: false });
+      if (typeof selection !== "string") return;
+
+      const nextPaths = { ...selectedPaths, [tool]: selection };
+      const nextStatus = await backend.setFfmpegPaths(nextPaths.ffmpeg, nextPaths.ffprobe);
+      setSelectedPaths(nextPaths);
+      setStatus(nextStatus);
+      if (nextStatus.available) {
         onFixed();
       } else {
-        setMessage("FFmpeg still not detected on PATH. Click 'Restart Snipsy' to pick up the new PATH.");
+        setMessage("Select both FFmpeg and FFprobe if they are not installed in a standard location.");
       }
-    } catch {
-      setMessage("Could not check FFmpeg status.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Could not save the ${tool} path.`);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const resetPaths = async () => {
+    setChecking(true);
+    setMessage("");
+    try {
+      const nextStatus = await backend.setFfmpegPaths(null, null);
+      setStatus(nextStatus);
+      setSelectedPaths({ ffmpeg: null, ffprobe: null });
+      if (nextStatus.available) onFixed();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not reset the saved FFmpeg paths.");
     } finally {
       setChecking(false);
     }
@@ -77,8 +84,8 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
       ref={trapRef}
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: "var(--color-overlay)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
       tabIndex={-1}
       role="dialog"
       aria-modal="true"
@@ -86,130 +93,80 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
     >
       <div
         className="rounded-lg shadow-xl max-w-md w-full mx-4"
-        style={{
-          backgroundColor: "var(--color-surface)",
-          border: "1px solid var(--color-border)",
-        }}
+        style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)" }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-3"
-          style={{ borderBottom: "1px solid var(--color-border)" }}
-        >
+        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "1px solid var(--color-border)" }}>
           <h3 id="ffmpeg-dialog-title" className="text-lg font-semibold" style={{ color: "var(--color-text)" }}>
-            FFmpeg Required
+            Video Tools
           </h3>
-          <button
-            onClick={onClose}
-            className="w-6 h-6 flex items-center justify-center rounded hover:opacity-70"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
+          <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-70" style={{ color: "var(--color-text-secondary)" }} aria-label="Close">
             <X size={14} />
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-5 py-4 space-y-4">
           <p className="text-base leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
-            FFmpeg is a free tool needed for video processing and script recording.
-            It's not bundled with Snipsy, but you can install it in one click.
+            Snipsy uses FFmpeg and FFprobe for video processing and automation recordings. They are not bundled with Snipsy.
           </p>
 
-          {/* Auto-install button */}
-          <button
-            onClick={handleInstall}
-            disabled={installState === "installing"}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-md font-medium transition-opacity"
-            style={{
-              backgroundColor: "var(--color-accent)",
-              color: "var(--color-text-on-accent)",
-              opacity: installState === "installing" ? 0.7 : 1,
-            }}
-          >
-            {installState === "installing" ? (
-              <><Loader2 size={14} className="animate-spin" /> Installing…</>
-            ) : (
-              <><Download size={14} /> Install FFmpeg Automatically</>
-            )}
-          </button>
-
-          {/* Status message */}
-          {message && (
-            <div
-              className="p-3 rounded-md text-sm leading-relaxed"
-              style={{
-                backgroundColor: "var(--color-surface-inset)",
-                border: "1px solid var(--color-border)",
-                color: installState === "success" ? "var(--color-success)" :
-                       installState === "error" ? "var(--color-danger)" :
-                       "var(--color-text-secondary)",
-              }}
-            >
-              <div className="flex items-start gap-2">
-                {installState === "success" && <CheckCircle size={13} className="shrink-0 mt-0.5" />}
-                {installState === "error" && <AlertTriangle size={13} className="shrink-0 mt-0.5" />}
-                <span className="whitespace-pre-wrap">{message}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Re-check button */}
-          <button
-            onClick={handleRecheck}
-            disabled={checking}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-base font-medium"
-            style={{
-              backgroundColor: "var(--color-surface-inset)",
-              color: "var(--color-text)",
-              border: "1px solid var(--color-border)",
-              opacity: checking ? 0.7 : 1,
-            }}
-          >
-            <RefreshCw size={13} className={checking ? "animate-spin" : ""} /> Check Again
-          </button>
-
-          {/* Restart button — shown after install attempt */}
-          {(installState === "success" || installState === "error") && (
-            <button
-              onClick={handleRestart}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md text-base font-medium"
-              style={{
-                backgroundColor: "var(--color-accent)",
-                color: "var(--color-text-on-accent)",
-              }}
-            >
-              <RotateCcw size={13} /> Restart Snipsy
-            </button>
-          )}
-
-          {/* Manual instructions */}
-          <details className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            <summary className="cursor-pointer hover:underline">Manual installation instructions</summary>
-            <div
-              className="mt-2 p-3 rounded-md space-y-2"
-              style={{ backgroundColor: "var(--color-surface-inset)" }}
-            >
-              <p><strong>Windows:</strong> <code>winget install ffmpeg</code></p>
-              <p><strong>macOS:</strong> <code>brew install ffmpeg</code></p>
-              <p><strong>Linux:</strong> <code>sudo apt install ffmpeg</code></p>
-              <p>
-                Or download from{" "}
-                <a
-                  href="https://ffmpeg.org/download.html"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 underline"
-                  style={{ color: "var(--color-accent)" }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.open("https://ffmpeg.org/download.html", "_blank");
-                  }}
+          {(["ffmpeg", "ffprobe"] as const).map((tool) => {
+            const toolStatus = status?.[tool];
+            const ready = toolStatus?.available;
+            return (
+              <div key={tool} className="p-3 rounded-md space-y-2" style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)" }}>
+                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: ready ? "var(--color-success)" : "var(--color-text)" }}>
+                  {ready ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
+                  {tool === "ffmpeg" ? "FFmpeg" : "FFprobe"} {ready ? "ready" : "needed"}
+                </div>
+                {toolStatus?.path && <p className="text-xs break-all" style={{ color: "var(--color-text-secondary)" }}>{toolStatus.path}</p>}
+                {toolStatus?.version && <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{toolStatus.version}</p>}
+                {toolStatus?.error && <p className="text-xs" style={{ color: "var(--color-danger)" }}>{toolStatus.error}</p>}
+                <button
+                  onClick={() => void locateTool(tool)}
+                  disabled={saving !== null}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium"
+                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                 >
-                  ffmpeg.org <ExternalLink size={10} />
-                </a>
-              </p>
-            </div>
-          </details>
+                  {saving === tool ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />}
+                  Locate {tool === "ffmpeg" ? "FFmpeg" : "FFprobe"}
+                </button>
+              </div>
+            );
+          })}
+
+          {message && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{message}</p>}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => void refresh()}
+              disabled={checking || saving !== null}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium"
+              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+            >
+              <RefreshCw size={13} className={checking ? "animate-spin" : ""} /> Check Again
+            </button>
+            <button
+              onClick={() => void resetPaths()}
+              disabled={checking || saving !== null}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium"
+              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+            >
+              <RotateCcw size={13} /> Reset Paths
+            </button>
+          </div>
+
+          <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+            Install FFmpeg with your preferred package manager, then locate the two executables here if Snipsy cannot find them automatically.{" "}
+            <a
+              href="https://ffmpeg.org/download.html"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-0.5 underline"
+              style={{ color: "var(--color-accent)" }}
+            >
+              FFmpeg downloads <ExternalLink size={10} />
+            </a>
+          </p>
         </div>
       </div>
     </div>

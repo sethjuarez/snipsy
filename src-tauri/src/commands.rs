@@ -1,9 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
 use crate::models::{Project, ProjectData, Script, TextSnippet, VideoSnippet};
 use tauri_plugin_auditaur::IpcTraceContext;
 
@@ -116,44 +113,49 @@ pub fn save_video_snippets(
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
 pub fn import_video(
+    app: tauri::AppHandle,
     project_path: String,
     source_file_path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<String, String> {
-    let project_dir = PathBuf::from(&project_path);
-    let source = PathBuf::from(&source_file_path);
+    let (file_name, dest, videos_dir) = import_video_file(
+        &PathBuf::from(&project_path),
+        &PathBuf::from(&source_file_path),
+    )?;
 
+    // Generate thumbnail (best-effort — don't fail import if ffmpeg missing)
+    let _ = generate_thumbnail(&app, &dest, &videos_dir);
+
+    Ok(format!("videos/{file_name}"))
+}
+
+fn import_video_file(
+    project_dir: &std::path::Path,
+    source: &std::path::Path,
+) -> Result<(String, PathBuf, PathBuf), String> {
     if !source.exists() {
-        return Err(format!("Source file does not exist: {source_file_path}"));
+        return Err(format!("Source file does not exist: {}", source.display()));
     }
 
     let videos_dir = project_dir.join("videos");
     fs::create_dir_all(&videos_dir)
         .map_err(|e| format!("Failed to create videos directory: {e}"))?;
-
     let file_name = source
         .file_name()
         .ok_or("Invalid source file name")?
         .to_string_lossy()
         .to_string();
-
     let dest = videos_dir.join(&file_name);
-    fs::copy(&source, &dest).map_err(|e| format!("Failed to copy video file: {e}"))?;
-
-    // Generate thumbnail (best-effort — don't fail import if ffmpeg missing)
-    let _ = generate_thumbnail(&dest, &videos_dir);
-
-    Ok(format!("videos/{file_name}"))
+    fs::copy(source, &dest).map_err(|e| format!("Failed to copy video file: {e}"))?;
+    Ok((file_name, dest, videos_dir))
 }
 
 /// Generate a thumbnail for a video using ffmpeg (first frame at 1s).
 fn generate_thumbnail(
+    app: &tauri::AppHandle,
     video_path: &std::path::Path,
     videos_dir: &std::path::Path,
 ) -> Result<(), String> {
-    let ffmpeg = crate::scripting::resolve_ffmpeg_path()
-        .ok_or_else(|| "ffmpeg not available".to_string())?;
-
     let thumbs_dir = videos_dir.join("thumbnails");
     fs::create_dir_all(&thumbs_dir).map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
 
@@ -163,7 +165,7 @@ fn generate_thumbnail(
         .to_string_lossy();
     let thumb_path = thumbs_dir.join(format!("{stem}.jpg"));
 
-    let mut cmd = std::process::Command::new(ffmpeg);
+    let mut cmd = crate::ffmpeg::command_for_ffmpeg(app)?;
     cmd.args([
         "-i",
         &video_path.to_string_lossy(),
@@ -176,14 +178,16 @@ fn generate_thumbnail(
         "-y",
         &thumb_path.to_string_lossy(),
     ]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     let output = cmd
         .output()
-        .map_err(|e| format!("ffmpeg not available: {e}"))?;
+        .map_err(|e| format!("Failed to run FFmpeg for thumbnail generation: {e}"))?;
 
     if !output.status.success() {
-        return Err("ffmpeg thumbnail generation failed".into());
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "FFmpeg thumbnail generation failed: {}",
+            error.trim()
+        ));
     }
     Ok(())
 }
@@ -193,26 +197,11 @@ fn generate_thumbnail(
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
 pub fn get_video_fps(
+    app: tauri::AppHandle,
     video_path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<f64, String> {
-    let ffprobe = crate::scripting::resolve_ffmpeg_path()
-        .map(|p| {
-            let mut pb = std::path::PathBuf::from(p);
-            pb.set_file_name(if cfg!(windows) {
-                "ffprobe.exe"
-            } else {
-                "ffprobe"
-            });
-            if pb.is_file() {
-                pb.to_string_lossy().into_owned()
-            } else {
-                "ffprobe".to_string()
-            }
-        })
-        .unwrap_or_else(|| "ffprobe".to_string());
-
-    let mut cmd = std::process::Command::new(ffprobe);
+    let mut cmd = crate::ffmpeg::command_for_ffprobe(&app)?;
     cmd.args([
         "-v",
         "error",
@@ -224,14 +213,13 @@ pub fn get_video_fps(
         "csv=p=0",
         &video_path,
     ]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     let output = cmd
         .output()
-        .map_err(|e| format!("ffprobe not available: {e}"))?;
+        .map_err(|e| format!("Failed to run FFprobe: {e}"))?;
 
     if !output.status.success() {
-        return Err("ffprobe failed to read video".into());
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("FFprobe failed to read video: {}", error.trim()));
     }
 
     let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -247,6 +235,26 @@ pub fn get_video_fps(
     } else {
         raw.parse::<f64>().or(Ok(30.0))
     }
+}
+
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc]
+pub fn check_ffmpeg(
+    app: tauri::AppHandle,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> crate::ffmpeg::FfmpegStatus {
+    crate::ffmpeg::check_status(&app)
+}
+
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn set_ffmpeg_paths(
+    app: tauri::AppHandle,
+    ffmpeg_executable_path: Option<String>,
+    ffprobe_executable_path: Option<String>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<crate::ffmpeg::FfmpegStatus, String> {
+    crate::ffmpeg::set_paths(&app, ffmpeg_executable_path, ffprobe_executable_path)
 }
 
 /// Imported video metadata returned to the frontend.
@@ -640,11 +648,8 @@ mod tests {
         let source_file = tmp.path().join("test-video.mp4");
         fs::write(&source_file, b"fake video content").unwrap();
 
-        let result = import_video(
-            project_path.to_string_lossy().into_owned(),
-            source_file.to_string_lossy().into_owned(),
-            None,
-        );
+        let result = import_video_file(&project_path, &source_file)
+            .map(|(file_name, _, _)| format!("videos/{file_name}"));
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "videos/test-video.mp4");
 
@@ -664,10 +669,9 @@ mod tests {
         )
         .unwrap();
 
-        let result = import_video(
-            project_path.to_string_lossy().into_owned(),
-            "/nonexistent/video.mp4".into(),
-            None,
+        let result = import_video_file(
+            &project_path,
+            std::path::Path::new("/nonexistent/video.mp4"),
         );
         assert!(result.is_err());
     }

@@ -117,11 +117,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ recentProjects: loadRecentProjects() });
 
     // Load scripts and check FFmpeg in parallel (non-blocking)
-    const [scripts, ffmpegAvailable] = await Promise.all([
+    const [scripts, ffmpegStatus] = await Promise.all([
       backend.loadScripts(path),
       backend.checkFfmpeg(),
     ]);
-    set({ scripts, ffmpegAvailable });
+    set({ scripts, ffmpegAvailable: ffmpegStatus.available });
   },
 
   closeProject: () => {
@@ -206,8 +206,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   checkFfmpeg: async () => {
-    const available = await backend.checkFfmpeg();
-    set({ ffmpegAvailable: available });
+    const status = await backend.checkFfmpeg();
+    set({ ffmpegAvailable: status.available });
   },
 
   enterDemoMode: async () => {

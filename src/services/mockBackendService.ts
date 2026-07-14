@@ -1,4 +1,4 @@
-import type { BackendService, SnippetHotkey } from "./backendService";
+import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
 import type { ProjectData, Script, TextSnippet, VideoSnippet } from "../types";
 
 const FIXTURE_PROJECT: ProjectData = {
@@ -202,12 +202,29 @@ export class MockBackendService implements BackendService {
     return "videos/mock-output.mp4";
   }
 
-  async checkFfmpeg(): Promise<boolean> {
-    return false; // Mock: FFmpeg not available in test mode
+  async checkFfmpeg(): Promise<FfmpegStatus> {
+    return {
+      available: false,
+      ffmpeg: {
+        available: false,
+        path: null,
+        version: null,
+        error: "FFmpeg is unavailable in frontend-only mode.",
+      },
+      ffprobe: {
+        available: false,
+        path: null,
+        version: null,
+        error: "FFprobe is unavailable in frontend-only mode.",
+      },
+    };
   }
 
-  async installFfmpeg(): Promise<string> {
-    return "FFmpeg installed successfully (mock).";
+  async setFfmpegPaths(
+    _ffmpegExecutablePath: string | null,
+    _ffprobeExecutablePath: string | null,
+  ): Promise<FfmpegStatus> {
+    return this.checkFfmpeg();
   }
 
   async activateDemoTray(): Promise<void> {

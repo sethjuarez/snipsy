@@ -2,6 +2,7 @@ mod commands;
 mod delivery;
 mod demo;
 mod elevation;
+mod ffmpeg;
 mod focus;
 mod keyboard_hook;
 mod models;
@@ -66,6 +67,8 @@ pub fn run() {
             commands::get_video_fps,
             commands::list_monitors,
             commands::capture_monitor_preview,
+            commands::check_ffmpeg,
+            commands::set_ffmpeg_paths,
             commands::save_script,
             commands::load_scripts,
             commands::delete_script,
@@ -82,8 +85,6 @@ pub fn run() {
             recorder::stop_recording_script,
             recorder::is_recording,
             scripting::run_script,
-            scripting::check_ffmpeg,
-            scripting::install_ffmpeg,
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,
         ])

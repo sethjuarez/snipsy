@@ -33,6 +33,19 @@ export interface SnippetHotkey {
   pauseStops?: PauseStop[];
 }
 
+export interface FfmpegToolStatus {
+  available: boolean;
+  path: string | null;
+  version: string | null;
+  error: string | null;
+}
+
+export interface FfmpegStatus {
+  available: boolean;
+  ffmpeg: FfmpegToolStatus;
+  ffprobe: FfmpegToolStatus;
+}
+
 export interface BackendService {
   createProject(
     path: string,
@@ -73,8 +86,11 @@ export interface BackendService {
   loadScripts(projectPath: string): Promise<Script[]>;
   deleteScript(projectPath: string, id: string): Promise<void>;
   runScript(projectPath: string, scriptId: string): Promise<string>;
-  checkFfmpeg(): Promise<boolean>;
-  installFfmpeg(): Promise<string>;
+  checkFfmpeg(): Promise<FfmpegStatus>;
+  setFfmpegPaths(
+    ffmpegExecutablePath: string | null,
+    ffprobeExecutablePath: string | null,
+  ): Promise<FfmpegStatus>;
   activateDemoTray(): Promise<void>;
   deactivateDemoTray(): Promise<void>;
   isElevated(): Promise<boolean>;

@@ -60,6 +60,7 @@ function App() {
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
   const playVideo = useProjectStore((s) => s.playVideo);
   const ffmpegAvailable = useProjectStore((s) => s.ffmpegAvailable);
+  const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
   const closeProject = useProjectStore((s) => s.closeProject);
   const autoOpenLastProject = useProjectStore((s) => s.autoOpenLastProject);
 
@@ -86,7 +87,6 @@ function App() {
   const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const videoListRef = useRef<VideoListHandle>(null);
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
-  const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
   const loadScripts = useProjectStore((s) => s.loadScripts);
   const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, scripts);
 
@@ -100,10 +100,11 @@ function App() {
 
   // Auto-open last project on startup
   useEffect(() => {
-    autoOpenLastProject();
+    void autoOpenLastProject();
+    void checkFfmpeg();
     // Silent update check on startup
     useUpdateStore.getState().checkForUpdate();
-  }, [autoOpenLastProject]);
+  }, [autoOpenLastProject, checkFfmpeg]);
 
   // Listen for tray "Exit Demo Mode" event
   useEffect(() => {
