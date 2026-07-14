@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.1](https://github.com/sethjuarez/snipsy/compare/v0.17.0...v0.17.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* harden FFmpeg discovery ([33e7253](https://github.com/sethjuarez/snipsy/commit/33e7253eed29e3a014c979e0c0138818df63bc34))
+* harden FFmpeg discovery ([c3c7ac0](https://github.com/sethjuarez/snipsy/commit/c3c7ac007d5c9c31f443d0dc3e5de12fa8de758b))
+
 ## [0.17.0](https://github.com/sethjuarez/snipsy/compare/v0.16.0...v0.17.0) (2026-07-12)
 
 
