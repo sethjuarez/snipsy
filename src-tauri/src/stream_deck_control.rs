@@ -223,7 +223,22 @@ pub async fn execute_request(
 ) -> StreamDeckControlResponse {
     match execute_request_inner(app, request).await {
         Ok(result) => success_response(result),
-        Err(error) => error_response("commandFailed", error),
+        Err(error) => error_response(command_error_code(&error), error),
+    }
+}
+
+fn command_error_code(error: &str) -> &'static str {
+    if error.contains("Text snippet not found") || error.contains("Video snippet not found") {
+        "snippetNotFound"
+    } else if error.contains("Unknown Stream Deck snippet type") {
+        "unknownSnippetType"
+    } else if error.contains("project.json")
+        || error.contains("text-snippets.json")
+        || error.contains("video-snippets.json")
+    {
+        "projectUnavailable"
+    } else {
+        "commandFailed"
     }
 }
 
@@ -1063,5 +1078,26 @@ mod tests {
 
         assert!(!response.ok);
         assert_eq!(response.error.unwrap().code, "busy");
+    }
+
+    #[test]
+    fn command_errors_have_stable_codes_for_plugin_states() {
+        assert_eq!(
+            command_error_code("Text snippet not found for Stream Deck binding: text-1"),
+            "snippetNotFound"
+        );
+        assert_eq!(
+            command_error_code("Video snippet not found for Stream Deck binding: video-1"),
+            "snippetNotFound"
+        );
+        assert_eq!(
+            command_error_code("Failed to read project.json: not found"),
+            "projectUnavailable"
+        );
+        assert_eq!(
+            command_error_code("Unknown Stream Deck snippet type: script"),
+            "unknownSnippetType"
+        );
+        assert_eq!(command_error_code("Failed to type text"), "commandFailed");
     }
 }

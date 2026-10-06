@@ -17751,7 +17751,8 @@ function labelForError(error40) {
     if (error40.code === "missingBinding") return "Bind in\nSnipsy";
     if (error40.code === "busy") return "Snipsy\nBusy";
     if (error40.code === "unsupportedProtocol" || error40.code === "unsupportedTransport") return "Update\nSnipsy";
-    if (error40.code === "commandFailed" && /not found|missing/i.test(error40.message)) return "Project?\nSnippet?";
+    if (error40.code === "projectUnavailable") return "Project?\nMissing";
+    if (error40.code === "snippetNotFound" || error40.code === "unknownSnippetType") return "Stale\nBinding";
     return "Snipsy\nError";
   }
   return "Snipsy\nError";

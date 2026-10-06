@@ -148,7 +148,8 @@ function labelForError(error: unknown): string {
     if (error.code === "missingBinding") return "Bind in\nSnipsy";
     if (error.code === "busy") return "Snipsy\nBusy";
     if (error.code === "unsupportedProtocol" || error.code === "unsupportedTransport") return "Update\nSnipsy";
-    if (error.code === "commandFailed" && /not found|missing/i.test(error.message)) return "Project?\nSnippet?";
+    if (error.code === "projectUnavailable") return "Project?\nMissing";
+    if (error.code === "snippetNotFound" || error.code === "unknownSnippetType") return "Stale\nBinding";
     return "Snipsy\nError";
   }
   return "Snipsy\nError";

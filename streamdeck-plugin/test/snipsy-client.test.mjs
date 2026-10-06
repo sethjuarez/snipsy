@@ -273,6 +273,9 @@ test("plugin key refresh surfaces stale and offline states", async () => {
   assert.match(source, /Snipsy\\nOffline/);
   assert.match(source, /Snipsy\\nBusy/);
   assert.match(source, /Update\\nSnipsy/);
+  assert.match(source, /projectUnavailable/);
+  assert.match(source, /snippetNotFound/);
+  assert.doesNotMatch(source, /not found\|missing/);
 });
 
 test("plugin entrypoint loads without CommonJS bundle failures", async () => {
