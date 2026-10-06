@@ -4,6 +4,7 @@ import type {
   MonitorInfo,
   PauseStop,
   Script,
+  StreamDeckButton,
   TextSnippet,
   TransitionAction,
   VideoSnippet,
@@ -100,6 +101,7 @@ export interface BackendService {
   getVideoFps(videoPath: string): Promise<number>;
   listMonitors(): Promise<MonitorInfo[]>;
   captureMonitorPreview(monitorName: string): Promise<string>;
+  listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]>;
   startRecordingScript(projectPath: string): Promise<string>;
   stopRecordingScript(projectPath: string, title: string, description: string): Promise<Script>;
   isRecording(): Promise<boolean>;

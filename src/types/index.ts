@@ -5,6 +5,25 @@ export interface Project {
 
 export type DeliveryMethod = "fast-type" | "paste";
 
+export type StreamDeckIcon =
+  | {
+      kind: "preset";
+      value: "text" | "code" | "terminal" | "play" | "rocket";
+      background?: string;
+      foreground?: string;
+    }
+  | {
+      kind: "emoji";
+      value: string;
+      background?: string;
+      foreground?: string;
+    }
+  | {
+      kind: "generated";
+      background?: string;
+      foreground?: string;
+    };
+
 export interface TextSnippet {
   id: string;
   title: string;
@@ -13,6 +32,7 @@ export interface TextSnippet {
   hotkey: string;
   delivery: DeliveryMethod;
   typeDelay?: number;
+  streamDeckIcon?: StreamDeckIcon;
 }
 
 export interface TransitionAction {
@@ -80,6 +100,7 @@ export interface VideoSnippet {
   muted?: boolean;
   pauseStops?: PauseStop[];
   transitionActions?: TransitionAction[];
+  streamDeckIcon?: StreamDeckIcon;
 }
 
 export type ScriptPlatform = "windows" | "macos" | "linux";
@@ -154,4 +175,12 @@ export interface ProjectData {
   project: Project;
   textSnippets: TextSnippet[];
   videoSnippets: VideoSnippet[];
+}
+
+export interface StreamDeckButton {
+  id: string;
+  title: string;
+  snippetType: "text" | "video";
+  hotkey: string;
+  iconDataUrl: string;
 }

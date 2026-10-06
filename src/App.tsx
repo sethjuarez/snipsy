@@ -21,6 +21,7 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import SectionToolbar, { type ToolbarAction } from "./components/SectionToolbar";
 import ToastViewport, { type ToastMessage, type ToastTone } from "./components/ToastViewport";
 import ErrorBoundary from "./components/ErrorBoundary";
+import StreamDeckEmulator from "./components/StreamDeckEmulator";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners } from "./utils/hotkeys";
@@ -609,6 +610,10 @@ function App() {
                 )}
               </>
             )}
+
+            {activeView === "streamdeck" && (
+              <StreamDeckEmulator />
+            )}
             </>
             )}
           </div>
@@ -726,6 +731,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   videos: "Videos",
   "video-snippets": "Video Clips",
   scripts: "Automations",
+  streamdeck: "Stream Deck Emulator",
 };
 
 function ContentHeader({
@@ -760,7 +766,7 @@ function ContentHeader({
     form?: string;
   };
 }) {
-  const canAdd = view !== "videos" && view !== "home";
+  const canAdd = view !== "videos" && view !== "home" && view !== "streamdeck";
   const actions: ToolbarAction[] = [];
 
   if (view === "scripts" && !showForm && !isRecording) {

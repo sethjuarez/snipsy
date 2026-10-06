@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke } from "./auditaur";
 import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
-import type { ProjectData, MonitorInfo, TextSnippet, VideoSnippet } from "../types";
+import type { ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -177,6 +177,10 @@ export class TauriBackendService implements BackendService {
 
   async captureMonitorPreview(monitorName: string): Promise<string> {
     return invoke<string>("capture_monitor_preview", { monitorName });
+  }
+
+  async listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]> {
+    return invoke<StreamDeckButton[]>("list_stream_deck_buttons", { projectPath });
   }
 
   async startRecordingScript(projectPath: string): Promise<string> {

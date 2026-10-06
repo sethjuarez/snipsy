@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import type { VideoSnippet, TransitionAction } from "../types";
+import type { VideoSnippet, TransitionAction, StreamDeckIcon } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
+import { STREAM_DECK_PRESETS, defaultStreamDeckIcon, streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 interface VideoSnippetFormProps {
   snippet?: VideoSnippet;
@@ -23,6 +24,12 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   );
   const [muted, setMuted] = useState(snippet?.muted !== false);
   const [pauseStops] = useState(snippet?.pauseStops);
+  const initialIcon = snippet?.streamDeckIcon ?? defaultStreamDeckIcon("video");
+  const [iconKind, setIconKind] = useState<StreamDeckIcon["kind"]>(initialIcon.kind);
+  const [iconPreset, setIconPreset] = useState<string>(initialIcon.kind === "preset" ? initialIcon.value : "play");
+  const [iconEmoji, setIconEmoji] = useState(initialIcon.kind === "emoji" ? initialIcon.value : "▶");
+  const [iconBackground, setIconBackground] = useState(initialIcon.background ?? "#1e1b4b");
+  const [iconForeground, setIconForeground] = useState(initialIcon.foreground ?? "#a78bfa");
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
   const canSave = Boolean(title.trim()) && Boolean(videoFile.trim()) && hotkeyStatus.state === "available";
@@ -33,6 +40,12 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
       !videoFile.trim() ? "Video file" : null,
       hotkeyStatus.state !== "available" ? "Hotkey" : null,
     ].filter(Boolean).join(", ")}`;
+  const streamDeckIcon: StreamDeckIcon = iconKind === "emoji"
+    ? { kind: "emoji", value: iconEmoji || "▶", background: iconBackground, foreground: iconForeground }
+    : iconKind === "generated"
+      ? { kind: "generated", background: iconBackground, foreground: iconForeground }
+      : { kind: "preset", value: STREAM_DECK_PRESETS.includes(iconPreset as (typeof STREAM_DECK_PRESETS)[number]) ? iconPreset as (typeof STREAM_DECK_PRESETS)[number] : "play", background: iconBackground, foreground: iconForeground };
+  const streamDeckPreview = streamDeckIconToDataUrl(streamDeckIcon, title || "Clip", "video");
 
   const addTransitionAction = () => {
     setTransitionActions([
@@ -82,6 +95,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
       speed,
       muted,
       pauseStops,
+      streamDeckIcon,
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
     });
@@ -95,7 +109,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
 
   useEffect(() => {
     if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions]);
+  }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions, iconKind, iconPreset, iconEmoji, iconBackground, iconForeground]);
 
   useEffect(() => {
     onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
@@ -254,6 +268,67 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
         <label htmlFor="muted" className="font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
           Mute audio during playback
         </label>
+      </div>
+
+      <div>
+        <label className="block font-medium mb-2 text-base" style={{ color: "var(--color-text-secondary)" }}>
+          Stream Deck Icon
+        </label>
+        <div className="flex gap-3 items-start">
+          <img src={streamDeckPreview} alt="" className="w-20 h-20 rounded-xl" data-testid="video-streamdeck-icon-preview" />
+          <div className="grid grid-cols-2 gap-3 flex-1">
+            <select
+              value={iconKind}
+              onChange={(e) => setIconKind(e.target.value as StreamDeckIcon["kind"])}
+              className="px-3 py-2 rounded text-md"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+              data-testid="video-streamdeck-icon-kind"
+            >
+              <option value="preset">Preset</option>
+              <option value="emoji">Emoji</option>
+              <option value="generated">Generated initials</option>
+            </select>
+            {iconKind === "preset" ? (
+              <select
+                value={iconPreset}
+                onChange={(e) => setIconPreset(e.target.value)}
+                className="px-3 py-2 rounded text-md"
+                style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                data-testid="video-streamdeck-icon-preset"
+              >
+                {STREAM_DECK_PRESETS.map((preset) => <option key={preset} value={preset}>{preset}</option>)}
+              </select>
+            ) : iconKind === "emoji" ? (
+              <input
+                value={iconEmoji}
+                onChange={(e) => setIconEmoji(e.target.value)}
+                className="px-3 py-2 rounded text-md"
+                style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                data-testid="video-streamdeck-icon-emoji"
+              />
+            ) : (
+              <div className="px-3 py-2 rounded text-md" style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                Uses title initials
+              </div>
+            )}
+            <input
+              type="color"
+              aria-label="Stream Deck icon background"
+              value={iconBackground}
+              onChange={(e) => setIconBackground(e.target.value)}
+              className="h-10 w-full rounded"
+              data-testid="video-streamdeck-icon-background"
+            />
+            <input
+              type="color"
+              aria-label="Stream Deck icon foreground"
+              value={iconForeground}
+              onChange={(e) => setIconForeground(e.target.value)}
+              className="h-10 w-full rounded"
+              data-testid="video-streamdeck-icon-foreground"
+            />
+          </div>
+        </div>
       </div>
 
       <div data-testid="transition-actions-section">

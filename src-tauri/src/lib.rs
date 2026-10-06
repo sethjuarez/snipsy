@@ -9,6 +9,7 @@ mod models;
 mod playback;
 mod recorder;
 mod scripting;
+mod stream_deck;
 mod tray;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -85,6 +86,7 @@ pub fn run() {
             recorder::stop_recording_script,
             recorder::is_recording,
             scripting::run_script,
+            stream_deck::list_stream_deck_buttons,
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,
         ])
