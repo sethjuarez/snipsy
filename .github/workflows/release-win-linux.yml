@@ -95,6 +95,16 @@ jobs:
         if: matrix.rust_targets == ''
         run: npm test
 
+      - name: Package Stream Deck plugin
+        if: matrix.platform == 'windows-latest' && matrix.args == ''
+        run: npm run package:streamdeck
+
+      - name: Upload Stream Deck plugin
+        if: matrix.platform == 'windows-latest' && matrix.args == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.resolve-tag.outputs.tag }}" "dist/streamdeck/Snipsy.streamDeckPlugin" --clobber
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
