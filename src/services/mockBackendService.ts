@@ -297,6 +297,41 @@ export class MockBackendService implements BackendService {
     ];
   }
 
+  async triggerStreamDeckButton(
+    _projectPath: string,
+    snippetId: string,
+    snippetType: "text" | "video",
+  ) {
+    const snippets = snippetType === "text" ? this.data.textSnippets : this.data.videoSnippets;
+    const snippet = snippets.find((candidate) => candidate.id === snippetId);
+    if (!snippet) throw new Error(`${snippetType} snippet not found: ${snippetId}`);
+    if (snippetType === "text") {
+      const textSnippet = snippet as TextSnippet;
+      await this.deliverText(textSnippet.text, textSnippet.delivery, textSnippet.typeDelay);
+    } else {
+      await this.playVideo(
+        _projectPath,
+        (snippet as VideoSnippet).videoFile,
+        (snippet as VideoSnippet).startTime,
+        (snippet as VideoSnippet).endTime,
+        (snippet as VideoSnippet).speed,
+        (snippet as VideoSnippet).transitionActions,
+        (snippet as VideoSnippet).targetMonitor,
+        (snippet as VideoSnippet).endBehavior,
+        (snippet as VideoSnippet).hideCursor,
+        (snippet as VideoSnippet).backgroundColor,
+        (snippet as VideoSnippet).clickToPlay,
+        (snippet as VideoSnippet).muted,
+        (snippet as VideoSnippet).pauseStops,
+      );
+    }
+    return {
+      id: snippet.id,
+      title: snippet.title,
+      snippetType,
+    };
+  }
+
   async startRecordingScript(_projectPath: string): Promise<string> {
     this._isRecording = true;
     return "screenshots/mock-start.png";

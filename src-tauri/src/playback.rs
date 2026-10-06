@@ -60,16 +60,40 @@ pub async fn play_video(
         &pause_stops_json,
     );
 
+    let resolved_target_monitor = resolve_target_monitor(target_monitor.as_deref());
+
     create_playback_window(
         app,
         url,
-        target_monitor,
+        resolved_target_monitor,
         bg,
         hide_cursor.unwrap_or(true),
         transition_actions,
         (end_time - start_time) / speed,
     )
     .await
+}
+
+fn resolve_target_monitor(target_monitor: Option<&str>) -> Option<String> {
+    let monitors = xcap::Monitor::all().ok()?;
+    let names = monitors
+        .iter()
+        .filter_map(|monitor| monitor.name().ok())
+        .collect::<Vec<_>>();
+    select_monitor_name(target_monitor, names.iter().map(String::as_str))
+}
+
+fn select_monitor_name<'a>(
+    target_monitor: Option<&str>,
+    available_names: impl IntoIterator<Item = &'a str>,
+) -> Option<String> {
+    let names = available_names.into_iter().collect::<Vec<_>>();
+    if let Some(target) = target_monitor {
+        if names.iter().any(|name| *name == target) {
+            return Some(target.into());
+        }
+    }
+    names.first().map(|name| (*name).into())
 }
 
 async fn create_playback_window(
@@ -349,6 +373,27 @@ mod tests {
             url,
             "/playback?file=/tmp/demo%20clip.mp4&start=1.25&end=5.5&speed=1&endBehavior=freeze&hideCursor=false&bg=%23101010&clickToPlay=true&muted=false&pauseStops=%5B%7B%22time%22%3A2%7D%5D"
         );
+    }
+
+    #[test]
+    fn select_monitor_name_keeps_available_target() {
+        let selected = select_monitor_name(Some("Presenter"), ["Primary", "Presenter"]);
+
+        assert_eq!(selected.as_deref(), Some("Presenter"));
+    }
+
+    #[test]
+    fn select_monitor_name_falls_back_to_first_available_monitor() {
+        let selected = select_monitor_name(Some("Missing"), ["Primary", "Presenter"]);
+
+        assert_eq!(selected.as_deref(), Some("Primary"));
+    }
+
+    #[test]
+    fn select_monitor_name_falls_back_when_no_target_is_saved() {
+        let selected = select_monitor_name(None, ["Primary", "Presenter"]);
+
+        assert_eq!(selected.as_deref(), Some("Primary"));
     }
 
     #[test]

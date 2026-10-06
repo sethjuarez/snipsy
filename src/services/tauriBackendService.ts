@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke } from "./auditaur";
 import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
-import type { ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ProjectData, MonitorInfo, StreamDeckButton, StreamDeckTriggerResult, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -181,6 +181,18 @@ export class TauriBackendService implements BackendService {
 
   async listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]> {
     return invoke<StreamDeckButton[]>("list_stream_deck_buttons", { projectPath });
+  }
+
+  async triggerStreamDeckButton(
+    projectPath: string,
+    snippetId: string,
+    snippetType: "text" | "video",
+  ): Promise<StreamDeckTriggerResult> {
+    return invoke<StreamDeckTriggerResult>("trigger_stream_deck_button", {
+      projectPath,
+      snippetId,
+      snippetType,
+    });
   }
 
   async startRecordingScript(projectPath: string): Promise<string> {

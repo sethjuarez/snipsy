@@ -184,3 +184,9 @@ export interface StreamDeckButton {
   hotkey: string;
   iconDataUrl: string;
 }
+
+export interface StreamDeckTriggerResult {
+  id: string;
+  title: string;
+  snippetType: "text" | "video";
+}

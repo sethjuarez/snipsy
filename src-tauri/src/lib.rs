@@ -87,6 +87,7 @@ pub fn run() {
             recorder::is_recording,
             scripting::run_script,
             stream_deck::list_stream_deck_buttons,
+            stream_deck::trigger_stream_deck_button,
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,
         ])

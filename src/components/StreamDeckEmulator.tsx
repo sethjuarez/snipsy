@@ -51,6 +51,12 @@ function StreamDeckEmulator() {
 
   async function handlePress(button: StreamDeckButton) {
     try {
+      if (projectPath) {
+        const result = await backend.triggerStreamDeckButton(projectPath, button.id, button.snippetType);
+        setStatus(`Triggered ${result.title}`);
+        return;
+      }
+
       if (button.snippetType === "text") {
         const snippet = textSnippets.find((candidate) => candidate.id === button.id);
         if (!snippet) {
@@ -69,7 +75,7 @@ function StreamDeckEmulator() {
       setStatus(`Triggered ${button.title}`);
     } catch (error) {
       console.error("Stream Deck emulator trigger failed", error);
-      setStatus(`Failed: ${button.title}`);
+      setStatus(`Failed: ${button.title} — ${errorMessage(error)}`);
     }
   }
 
@@ -126,6 +132,10 @@ function toButton(snippet: TextSnippet | VideoSnippet, snippetType: "text" | "vi
     hotkey: snippet.hotkey,
     iconDataUrl: streamDeckIconToDataUrl(snippet.streamDeckIcon, snippet.title, snippetType),
   };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export default StreamDeckEmulator;
