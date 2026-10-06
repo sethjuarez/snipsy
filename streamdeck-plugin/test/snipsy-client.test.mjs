@@ -119,6 +119,35 @@ test("sends listButtons requests through the advertised descriptor", async () =>
   assert.deepEqual(requests, [{ command: "listButtons", projectPath: "C:\\demo" }]);
 });
 
+test("deduplicates bursty listButtons requests per project path", async () => {
+  let requestCount = 0;
+  let now = 1000;
+  const client = new SnipsyClient({
+    platform: "win32",
+    now: () => now,
+    listButtonsCacheTtlMs: 1500,
+    readFileText: async () => JSON.stringify(descriptor),
+    request: async () => {
+      requestCount += 1;
+      return [
+        {
+          id: "snippet-1",
+          title: "Snippet 1",
+          snippetType: "text",
+          iconDataUrl: "data:image/svg+xml;base64,PHN2Zy8+",
+        },
+      ];
+    },
+  });
+
+  const [first, second] = await Promise.all([client.listButtons(" C:\\demo "), client.listButtons("C:\\demo")]);
+  now = 2600;
+  await client.listButtons("C:\\demo");
+
+  assert.equal(first, second);
+  assert.equal(requestCount, 2);
+});
+
 test("sends triggerButton requests with semantic snippet bindings", async () => {
   const requests = [];
   const client = new SnipsyClient({

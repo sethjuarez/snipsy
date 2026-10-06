@@ -15,14 +15,19 @@ var SnipsyControlError = class extends Error {
 var SnipsyClient = class {
   #descriptorPath;
   #timeoutMs;
+  #listButtonsCacheTtlMs;
+  #now;
   #readFileText;
   #request;
   #env;
   #platform;
   #homeDir;
+  #listButtonsCache = /* @__PURE__ */ new Map();
   constructor(options = {}) {
     this.#descriptorPath = options.descriptorPath;
     this.#timeoutMs = options.timeoutMs ?? 5e3;
+    this.#listButtonsCacheTtlMs = options.listButtonsCacheTtlMs ?? 1500;
+    this.#now = options.now ?? Date.now;
     this.#readFileText = options.readFileText ?? ((path) => readFile(path, "utf8"));
     this.#request = options.request;
     this.#env = options.env ?? process.env;
@@ -53,10 +58,26 @@ var SnipsyClient = class {
     return this.#send({ command: "status" });
   }
   async listButtons(projectPath) {
-    if (!projectPath.trim()) {
+    const normalizedProjectPath = projectPath.trim();
+    if (!normalizedProjectPath) {
       throw new SnipsyControlError("Project path is required before listing buttons.", "missingProjectPath");
     }
-    return this.#send({ command: "listButtons", projectPath });
+    const cached = this.#listButtonsCache.get(normalizedProjectPath);
+    if (cached && cached.expiresAt > this.#now()) {
+      return cached.promise;
+    }
+    const promise = this.#send({
+      command: "listButtons",
+      projectPath: normalizedProjectPath
+    }).catch((error) => {
+      this.#listButtonsCache.delete(normalizedProjectPath);
+      throw error;
+    });
+    this.#listButtonsCache.set(normalizedProjectPath, {
+      expiresAt: this.#now() + this.#listButtonsCacheTtlMs,
+      promise
+    });
+    return promise;
   }
   async triggerButton(projectPath, snippetId, snippetType) {
     if (!projectPath.trim() || !snippetId.trim()) {

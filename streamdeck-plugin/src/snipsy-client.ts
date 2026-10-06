@@ -53,6 +53,8 @@ type Command =
 export interface SnipsyClientOptions {
   descriptorPath?: string;
   timeoutMs?: number;
+  listButtonsCacheTtlMs?: number;
+  now?: () => number;
   readFileText?: (path: string) => Promise<string>;
   request?: <T>(descriptor: StreamDeckControlDescriptor, command: Command) => Promise<T>;
   env?: NodeJS.ProcessEnv;
@@ -72,15 +74,20 @@ export class SnipsyControlError extends Error {
 export class SnipsyClient {
   readonly #descriptorPath?: string;
   readonly #timeoutMs: number;
+  readonly #listButtonsCacheTtlMs: number;
+  readonly #now: () => number;
   readonly #readFileText: (path: string) => Promise<string>;
   readonly #request?: <T>(descriptor: StreamDeckControlDescriptor, command: Command) => Promise<T>;
   readonly #env: NodeJS.ProcessEnv;
   readonly #platform: NodeJS.Platform;
   readonly #homeDir: string;
+  readonly #listButtonsCache = new Map<string, { expiresAt: number; promise: Promise<StreamDeckButton[]> }>();
 
   constructor(options: SnipsyClientOptions = {}) {
     this.#descriptorPath = options.descriptorPath;
     this.#timeoutMs = options.timeoutMs ?? 5000;
+    this.#listButtonsCacheTtlMs = options.listButtonsCacheTtlMs ?? 1500;
+    this.#now = options.now ?? Date.now;
     this.#readFileText = options.readFileText ?? ((path) => readFile(path, "utf8"));
     this.#request = options.request;
     this.#env = options.env ?? process.env;
@@ -115,10 +122,26 @@ export class SnipsyClient {
   }
 
   async listButtons(projectPath: string): Promise<StreamDeckButton[]> {
-    if (!projectPath.trim()) {
+    const normalizedProjectPath = projectPath.trim();
+    if (!normalizedProjectPath) {
       throw new SnipsyControlError("Project path is required before listing buttons.", "missingProjectPath");
     }
-    return this.#send<StreamDeckButton[]>({ command: "listButtons", projectPath });
+    const cached = this.#listButtonsCache.get(normalizedProjectPath);
+    if (cached && cached.expiresAt > this.#now()) {
+      return cached.promise;
+    }
+    const promise = this.#send<StreamDeckButton[]>({
+      command: "listButtons",
+      projectPath: normalizedProjectPath,
+    }).catch((error) => {
+      this.#listButtonsCache.delete(normalizedProjectPath);
+      throw error;
+    });
+    this.#listButtonsCache.set(normalizedProjectPath, {
+      expiresAt: this.#now() + this.#listButtonsCacheTtlMs,
+      promise,
+    });
+    return promise;
   }
 
   async triggerButton(
