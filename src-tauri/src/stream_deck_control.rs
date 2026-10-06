@@ -21,6 +21,7 @@ use tauri::{AppHandle, Manager};
 
 pub const CONTROL_PROTOCOL_VERSION: u32 = 1;
 const DESCRIPTOR_FILE: &str = "stream-deck-control.json";
+static TRIGGER_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -289,6 +290,33 @@ pub fn error_response(
             message: message.into(),
         }),
     }
+}
+
+fn accepted_response(status: impl Into<String>) -> StreamDeckControlResponse {
+    success_response(serde_json::json!({ "status": status.into() }))
+}
+
+fn try_start_trigger_request(
+    app: AppHandle,
+    request: StreamDeckControlRequest,
+) -> StreamDeckControlResponse {
+    if TRIGGER_IN_PROGRESS
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return error_response(
+            "busy",
+            "Another Stream Deck trigger is already running. Try again when it finishes.",
+        );
+    }
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = execute_request_inner(app, request).await {
+            tracing::warn!(error = %error, "Stream Deck trigger request failed after acceptance");
+        }
+        TRIGGER_IN_PROGRESS.store(false, Ordering::SeqCst);
+    });
+    accepted_response("accepted")
 }
 
 #[cfg(target_os = "windows")]
@@ -607,6 +635,9 @@ fn handle_windows_pipe_connection(
 ) -> Result<(), String> {
     let response = match read_windows_pipe_request(pipe) {
         Ok(request_line) => match parse_request_line(&request_line) {
+            Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
+                try_start_trigger_request(app, request)
+            }
             Ok(request) => tauri::async_runtime::block_on(execute_request(app, request)),
             Err(error) => StreamDeckControlResponse {
                 protocol_version: CONTROL_PROTOCOL_VERSION,
@@ -828,5 +859,25 @@ mod tests {
         assert!(!response.ok);
         assert!(response.result.is_none());
         assert_eq!(response.error.unwrap().code, "missingProject");
+    }
+
+    #[test]
+    fn accepted_response_reports_accepted_status() {
+        let response = accepted_response("accepted");
+
+        assert_eq!(response.protocol_version, CONTROL_PROTOCOL_VERSION);
+        assert!(response.ok);
+        assert_eq!(response.result.unwrap()["status"], "accepted");
+    }
+
+    #[test]
+    fn busy_response_has_stable_error_code() {
+        let response = error_response(
+            "busy",
+            "Another Stream Deck trigger is already running. Try again when it finishes.",
+        );
+
+        assert!(!response.ok);
+        assert_eq!(response.error.unwrap().code, "busy");
     }
 }

@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { readFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createServer } from "node:net";
 import test from "node:test";
 
 import {
   SnipsyClient,
   SnipsyControlError,
   defaultDescriptorPath,
+  sendRequest,
   validateDescriptor,
 } from "../com.snipsy.streamdeck.sdPlugin/bin/snipsy-client.mjs";
 
@@ -95,6 +97,47 @@ test("sends triggerButton requests with semantic snippet bindings", async () => 
     },
   ]);
 });
+
+test(
+  "round-trips requests over an actual Windows named pipe",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const pipeName = `\\\\.\\pipe\\snipsy-streamdeck-test-${process.pid}-${Date.now()}`;
+    const server = createServer((socket) => {
+      let request = "";
+      socket.on("data", (chunk) => {
+        request += chunk.toString("utf8");
+        if (!request.includes("\n")) return;
+        const command = JSON.parse(request.trim());
+        socket.end(
+          `${JSON.stringify({
+            protocolVersion: 1,
+            ok: true,
+            result: { command: command.command, projectPath: command.projectPath },
+          })}\n`,
+        );
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(pipeName, resolve);
+    });
+    try {
+      const result = await sendRequest(
+        {
+          ...descriptor,
+          transport: { ...descriptor.transport, endpoint: pipeName },
+        },
+        { command: "listButtons", projectPath: "C:\\demo" },
+      );
+
+      assert.deepEqual(result, { command: "listButtons", projectPath: "C:\\demo" });
+    } finally {
+      server.close();
+    }
+  },
+);
 
 test("property inspector includes the action uuid in sendToPlugin messages", async () => {
   const source = await readFile(
