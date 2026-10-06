@@ -46,8 +46,22 @@ pub fn run() {
 
             // Always-on tray/menu bar icon
             tray::init_tray(app.handle())?;
-            if let Err(e) = stream_deck_control::write_discovery_descriptor(app.handle()) {
-                tracing::warn!(error = %e, "Failed to write Stream Deck discovery descriptor");
+            match stream_deck_control::start_control_server(app.handle()) {
+                Ok(state) => {
+                    app.manage(state);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to start Stream Deck control server");
+                    if let Err(descriptor_error) =
+                        stream_deck_control::write_discovery_descriptor_with_status(
+                            app.handle(),
+                            false,
+                            stream_deck_control::StreamDeckTransportStatus::StartFailed,
+                        )
+                    {
+                        tracing::warn!(error = %descriptor_error, "Failed to write Stream Deck discovery descriptor");
+                    }
+                }
             }
 
             if let Err(e) = tray::restore_main_window(app.handle()) {
@@ -122,6 +136,9 @@ fn cleanup_on_exit(app: &tauri::AppHandle) {
 
     // Clean up low-level keyboard hooks
     keyboard_hook::clear_all_hooks();
+    if let Some(state) = app.try_state::<stream_deck_control::StreamDeckControlState>() {
+        state.stop();
+    }
     stream_deck_control::remove_discovery_descriptor(app);
 
     // Close the playback window if it's still open

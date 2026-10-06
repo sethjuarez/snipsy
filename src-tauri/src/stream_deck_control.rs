@@ -1,11 +1,19 @@
-//! Stream Deck control protocol scaffolding.
+//! Stream Deck control protocol and native transport.
 //!
-//! The descriptor advertises the intended native transport endpoint, but the
-//! transport remains inactive until the pipe/socket server is implemented. When
-//! that server is added, bind it owner-only because trigger requests can type
-//! into the foreground app and start video playback.
+//! The Windows named pipe is bound to the current user and SYSTEM only because
+//! trigger requests can type into the foreground app and start video playback.
 
-use std::{fs, path::PathBuf, process};
+use std::{
+    ffi::c_void,
+    fs,
+    path::PathBuf,
+    process,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -38,6 +46,33 @@ pub struct StreamDeckTransportDescriptor {
 #[serde(rename_all = "camelCase")]
 pub enum StreamDeckTransportStatus {
     NotStarted,
+    Listening,
+    StartFailed,
+}
+
+pub struct StreamDeckControlState {
+    endpoint: String,
+    stop: Arc<AtomicBool>,
+}
+
+impl StreamDeckControlState {
+    pub fn stop(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        unblock_transport(&self.endpoint);
+    }
+}
+
+pub fn start_control_server(app: &AppHandle) -> Result<StreamDeckControlState, String> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let endpoint = start_transport(app.clone(), stop.clone())?;
+    if let Err(error) =
+        write_discovery_descriptor_with_status(app, true, StreamDeckTransportStatus::Listening)
+    {
+        stop.store(true, Ordering::SeqCst);
+        unblock_transport(&endpoint);
+        return Err(error);
+    }
+    Ok(StreamDeckControlState { endpoint, stop })
 }
 
 #[allow(dead_code)]
@@ -79,9 +114,23 @@ pub struct StreamDeckControlError {
     pub message: String,
 }
 
+#[allow(dead_code)]
 pub fn write_discovery_descriptor(app: &AppHandle) -> Result<PathBuf, String> {
+    write_discovery_descriptor_with_status(app, false, StreamDeckTransportStatus::NotStarted)
+}
+
+pub fn write_discovery_descriptor_with_status(
+    app: &AppHandle,
+    active: bool,
+    status: StreamDeckTransportStatus,
+) -> Result<PathBuf, String> {
     let path = discovery_descriptor_path(app)?;
-    let descriptor = descriptor_for_process(app.package_info().version.to_string(), process::id());
+    let descriptor = descriptor_for_process_with_transport(
+        app.package_info().version.to_string(),
+        process::id(),
+        active,
+        status,
+    );
     let json = serde_json::to_string_pretty(&descriptor)
         .map_err(|error| format!("Failed to serialize Stream Deck descriptor: {error}"))?;
     let parent = path
@@ -112,20 +161,36 @@ pub fn discovery_descriptor_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir.join(DESCRIPTOR_FILE))
 }
 
+#[allow(dead_code)]
 pub fn descriptor_for_process(app_version: String, pid: u32) -> StreamDeckControlDescriptor {
+    descriptor_for_process_with_transport(
+        app_version,
+        pid,
+        false,
+        StreamDeckTransportStatus::NotStarted,
+    )
+}
+
+pub fn descriptor_for_process_with_transport(
+    app_version: String,
+    pid: u32,
+    active: bool,
+    status: StreamDeckTransportStatus,
+) -> StreamDeckControlDescriptor {
     StreamDeckControlDescriptor {
         schema_version: 1,
         app: "snipsy".into(),
         app_version,
         protocol_version: CONTROL_PROTOCOL_VERSION,
         pid,
-        transport: transport_descriptor(pid),
+        transport: transport_descriptor(pid, active, status),
     }
 }
 
 #[allow(dead_code)]
 pub fn parse_request_line(line: &str) -> Result<StreamDeckControlRequest, StreamDeckControlError> {
-    let value: Value = serde_json::from_str(line.trim()).map_err(|error| StreamDeckControlError {
+    let line = line.trim().trim_start_matches('\u{feff}');
+    let value: Value = serde_json::from_str(line).map_err(|error| StreamDeckControlError {
         code: "invalidJson".into(),
         message: format!("Invalid Stream Deck control request JSON: {error}"),
     })?;
@@ -167,11 +232,15 @@ async fn execute_request_inner(
     request: StreamDeckControlRequest,
 ) -> Result<Value, String> {
     match request {
-        StreamDeckControlRequest::Status => serde_json::to_value(descriptor_for_process(
-            app.package_info().version.to_string(),
-            process::id(),
-        ))
-        .map_err(|error| format!("Failed to encode Stream Deck status: {error}")),
+        StreamDeckControlRequest::Status => {
+            serde_json::to_value(descriptor_for_process_with_transport(
+                app.package_info().version.to_string(),
+                process::id(),
+                true,
+                StreamDeckTransportStatus::Listening,
+            ))
+            .map_err(|error| format!("Failed to encode Stream Deck status: {error}"))
+        }
         StreamDeckControlRequest::ListButtons { project_path } => {
             let buttons = crate::stream_deck::list_stream_deck_buttons(project_path, None)?;
             serde_json::to_value(buttons)
@@ -223,17 +292,25 @@ pub fn error_response(
 }
 
 #[cfg(target_os = "windows")]
-fn transport_descriptor(pid: u32) -> StreamDeckTransportDescriptor {
+fn transport_descriptor(
+    pid: u32,
+    active: bool,
+    status: StreamDeckTransportStatus,
+) -> StreamDeckTransportDescriptor {
     StreamDeckTransportDescriptor {
         kind: "windowsNamedPipe".into(),
         endpoint: format!(r"\\.\pipe\snipsy-streamdeck-{pid}"),
-        active: false,
-        status: StreamDeckTransportStatus::NotStarted,
+        active,
+        status,
     }
 }
 
 #[cfg(not(target_os = "windows"))]
-fn transport_descriptor(pid: u32) -> StreamDeckTransportDescriptor {
+fn transport_descriptor(
+    pid: u32,
+    active: bool,
+    status: StreamDeckTransportStatus,
+) -> StreamDeckTransportDescriptor {
     #[cfg(target_os = "macos")]
     let endpoint = PathBuf::from("/tmp").join(format!("snipsy-streamdeck-{pid}.sock"));
 
@@ -245,8 +322,8 @@ fn transport_descriptor(pid: u32) -> StreamDeckTransportDescriptor {
     StreamDeckTransportDescriptor {
         kind: "unixSocket".into(),
         endpoint: endpoint.to_string_lossy().into_owned(),
-        active: false,
-        status: StreamDeckTransportStatus::NotStarted,
+        active,
+        status,
     }
 }
 
@@ -258,6 +335,351 @@ fn descriptor_belongs_to_current_process(path: &PathBuf) -> bool {
         return false;
     };
     descriptor.pid == process::id()
+}
+
+#[cfg(target_os = "windows")]
+struct PipeSecurity {
+    attributes: windows::Win32::Security::SECURITY_ATTRIBUTES,
+    descriptor: windows::Win32::Security::PSECURITY_DESCRIPTOR,
+}
+
+#[cfg(target_os = "windows")]
+impl PipeSecurity {
+    fn owner_only() -> Result<Self, String> {
+        use windows::core::{PCWSTR, PWSTR};
+        use windows::Win32::Foundation::HLOCAL;
+        use windows::Win32::Security::Authorization::{
+            ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+            SDDL_REVISION_1,
+        };
+        use windows::Win32::Security::{
+            GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, TOKEN_QUERY, TOKEN_USER,
+        };
+        use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+        let mut token = windows::Win32::Foundation::HANDLE::default();
+        unsafe {
+            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)
+                .map_err(|error| format!("Failed to open process token: {error}"))?;
+        }
+        let token_guard = HandleGuard(token);
+
+        let mut required = 0_u32;
+        let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut required) };
+        if required == 0 {
+            return Err("Failed to determine process token user size".into());
+        }
+
+        let mut token_info = vec![0_u8; required as usize];
+        unsafe {
+            GetTokenInformation(
+                token,
+                TokenUser,
+                Some(token_info.as_mut_ptr() as *mut c_void),
+                required,
+                &mut required,
+            )
+            .map_err(|error| format!("Failed to read process token user: {error}"))?;
+        }
+
+        let token_user = unsafe { &*(token_info.as_ptr() as *const TOKEN_USER) };
+        let mut sid_string = PWSTR::null();
+        unsafe {
+            ConvertSidToStringSidW(token_user.User.Sid, &mut sid_string)
+                .map_err(|error| format!("Failed to stringify process token SID: {error}"))?;
+        }
+        let sid_guard = LocalAllocGuard(HLOCAL(sid_string.0 as *mut c_void));
+        let sid = unsafe {
+            sid_string
+                .to_string()
+                .map_err(|error| format!("Failed to convert process token SID: {error}"))?
+        };
+
+        let sddl = format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)");
+        let sddl = wide_null(&sddl);
+        let mut descriptor = PSECURITY_DESCRIPTOR::default();
+        unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                PCWSTR(sddl.as_ptr()),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                None,
+            )
+            .map_err(|error| {
+                format!("Failed to build owner-only pipe security descriptor: {error}")
+            })?;
+        }
+        drop(sid_guard);
+        drop(token_guard);
+
+        Ok(Self {
+            attributes: windows::Win32::Security::SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<windows::Win32::Security::SECURITY_ATTRIBUTES>()
+                    as u32,
+                lpSecurityDescriptor: descriptor.0,
+                bInheritHandle: false.into(),
+            },
+            descriptor,
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for PipeSecurity {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::LocalFree(Some(
+                windows::Win32::Foundation::HLOCAL(self.descriptor.0),
+            ));
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+struct HandleGuard(windows::Win32::Foundation::HANDLE);
+
+#[cfg(target_os = "windows")]
+impl Drop for HandleGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+struct LocalAllocGuard(windows::Win32::Foundation::HLOCAL);
+
+#[cfg(target_os = "windows")]
+impl Drop for LocalAllocGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::LocalFree(Some(self.0));
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn start_transport(app: AppHandle, stop: Arc<AtomicBool>) -> Result<String, String> {
+    let endpoint =
+        transport_descriptor(process::id(), true, StreamDeckTransportStatus::Listening).endpoint;
+    let first_pipe = create_windows_pipe(&endpoint)?;
+    let first_pipe_raw = first_pipe.0 as isize;
+    let thread_endpoint = endpoint.clone();
+    thread::Builder::new()
+        .name("snipsy-streamdeck-pipe".into())
+        .spawn(move || {
+            let first_pipe = windows::Win32::Foundation::HANDLE(first_pipe_raw as *mut c_void);
+            run_windows_pipe_server(app, thread_endpoint, stop, Some(first_pipe));
+        })
+        .map_err(|error| {
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(first_pipe);
+            }
+            format!("Failed to start Stream Deck named pipe thread: {error}")
+        })?;
+    Ok(endpoint)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn start_transport(_app: AppHandle, _stop: Arc<AtomicBool>) -> Result<String, String> {
+    Err("Stream Deck native transport is not implemented for this platform yet".into())
+}
+
+#[cfg(target_os = "windows")]
+fn run_windows_pipe_server(
+    app: AppHandle,
+    endpoint: String,
+    stop: Arc<AtomicBool>,
+    mut pending_pipe: Option<windows::Win32::Foundation::HANDLE>,
+) {
+    while !stop.load(Ordering::SeqCst) {
+        let pipe = match pending_pipe.take() {
+            Some(pipe) => Ok(pipe),
+            None => create_windows_pipe(&endpoint),
+        };
+        match pipe {
+            Ok(pipe) => unsafe {
+                if connect_windows_pipe(pipe) {
+                    let app = app.clone();
+                    let pipe_raw = pipe.0 as isize;
+                    if let Err(error) = thread::Builder::new()
+                        .name("snipsy-streamdeck-client".into())
+                        .spawn(move || {
+                            let pipe = windows::Win32::Foundation::HANDLE(pipe_raw as *mut c_void);
+                            handle_windows_pipe_client(app, pipe);
+                        })
+                    {
+                        tracing::warn!(error = %error, "Failed to start Stream Deck pipe client worker");
+                        let _ = windows::Win32::System::Pipes::DisconnectNamedPipe(pipe);
+                        let _ = windows::Win32::Foundation::CloseHandle(pipe);
+                    }
+                } else {
+                    let _ = windows::Win32::Foundation::CloseHandle(pipe);
+                    thread::sleep(std::time::Duration::from_millis(100));
+                }
+            },
+            Err(error) => {
+                tracing::error!(error = %error, "Failed to create Stream Deck named pipe");
+                if !stop.load(Ordering::SeqCst) {
+                    let _ = write_discovery_descriptor_with_status(
+                        &app,
+                        false,
+                        StreamDeckTransportStatus::StartFailed,
+                    );
+                }
+                break;
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn unblock_transport(endpoint: &str) {
+    let _ = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(endpoint);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn unblock_transport(_endpoint: &str) {}
+
+#[cfg(target_os = "windows")]
+fn create_windows_pipe(endpoint: &str) -> Result<windows::Win32::Foundation::HANDLE, String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
+    use windows::Win32::System::Pipes::{
+        CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
+        PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+    };
+
+    let endpoint = wide_null(endpoint);
+    let security = PipeSecurity::owner_only()?;
+    let pipe = unsafe {
+        CreateNamedPipeW(
+            PCWSTR(endpoint.as_ptr()),
+            PIPE_ACCESS_DUPLEX,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+            PIPE_UNLIMITED_INSTANCES,
+            65536,
+            65536,
+            0,
+            Some(&security.attributes as *const _),
+        )
+    };
+    if pipe.is_invalid() {
+        Err(format!(
+            "CreateNamedPipeW failed: {}",
+            windows::core::Error::from_win32()
+        ))
+    } else {
+        Ok(pipe)
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn connect_windows_pipe(pipe: windows::Win32::Foundation::HANDLE) -> bool {
+    use windows::Win32::Foundation::ERROR_PIPE_CONNECTED;
+    use windows::Win32::System::Pipes::ConnectNamedPipe;
+
+    match unsafe { ConnectNamedPipe(pipe, None) } {
+        Ok(()) => true,
+        Err(error) => error.code() == ERROR_PIPE_CONNECTED.to_hresult(),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn handle_windows_pipe_client(app: AppHandle, pipe: windows::Win32::Foundation::HANDLE) {
+    unsafe {
+        if let Err(error) = handle_windows_pipe_connection(app, pipe) {
+            tracing::warn!(error = %error, "Stream Deck named pipe request failed");
+        }
+        let _ = windows::Win32::System::Pipes::DisconnectNamedPipe(pipe);
+        let _ = windows::Win32::Foundation::CloseHandle(pipe);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn handle_windows_pipe_connection(
+    app: AppHandle,
+    pipe: windows::Win32::Foundation::HANDLE,
+) -> Result<(), String> {
+    let response = match read_windows_pipe_request(pipe) {
+        Ok(request_line) => match parse_request_line(&request_line) {
+            Ok(request) => tauri::async_runtime::block_on(execute_request(app, request)),
+            Err(error) => StreamDeckControlResponse {
+                protocol_version: CONTROL_PROTOCOL_VERSION,
+                ok: false,
+                result: None,
+                error: Some(error),
+            },
+        },
+        Err(error) => error_response("readFailed", error),
+    };
+    let response_line = serde_json::to_string(&response)
+        .map_err(|error| format!("Failed to serialize Stream Deck response: {error}"))?
+        + "\n";
+    write_windows_pipe_response(pipe, response_line.as_bytes())
+}
+
+#[cfg(target_os = "windows")]
+fn read_windows_pipe_request(pipe: windows::Win32::Foundation::HANDLE) -> Result<String, String> {
+    use windows::Win32::Storage::FileSystem::ReadFile;
+
+    let mut request = Vec::new();
+    loop {
+        let mut chunk = [0_u8; 4096];
+        let mut bytes_read = 0_u32;
+        unsafe {
+            ReadFile(pipe, Some(&mut chunk), Some(&mut bytes_read), None)
+                .map_err(|error| format!("Failed to read Stream Deck pipe request: {error}"))?;
+        }
+        if bytes_read == 0 {
+            break;
+        }
+        request.extend_from_slice(&chunk[..bytes_read as usize]);
+        if request.contains(&b'\n') {
+            break;
+        }
+        if request.len() > 65536 {
+            return Err("Stream Deck pipe request exceeded 65536 bytes".into());
+        }
+    }
+    if let Some(index) = request.iter().position(|byte| *byte == b'\n') {
+        request.truncate(index);
+    }
+    String::from_utf8(request)
+        .map_err(|error| format!("Stream Deck pipe request was not valid UTF-8: {error}"))
+}
+
+#[cfg(target_os = "windows")]
+fn write_windows_pipe_response(
+    pipe: windows::Win32::Foundation::HANDLE,
+    response: &[u8],
+) -> Result<(), String> {
+    use windows::Win32::Storage::FileSystem::{FlushFileBuffers, WriteFile};
+
+    let mut bytes_written = 0_u32;
+    unsafe {
+        WriteFile(pipe, Some(response), Some(&mut bytes_written), None)
+            .map_err(|error| format!("Failed to write Stream Deck pipe response: {error}"))?;
+        FlushFileBuffers(pipe)
+            .map_err(|error| format!("Failed to flush Stream Deck pipe response: {error}"))?;
+    }
+    if bytes_written as usize == response.len() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Incomplete Stream Deck pipe response write: {bytes_written}/{} bytes",
+            response.len()
+        ))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[cfg(test)]
@@ -307,6 +729,29 @@ mod tests {
         let request = parse_request_line(r#"{"command":"status"}"#).unwrap();
 
         assert_eq!(request, StreamDeckControlRequest::Status);
+    }
+
+    #[test]
+    fn parses_request_with_utf8_bom() {
+        let request = parse_request_line("\u{feff}{\"command\":\"status\"}").unwrap();
+
+        assert_eq!(request, StreamDeckControlRequest::Status);
+    }
+
+    #[test]
+    fn descriptor_can_advertise_listening_transport() {
+        let descriptor = descriptor_for_process_with_transport(
+            "0.17.1-test".into(),
+            42,
+            true,
+            StreamDeckTransportStatus::Listening,
+        );
+
+        assert!(descriptor.transport.active);
+        assert_eq!(
+            descriptor.transport.status,
+            StreamDeckTransportStatus::Listening
+        );
     }
 
     #[test]
