@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.snipsy.streamdeck",
+  "Name": "Snipsy",
+  "Version": "0.1.0.0",
+  "Author": "Snipsy",
+  "Description": "Trigger Snipsy text and video snippets from Stream Deck.",
+  "Category": "Snipsy",
+  "CategoryIcon": "static/imgs/plugin/category-icon",
+  "Icon": "static/imgs/plugin/marketplace",
+  "CodePath": "bin/plugin.mjs",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "Nodejs": {
+    "Version": "20"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.snipsy.streamdeck.trigger-snippet",
+      "Name": "Trigger Snipsy Snippet",
+      "Icon": "static/imgs/actions/trigger/icon",
+      "Tooltip": "Triggers a bound Snipsy text or video snippet.",
+      "PropertyInspectorPath": "ui/property-inspector.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "static/imgs/actions/trigger/key",
+          "Title": "Snipsy",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "UserTitleEnabled": true
+    }
+  ]
+}

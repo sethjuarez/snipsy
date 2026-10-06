@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Snipsy</title>
+    <script type="module" src="./property-inspector.mjs"></script>
+    <style>
+      body {
+        color: #f8fafc;
+        background: #111827;
+        font: 13px system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+      }
+      label {
+        display: block;
+        font-weight: 700;
+        margin: 12px 0 6px;
+      }
+      input,
+      select,
+      button {
+        box-sizing: border-box;
+        width: 100%;
+      }
+      input,
+      select {
+        background: #020617;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        color: #f8fafc;
+        padding: 8px;
+      }
+      button {
+        background: #38bdf8;
+        border: 0;
+        border-radius: 6px;
+        color: #082f49;
+        cursor: pointer;
+        font-weight: 700;
+        margin-top: 12px;
+        padding: 8px;
+      }
+      .status {
+        color: #cbd5e1;
+        margin-top: 10px;
+        min-height: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <label for="projectPath">Snipsy project path</label>
+    <input id="projectPath" type="text" placeholder="C:\path\to\snipsy-project" />
+    <button id="refresh" type="button">Refresh snippets</button>
+
+    <label for="buttonSelect">Snippet</label>
+    <select id="buttonSelect">
+      <option value="">Refresh to load snippets</option>
+    </select>
+
+    <button id="save" type="button">Save binding</button>
+    <div id="status" class="status"></div>
+  </body>
+</html>
