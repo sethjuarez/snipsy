@@ -107,15 +107,21 @@ test("property inspector includes the action uuid in sendToPlugin messages", asy
 });
 
 test("plugin entrypoint loads without CommonJS bundle failures", async () => {
-  await rm(new URL("logs/", pluginDir), { recursive: true, force: true });
+  await cleanupPluginSmokeArtifacts();
   const result = await runNodePluginEntrypoint();
-  await rm(new URL("logs/", pluginDir), { recursive: true, force: true });
+  await cleanupPluginSmokeArtifacts();
 
   assert.equal(result.timedOut, false);
   assert.equal(result.code, 0);
   assert.doesNotMatch(result.stderr, /Dynamic require of/);
   assert.doesNotMatch(result.stderr, /manifestId/);
 });
+
+async function cleanupPluginSmokeArtifacts() {
+  await rm(new URL("logs/", pluginDir), { recursive: true, force: true });
+  await rm(new URL("e.txt", pluginDir), { force: true });
+  await rm(new URL("o.txt", pluginDir), { force: true });
+}
 
 function runNodePluginEntrypoint() {
   return new Promise((resolve, reject) => {
