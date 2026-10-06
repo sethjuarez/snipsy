@@ -30,3 +30,24 @@ The plugin discovers Snipsy through `stream-deck-control.json`, then uses the ad
 - Key press sends `triggerButton` through Snipsy's native IPC and shows Stream Deck alert/checkmark feedback.
 
 The official Stream Deck plugin package targets Windows and macOS. The Snipsy backend transport also supports Linux for direct clients and future compatible surfaces.
+
+## Install and smoke test
+
+1. Run `npm run package:streamdeck`.
+2. Open `dist/streamdeck/Snipsy.streamDeckPlugin` with Stream Deck.
+3. Start Snipsy and open the project you want to control.
+4. Add **Trigger Snipsy Snippet** to a Stream Deck key.
+5. In the property inspector, enter the Snipsy project path, refresh, choose a snippet, and save.
+6. Press the key. Text snippets should deliver through Snipsy; video snippets should open the Snipsy playback window.
+
+Expected key states:
+
+| State | Meaning |
+| --- | --- |
+| `Bind in Snipsy` | The key has no saved project/snippet binding yet. |
+| `Open Snipsy` | Snipsy is not running or has not published its descriptor. |
+| `Snipsy Offline` | Snipsy is running but the native transport is unavailable. |
+| `Stale Binding` | The saved snippet no longer exists in that project. |
+| `Project? Missing` | The saved project path no longer points at a readable Snipsy project. |
+| `Snipsy Busy` | Another Stream Deck-triggered snippet is still executing. |
+| `Update Snipsy` | The plugin and app protocol/transport versions are incompatible. |
