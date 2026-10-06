@@ -17445,7 +17445,7 @@ var plugin_default = streamDeck;
 // streamdeck-plugin/src/snipsy-client.ts
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
-import { join as join2 } from "node:path";
+import { posix, win32 } from "node:path";
 import { readFile } from "node:fs/promises";
 var CONTROL_PROTOCOL_VERSION = 1;
 var SnipsyControlError = class extends Error {
@@ -17488,6 +17488,7 @@ var SnipsyClient = class {
       );
     }
     validateDescriptor(descriptor);
+    validateDescriptorForPlatform(descriptor, this.#platform);
     return descriptor;
   }
   async status() {
@@ -17519,13 +17520,13 @@ function defaultDescriptorPath(platform, env, homeDir) {
     if (!appData) {
       throw new SnipsyControlError("APPDATA is not set; cannot find Snipsy descriptor.", "descriptorPathUnavailable");
     }
-    return join2(appData, "dev.snipsy.app", "stream-deck-control.json");
+    return win32.join(appData, "dev.snipsy.app", "stream-deck-control.json");
   }
   if (platform === "darwin") {
-    return join2(homeDir, "Library", "Application Support", "dev.snipsy.app", "stream-deck-control.json");
+    return posix.join(homeDir, "Library", "Application Support", "dev.snipsy.app", "stream-deck-control.json");
   }
-  return join2(
-    env.XDG_DATA_HOME ?? join2(homeDir, ".local", "share"),
+  return posix.join(
+    env.XDG_DATA_HOME ?? posix.join(homeDir, ".local", "share"),
     "dev.snipsy.app",
     "stream-deck-control.json"
   );
@@ -17551,6 +17552,21 @@ function validateDescriptor(descriptor) {
   }
   if (!descriptor.transport.endpoint) {
     throw new SnipsyControlError("Snipsy descriptor is missing a transport endpoint.", "invalidDescriptor");
+  }
+  if (!["windowsNamedPipe", "unixSocket"].includes(descriptor.transport.kind)) {
+    throw new SnipsyControlError(
+      `Unsupported Snipsy Stream Deck transport: ${descriptor.transport.kind}`,
+      "unsupportedTransport"
+    );
+  }
+}
+function validateDescriptorForPlatform(descriptor, platform) {
+  const expectedKind = platform === "win32" ? "windowsNamedPipe" : "unixSocket";
+  if (descriptor.transport.kind !== expectedKind) {
+    throw new SnipsyControlError(
+      `Snipsy advertised ${descriptor.transport.kind}, but ${platform} requires ${expectedKind}.`,
+      "unsupportedTransport"
+    );
   }
 }
 async function sendRequest(descriptor, command, timeoutMs = 5e3) {

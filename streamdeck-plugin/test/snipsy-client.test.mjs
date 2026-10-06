@@ -11,6 +11,7 @@ import {
   defaultDescriptorPath,
   sendRequest,
   validateDescriptor,
+  validateDescriptorForPlatform,
 } from "../com.snipsy.streamdeck.sdPlugin/bin/snipsy-client.mjs";
 
 const descriptor = {
@@ -35,6 +36,20 @@ test("resolves the Windows descriptor path from APPDATA", () => {
   );
 });
 
+test("resolves the macOS descriptor path from Application Support", () => {
+  assert.equal(
+    defaultDescriptorPath("darwin", {}, "/Users/seth"),
+    "/Users/seth/Library/Application Support/dev.snipsy.app/stream-deck-control.json",
+  );
+});
+
+test("resolves the Linux descriptor path from XDG_DATA_HOME", () => {
+  assert.equal(
+    defaultDescriptorPath("linux", { XDG_DATA_HOME: "/home/seth/.local/state" }, "/home/seth"),
+    "/home/seth/.local/state/dev.snipsy.app/stream-deck-control.json",
+  );
+});
+
 test("rejects inactive Snipsy descriptors", () => {
   assert.throws(
     () =>
@@ -53,9 +68,37 @@ test("rejects malformed descriptors with a typed control error", () => {
   );
 });
 
+test("rejects unsupported native transports", () => {
+  assert.throws(
+    () =>
+      validateDescriptor({
+        ...descriptor,
+        transport: { ...descriptor.transport, kind: "tcp" },
+      }),
+    (error) => error instanceof SnipsyControlError && error.code === "unsupportedTransport",
+  );
+});
+
+test("rejects descriptors for the wrong host platform", () => {
+  assert.throws(
+    () => validateDescriptorForPlatform(descriptor, "darwin"),
+    (error) => error instanceof SnipsyControlError && error.code === "unsupportedTransport",
+  );
+  assert.doesNotThrow(() =>
+    validateDescriptorForPlatform(
+      {
+        ...descriptor,
+        transport: { ...descriptor.transport, kind: "unixSocket", endpoint: "/tmp/snipsy.sock" },
+      },
+      "darwin",
+    ),
+  );
+});
+
 test("sends listButtons requests through the advertised descriptor", async () => {
   const requests = [];
   const client = new SnipsyClient({
+    platform: "win32",
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
@@ -79,6 +122,7 @@ test("sends listButtons requests through the advertised descriptor", async () =>
 test("sends triggerButton requests with semantic snippet bindings", async () => {
   const requests = [];
   const client = new SnipsyClient({
+    platform: "win32",
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
@@ -135,6 +179,48 @@ test(
       assert.deepEqual(result, { command: "listButtons", projectPath: "C:\\demo" });
     } finally {
       server.close();
+    }
+  },
+);
+
+test(
+  "round-trips requests over an actual Unix socket",
+  { skip: process.platform === "win32" },
+  async () => {
+    const socketPath = `/tmp/snipsy-streamdeck-test-${process.pid}-${Date.now()}.sock`;
+    const server = createServer((socket) => {
+      let request = "";
+      socket.on("data", (chunk) => {
+        request += chunk.toString("utf8");
+        if (!request.includes("\n")) return;
+        const command = JSON.parse(request.trim());
+        socket.end(
+          `${JSON.stringify({
+            protocolVersion: 1,
+            ok: true,
+            result: { command: command.command, projectPath: command.projectPath },
+          })}\n`,
+        );
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(socketPath, resolve);
+    });
+    try {
+      const result = await sendRequest(
+        {
+          ...descriptor,
+          transport: { ...descriptor.transport, kind: "unixSocket", endpoint: socketPath },
+        },
+        { command: "listButtons", projectPath: "/Users/seth/demo" },
+      );
+
+      assert.deepEqual(result, { command: "listButtons", projectPath: "/Users/seth/demo" });
+    } finally {
+      server.close();
+      await rm(socketPath, { force: true });
     }
   },
 );

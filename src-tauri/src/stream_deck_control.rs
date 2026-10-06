@@ -339,19 +339,36 @@ fn transport_descriptor(
     active: bool,
     status: StreamDeckTransportStatus,
 ) -> StreamDeckTransportDescriptor {
-    #[cfg(target_os = "macos")]
-    let endpoint = PathBuf::from("/tmp").join(format!("snipsy-streamdeck-{pid}.sock"));
-
-    #[cfg(not(target_os = "macos"))]
-    let endpoint = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join(format!("snipsy-streamdeck-{pid}.sock"));
+    let endpoint = unix_socket_dir().join(format!("sd-{pid}.sock"));
     StreamDeckTransportDescriptor {
         kind: "unixSocket".into(),
         endpoint: endpoint.to_string_lossy().into_owned(),
         active,
         status,
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn unix_socket_dir() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        return std::env::var_os("TMPDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("snipsy-sd");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .map(|home| home.join(".snipsy"))
+            })
+            .unwrap_or_else(std::env::temp_dir)
+            .join("streamdeck")
     }
 }
 
@@ -509,9 +526,63 @@ fn start_transport(app: AppHandle, stop: Arc<AtomicBool>) -> Result<String, Stri
     Ok(endpoint)
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(unix)]
+fn start_transport(app: AppHandle, stop: Arc<AtomicBool>) -> Result<String, String> {
+    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::net::UnixListener;
+
+    let endpoint =
+        transport_descriptor(process::id(), true, StreamDeckTransportStatus::Listening).endpoint;
+    let socket_path = PathBuf::from(&endpoint);
+    if let Some(parent) = socket_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!("Failed to create Stream Deck socket directory {parent:?}: {error}")
+        })?;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700)).map_err(|error| {
+            format!("Failed to secure Stream Deck socket directory {parent:?}: {error}")
+        })?;
+    }
+    validate_unix_socket_path(&socket_path)?;
+    if socket_path.exists() {
+        let _ = fs::remove_file(&socket_path);
+    }
+    let listener = UnixListener::bind(&socket_path).map_err(|error| {
+        format!("Failed to bind Stream Deck Unix socket {socket_path:?}: {error}")
+    })?;
+    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600)).map_err(|error| {
+        format!("Failed to secure Stream Deck Unix socket {socket_path:?}: {error}")
+    })?;
+
+    let thread_endpoint = endpoint.clone();
+    thread::Builder::new()
+        .name("snipsy-streamdeck-socket".into())
+        .spawn(move || run_unix_socket_server(app, listener, thread_endpoint, stop))
+        .map_err(|error| format!("Failed to start Stream Deck Unix socket thread: {error}"))?;
+    Ok(endpoint)
+}
+
+#[cfg(unix)]
+fn validate_unix_socket_path(socket_path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::ffi::OsStrExt;
+
+    #[cfg(target_os = "macos")]
+    const MAX_SUN_PATH_BYTES: usize = 103;
+    #[cfg(not(target_os = "macos"))]
+    const MAX_SUN_PATH_BYTES: usize = 107;
+
+    let length = socket_path.as_os_str().as_bytes().len();
+    if length > MAX_SUN_PATH_BYTES {
+        Err(format!(
+            "Stream Deck Unix socket path is too long ({length}/{MAX_SUN_PATH_BYTES} bytes): {socket_path:?}"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(all(not(target_os = "windows"), not(unix)))]
 fn start_transport(_app: AppHandle, _stop: Arc<AtomicBool>) -> Result<String, String> {
-    Err("Stream Deck native transport is not implemented for this platform yet".into())
+    Err("Stream Deck native transport is not supported on this platform".into())
 }
 
 #[cfg(target_os = "windows")]
@@ -571,7 +642,139 @@ fn unblock_transport(endpoint: &str) {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn unblock_transport(_endpoint: &str) {}
+fn unblock_transport(endpoint: &str) {
+    #[cfg(unix)]
+    {
+        let _ = std::os::unix::net::UnixStream::connect(endpoint);
+    }
+}
+
+fn handle_control_request(
+    app: AppHandle,
+    request_line: Result<String, String>,
+) -> StreamDeckControlResponse {
+    match request_line {
+        Ok(request_line) => match parse_request_line(&request_line) {
+            Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
+                try_start_trigger_request(app, request)
+            }
+            Ok(request) => tauri::async_runtime::block_on(execute_request(app, request)),
+            Err(error) => StreamDeckControlResponse {
+                protocol_version: CONTROL_PROTOCOL_VERSION,
+                ok: false,
+                result: None,
+                error: Some(error),
+            },
+        },
+        Err(error) => error_response("readFailed", error),
+    }
+}
+
+fn serialize_response_line(response: &StreamDeckControlResponse) -> Result<String, String> {
+    serde_json::to_string(response)
+        .map(|line| line + "\n")
+        .map_err(|error| format!("Failed to serialize Stream Deck response: {error}"))
+}
+
+#[cfg(unix)]
+fn run_unix_socket_server(
+    app: AppHandle,
+    listener: std::os::unix::net::UnixListener,
+    endpoint: String,
+    stop: Arc<AtomicBool>,
+) {
+    loop {
+        if stop.load(Ordering::SeqCst) {
+            break;
+        }
+        match listener.accept() {
+            Ok(stream) => {
+                let app = app.clone();
+                if let Err(error) = thread::Builder::new()
+                    .name("snipsy-streamdeck-client".into())
+                    .spawn(move || handle_unix_socket_client(app, stream.0))
+                {
+                    tracing::warn!(error = %error, "Failed to start Stream Deck socket client worker");
+                }
+            }
+            Err(error) => {
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::Interrupted
+                        | std::io::ErrorKind::ConnectionAborted
+                        | std::io::ErrorKind::WouldBlock
+                ) {
+                    thread::sleep(std::time::Duration::from_millis(100));
+                    continue;
+                }
+                tracing::error!(error = %error, "Failed to accept Stream Deck Unix socket client");
+                if !stop.load(Ordering::SeqCst) {
+                    let _ = write_discovery_descriptor_with_status(
+                        &app,
+                        false,
+                        StreamDeckTransportStatus::StartFailed,
+                    );
+                }
+                break;
+            }
+        }
+    }
+    let _ = fs::remove_file(endpoint);
+}
+
+#[cfg(unix)]
+fn handle_unix_socket_client(app: AppHandle, mut stream: std::os::unix::net::UnixStream) {
+    let timeout = Some(std::time::Duration::from_secs(5));
+    let _ = stream.set_read_timeout(timeout);
+    let _ = stream.set_write_timeout(timeout);
+    if let Err(error) = handle_unix_socket_connection(app, &mut stream) {
+        tracing::warn!(error = %error, "Stream Deck Unix socket request failed");
+    }
+}
+
+#[cfg(unix)]
+fn handle_unix_socket_connection(
+    app: AppHandle,
+    stream: &mut std::os::unix::net::UnixStream,
+) -> Result<(), String> {
+    let response = handle_control_request(app, read_unix_socket_request(stream));
+    let response_line = serialize_response_line(&response)?;
+    use std::io::Write;
+    stream
+        .write_all(response_line.as_bytes())
+        .map_err(|error| format!("Failed to write Stream Deck socket response: {error}"))?;
+    stream
+        .flush()
+        .map_err(|error| format!("Failed to flush Stream Deck socket response: {error}"))
+}
+
+#[cfg(unix)]
+fn read_unix_socket_request(stream: &mut std::os::unix::net::UnixStream) -> Result<String, String> {
+    use std::io::Read;
+
+    let mut request = Vec::new();
+    loop {
+        let mut chunk = [0_u8; 4096];
+        let bytes_read = stream
+            .read(&mut chunk)
+            .map_err(|error| format!("Failed to read Stream Deck socket request: {error}"))?;
+        if bytes_read == 0 {
+            break;
+        }
+        request.extend_from_slice(&chunk[..bytes_read]);
+        if request.contains(&b'\n') {
+            break;
+        }
+        if request.len() > 65536 {
+            return Err("Stream Deck socket request exceeded 65536 bytes".into());
+        }
+    }
+    if let Some(index) = request.iter().position(|byte| *byte == b'\n') {
+        request.truncate(index);
+    }
+    String::from_utf8(request)
+        .map_err(|error| format!("Stream Deck socket request was not valid UTF-8: {error}"))
+}
 
 #[cfg(target_os = "windows")]
 fn create_windows_pipe(endpoint: &str) -> Result<windows::Win32::Foundation::HANDLE, String> {
@@ -633,24 +836,8 @@ fn handle_windows_pipe_connection(
     app: AppHandle,
     pipe: windows::Win32::Foundation::HANDLE,
 ) -> Result<(), String> {
-    let response = match read_windows_pipe_request(pipe) {
-        Ok(request_line) => match parse_request_line(&request_line) {
-            Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
-                try_start_trigger_request(app, request)
-            }
-            Ok(request) => tauri::async_runtime::block_on(execute_request(app, request)),
-            Err(error) => StreamDeckControlResponse {
-                protocol_version: CONTROL_PROTOCOL_VERSION,
-                ok: false,
-                result: None,
-                error: Some(error),
-            },
-        },
-        Err(error) => error_response("readFailed", error),
-    };
-    let response_line = serde_json::to_string(&response)
-        .map_err(|error| format!("Failed to serialize Stream Deck response: {error}"))?
-        + "\n";
+    let response = handle_control_request(app, read_windows_pipe_request(pipe));
+    let response_line = serialize_response_line(&response)?;
     write_windows_pipe_response(pipe, response_line.as_bytes())
 }
 
@@ -744,10 +931,7 @@ mod tests {
         assert_eq!(descriptor.app, "snipsy");
         assert_eq!(descriptor.protocol_version, CONTROL_PROTOCOL_VERSION);
         assert_eq!(descriptor.transport.kind, "unixSocket");
-        assert!(descriptor
-            .transport
-            .endpoint
-            .ends_with("snipsy-streamdeck-42.sock"));
+        assert!(descriptor.transport.endpoint.ends_with("sd-42.sock"));
         assert_eq!(
             descriptor.transport.status,
             StreamDeckTransportStatus::NotStarted
