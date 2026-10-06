@@ -87,8 +87,26 @@ async function refreshKey(
   if (!actionInstance.isKey() || !actionInstance.setTitle || !actionInstance.setImage) {
     return;
   }
-  await actionInstance.setTitle(settings.title ?? "Snipsy");
-  await actionInstance.setImage(settings.iconDataUrl);
+  if (!settings.projectPath || !settings.snippetId || !settings.snippetType) {
+    await actionInstance.setTitle("Bind in\nSnipsy");
+    await actionInstance.setImage(settings.iconDataUrl);
+    return;
+  }
+
+  try {
+    const buttons = await client.listButtons(settings.projectPath);
+    const button = buttons.find((candidate) => buttonMatchesSettings(candidate, settings));
+    if (!button) {
+      await actionInstance.setTitle("Stale\nBinding");
+      await actionInstance.setImage(settings.iconDataUrl);
+      return;
+    }
+    await actionInstance.setTitle(button.title);
+    await actionInstance.setImage(button.iconDataUrl);
+  } catch (error) {
+    await actionInstance.setTitle(labelForError(error));
+    await actionInstance.setImage(settings.iconDataUrl);
+  }
 }
 
 async function sendButtonsToInspector(
@@ -128,9 +146,16 @@ function labelForError(error: unknown): string {
     if (error.code === "descriptorUnavailable") return "Open\nSnipsy";
     if (error.code === "transportUnavailable") return "Snipsy\nOffline";
     if (error.code === "missingBinding") return "Bind in\nSnipsy";
+    if (error.code === "busy") return "Snipsy\nBusy";
+    if (error.code === "unsupportedProtocol" || error.code === "unsupportedTransport") return "Update\nSnipsy";
+    if (error.code === "commandFailed" && /not found|missing/i.test(error.message)) return "Project?\nSnippet?";
     return "Snipsy\nError";
   }
   return "Snipsy\nError";
+}
+
+function buttonMatchesSettings(button: StreamDeckButton, settings: SnipsyActionSettings): boolean {
+  return button.id === settings.snippetId && button.snippetType === settings.snippetType;
 }
 
 function asInspectorMessage(payload: JsonValue): InspectorMessage | undefined {

@@ -235,6 +235,17 @@ test("property inspector includes the action uuid in sendToPlugin messages", asy
   assert.match(source, /event: "sendToPlugin", action: actionUuid, context, payload/);
 });
 
+test("plugin key refresh surfaces stale and offline states", async () => {
+  const source = await readFile(new URL("../src/plugin.ts", import.meta.url), "utf8");
+
+  assert.match(source, /client\.listButtons\(settings\.projectPath\)/);
+  assert.match(source, /Stale\\nBinding/);
+  assert.match(source, /Open\\nSnipsy/);
+  assert.match(source, /Snipsy\\nOffline/);
+  assert.match(source, /Snipsy\\nBusy/);
+  assert.match(source, /Update\\nSnipsy/);
+});
+
 test("plugin entrypoint loads without CommonJS bundle failures", async () => {
   await cleanupPluginSmokeArtifacts();
   const result = await runNodePluginEntrypoint();

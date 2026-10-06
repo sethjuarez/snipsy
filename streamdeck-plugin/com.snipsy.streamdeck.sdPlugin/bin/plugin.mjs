@@ -17676,8 +17676,25 @@ async function refreshKey(actionInstance, settings2) {
   if (!actionInstance.isKey() || !actionInstance.setTitle || !actionInstance.setImage) {
     return;
   }
-  await actionInstance.setTitle(settings2.title ?? "Snipsy");
-  await actionInstance.setImage(settings2.iconDataUrl);
+  if (!settings2.projectPath || !settings2.snippetId || !settings2.snippetType) {
+    await actionInstance.setTitle("Bind in\nSnipsy");
+    await actionInstance.setImage(settings2.iconDataUrl);
+    return;
+  }
+  try {
+    const buttons = await client.listButtons(settings2.projectPath);
+    const button = buttons.find((candidate) => buttonMatchesSettings(candidate, settings2));
+    if (!button) {
+      await actionInstance.setTitle("Stale\nBinding");
+      await actionInstance.setImage(settings2.iconDataUrl);
+      return;
+    }
+    await actionInstance.setTitle(button.title);
+    await actionInstance.setImage(button.iconDataUrl);
+  } catch (error40) {
+    await actionInstance.setTitle(labelForError(error40));
+    await actionInstance.setImage(settings2.iconDataUrl);
+  }
 }
 async function sendButtonsToInspector(actionInstance, projectPath) {
   const settings2 = await actionInstance.getSettings();
@@ -17711,9 +17728,15 @@ function labelForError(error40) {
     if (error40.code === "descriptorUnavailable") return "Open\nSnipsy";
     if (error40.code === "transportUnavailable") return "Snipsy\nOffline";
     if (error40.code === "missingBinding") return "Bind in\nSnipsy";
+    if (error40.code === "busy") return "Snipsy\nBusy";
+    if (error40.code === "unsupportedProtocol" || error40.code === "unsupportedTransport") return "Update\nSnipsy";
+    if (error40.code === "commandFailed" && /not found|missing/i.test(error40.message)) return "Project?\nSnippet?";
     return "Snipsy\nError";
   }
   return "Snipsy\nError";
+}
+function buttonMatchesSettings(button, settings2) {
+  return button.id === settings2.snippetId && button.snippetType === settings2.snippetType;
 }
 function asInspectorMessage(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
