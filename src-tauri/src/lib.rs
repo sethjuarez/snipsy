@@ -10,6 +10,7 @@ mod playback;
 mod recorder;
 mod scripting;
 mod stream_deck;
+mod stream_deck_control;
 mod tray;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -45,6 +46,9 @@ pub fn run() {
 
             // Always-on tray/menu bar icon
             tray::init_tray(app.handle())?;
+            if let Err(e) = stream_deck_control::write_discovery_descriptor(app.handle()) {
+                tracing::warn!(error = %e, "Failed to write Stream Deck discovery descriptor");
+            }
 
             if let Err(e) = tray::restore_main_window(app.handle()) {
                 tracing::warn!(error = %e, "Failed to restore main window during setup");
@@ -118,6 +122,7 @@ fn cleanup_on_exit(app: &tauri::AppHandle) {
 
     // Clean up low-level keyboard hooks
     keyboard_hook::clear_all_hooks();
+    stream_deck_control::remove_discovery_descriptor(app);
 
     // Close the playback window if it's still open
     if let Some(window) = app.get_webview_window("playback") {
