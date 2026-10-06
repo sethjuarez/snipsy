@@ -6,12 +6,19 @@ This is the Stream Deck plugin source package for Snipsy. It binds Stream Deck k
 
 ```powershell
 npm run build:streamdeck
+npm run package:streamdeck
 ```
 
 The build writes the bundled plugin entry point to:
 
 ```text
 streamdeck-plugin/com.snipsy.streamdeck.sdPlugin/bin/plugin.mjs
+```
+
+The package command writes the installable Stream Deck plugin archive to:
+
+```text
+dist/streamdeck/Snipsy.streamDeckPlugin
 ```
 
 The plugin discovers Snipsy through `stream-deck-control.json`, then uses the advertised native transport. On Windows, that transport is an owner/SYSTEM-only named pipe owned by the running Snipsy process. On macOS and Linux, Snipsy advertises an owner-only Unix domain socket.

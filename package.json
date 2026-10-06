@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:streamdeck": "node scripts/build-streamdeck-plugin.mjs",
+    "check:streamdeck-bundles": "node scripts/check-streamdeck-bundles.mjs",
+    "package:streamdeck": "npm run build:streamdeck && node scripts/package-streamdeck-plugin.mjs",
     "test": "npm run build && npm run test:streamdeck && cd src-tauri && cargo test",
-    "test:streamdeck": "npm run build:streamdeck && node --test streamdeck-plugin/test/snipsy-client.test.mjs",
+    "test:streamdeck": "npm run build:streamdeck && npm run check:streamdeck-bundles && node --test streamdeck-plugin/test/snipsy-client.test.mjs",
     "tauri": "tauri",
     "test:e2e": "node scripts/auditaur-drills.mjs"
   },
