@@ -9,6 +9,8 @@ mod models;
 mod playback;
 mod recorder;
 mod scripting;
+mod stream_deck;
+mod stream_deck_control;
 mod tray;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -44,6 +46,23 @@ pub fn run() {
 
             // Always-on tray/menu bar icon
             tray::init_tray(app.handle())?;
+            match stream_deck_control::start_control_server(app.handle()) {
+                Ok(state) => {
+                    app.manage(state);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to start Stream Deck control server");
+                    if let Err(descriptor_error) =
+                        stream_deck_control::write_discovery_descriptor_with_status(
+                            app.handle(),
+                            false,
+                            stream_deck_control::StreamDeckTransportStatus::StartFailed,
+                        )
+                    {
+                        tracing::warn!(error = %descriptor_error, "Failed to write Stream Deck discovery descriptor");
+                    }
+                }
+            }
 
             if let Err(e) = tray::restore_main_window(app.handle()) {
                 tracing::warn!(error = %e, "Failed to restore main window during setup");
@@ -85,6 +104,9 @@ pub fn run() {
             recorder::stop_recording_script,
             recorder::is_recording,
             scripting::run_script,
+            stream_deck::list_stream_deck_buttons,
+            stream_deck::trigger_stream_deck_button,
+            stream_deck_control::set_stream_deck_active_project,
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,
         ])
@@ -115,6 +137,10 @@ fn cleanup_on_exit(app: &tauri::AppHandle) {
 
     // Clean up low-level keyboard hooks
     keyboard_hook::clear_all_hooks();
+    if let Some(state) = app.try_state::<stream_deck_control::StreamDeckControlState>() {
+        state.stop();
+    }
+    stream_deck_control::remove_discovery_descriptor(app);
 
     // Close the playback window if it's still open
     if let Some(window) = app.get_webview_window("playback") {

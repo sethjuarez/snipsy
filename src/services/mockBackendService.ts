@@ -1,5 +1,6 @@
 import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
-import type { ProjectData, Script, TextSnippet, VideoSnippet } from "../types";
+import type { ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const FIXTURE_PROJECT: ProjectData = {
   project: {
@@ -15,6 +16,7 @@ const FIXTURE_PROJECT: ProjectData = {
       hotkey: "CmdOrControl+Shift+1",
       delivery: "fast-type",
       typeDelay: 30,
+      streamDeckIcon: { kind: "preset", value: "code", background: "#111827", foreground: "#38bdf8" },
     },
     {
       id: "ts-2",
@@ -23,6 +25,7 @@ const FIXTURE_PROJECT: ProjectData = {
       text: "console.log('Hello, world!');",
       hotkey: "CmdOrControl+Shift+2",
       delivery: "paste",
+      streamDeckIcon: { kind: "emoji", value: "📋", background: "#172554", foreground: "#bfdbfe" },
     },
     {
       id: "ts-3",
@@ -32,6 +35,7 @@ const FIXTURE_PROJECT: ProjectData = {
       hotkey: "CmdOrControl+Shift+3",
       delivery: "fast-type",
       typeDelay: 20,
+      streamDeckIcon: { kind: "preset", value: "terminal", background: "#052e16", foreground: "#86efac" },
     },
   ],
   videoSnippets: [
@@ -44,6 +48,7 @@ const FIXTURE_PROJECT: ProjectData = {
       endTime: 30,
       hotkey: "CmdOrControl+Shift+4",
       speed: 2.0,
+      streamDeckIcon: { kind: "preset", value: "play", background: "#1e1b4b", foreground: "#c4b5fd" },
       pauseStops: [
         {
           time: 12.5,
@@ -272,6 +277,62 @@ export class MockBackendService implements BackendService {
   }
 
   private _isRecording = false;
+
+  async setStreamDeckActiveProject(_projectPath: string | null): Promise<void> {}
+
+  async listStreamDeckButtons(_projectPath: string): Promise<StreamDeckButton[]> {
+    return [
+      ...this.data.textSnippets.map((snippet) => ({
+        id: snippet.id,
+        title: snippet.title,
+        snippetType: "text" as const,
+        hotkey: snippet.hotkey,
+        iconDataUrl: streamDeckIconToDataUrl(snippet.streamDeckIcon, snippet.title, "text"),
+      })),
+      ...this.data.videoSnippets.map((snippet) => ({
+        id: snippet.id,
+        title: snippet.title,
+        snippetType: "video" as const,
+        hotkey: snippet.hotkey,
+        iconDataUrl: streamDeckIconToDataUrl(snippet.streamDeckIcon, snippet.title, "video"),
+      })),
+    ];
+  }
+
+  async triggerStreamDeckButton(
+    _projectPath: string,
+    snippetId: string,
+    snippetType: "text" | "video",
+  ) {
+    const snippets = snippetType === "text" ? this.data.textSnippets : this.data.videoSnippets;
+    const snippet = snippets.find((candidate) => candidate.id === snippetId);
+    if (!snippet) throw new Error(`${snippetType} snippet not found: ${snippetId}`);
+    if (snippetType === "text") {
+      const textSnippet = snippet as TextSnippet;
+      await this.deliverText(textSnippet.text, textSnippet.delivery, textSnippet.typeDelay);
+    } else {
+      await this.playVideo(
+        _projectPath,
+        (snippet as VideoSnippet).videoFile,
+        (snippet as VideoSnippet).startTime,
+        (snippet as VideoSnippet).endTime,
+        (snippet as VideoSnippet).speed,
+        (snippet as VideoSnippet).transitionActions,
+        (snippet as VideoSnippet).targetMonitor,
+        (snippet as VideoSnippet).endBehavior,
+        (snippet as VideoSnippet).hideCursor,
+        (snippet as VideoSnippet).backgroundColor,
+        (snippet as VideoSnippet).clickToPlay,
+        (snippet as VideoSnippet).muted,
+        (snippet as VideoSnippet).pauseStops,
+      );
+    }
+    return {
+      id: snippet.id,
+      title: snippet.title,
+      snippetType,
+    };
+  }
 
   async startRecordingScript(_projectPath: string): Promise<string> {
     this._isRecording = true;

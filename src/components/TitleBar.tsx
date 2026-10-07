@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert } from "lucide-react";
 import { getBackend } from "../services";
@@ -53,7 +53,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   const minimize = useCallback(() => {
     appWindow?.hide();
   }, [appWindow]);
-  const toggleMaximize = useCallback(() => appWindow?.toggleMaximize(), [appWindow]);
+  const toggleMaximize = useCallback(async () => {
+    if (!appWindow) return;
+    await appWindow.toggleMaximize();
+    appWindow.isMaximized().then(setMaximized).catch(() => {});
+  }, [appWindow]);
   // Close actually quits the app (with confirmation)
   const close = useCallback(async () => {
     if (!appWindow) return;
@@ -72,21 +76,34 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
 
   const handleTitlebarMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (!appWindow || event.button !== 0 || isInteractiveTitlebarTarget(event.target)) return;
-
-    if (event.detail === 2) {
-      appWindow.toggleMaximize?.().catch?.(() => {});
-      return;
-    }
+    if (event.detail > 1) return;
 
     appWindow.startDragging?.().catch?.(() => {});
   }, [appWindow]);
 
+  const handleTitlebarDoubleClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (isInteractiveTitlebarTarget(event.target)) return;
+    event.preventDefault();
+    void toggleMaximize();
+  }, [toggleMaximize]);
+
   const titlebarHeight = isMac ? "var(--macos-titlebar-height)" : "var(--titlebar-height)";
+  const titlebarButtonStyle: CSSProperties = {
+    height: 28,
+    minWidth: 28,
+    color: "var(--color-text-secondary)",
+  };
+  const windowButtonStyle: CSSProperties = {
+    height: titlebarHeight,
+    width: 46,
+    color: "var(--color-text-secondary)",
+  };
 
   return (
     <div
       data-tauri-drag-region
       onMouseDown={handleTitlebarMouseDown}
+      onDoubleClick={handleTitlebarDoubleClick}
       className="no-select flex items-center justify-between shrink-0"
       style={{
         height: titlebarHeight,
@@ -96,15 +113,15 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
       }}
     >
       {/* Left: App icon + name + project (draggable) */}
-      <div data-tauri-drag-region className="flex items-center gap-2 shrink-0">
-        {!isMac && <img src={appIcon} alt="" className="w-4 h-4" draggable={false} />}
-        <span data-tauri-drag-region className="font-semibold text-md" style={{ color: "var(--color-text)" }}>
+      <div data-tauri-drag-region className="flex min-w-0 items-center gap-2 shrink-0">
+        {!isMac && <img src={appIcon} alt="" className="h-4 w-4 shrink-0" draggable={false} />}
+        <span data-tauri-drag-region className="font-semibold leading-none" style={{ color: "var(--color-text)", fontSize: "var(--font-size-md)" }}>
           Snipsy
         </span>
         {projectName && (
           <>
-            <span data-tauri-drag-region style={{ color: "var(--color-text-secondary)" }}>/</span>
-            <span data-tauri-drag-region className="text-base" style={{ color: "var(--color-text-secondary)" }}>
+            <span data-tauri-drag-region className="leading-none" style={{ color: "var(--color-text-secondary)", fontSize: "var(--font-size-base)" }}>/</span>
+            <span data-tauri-drag-region className="truncate leading-none" style={{ color: "var(--color-text-secondary)", fontSize: "var(--font-size-base)", maxWidth: 260 }}>
               {projectName}
             </span>
           </>
@@ -121,11 +138,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           {projectName && (
             <button
               onClick={onToggleDemo}
-              className="w-7 h-7 flex items-center justify-center rounded"
+              className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
               data-testid="demo-mode-toggle"
               title={demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
               aria-label={demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
-              style={{ color: demoMode ? "var(--color-danger)" : "var(--color-success)" }}
+              style={{ ...titlebarButtonStyle, color: demoMode ? "var(--color-danger)" : "var(--color-success)" }}
             >
               {demoMode
                 ? <CircleStop size={16} className="demo-pulse" />
@@ -137,11 +154,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           {projectName && !elevated && (
             <button
               onClick={handleRelaunchAsAdmin}
-              className="w-7 h-7 flex items-center justify-center rounded"
+              className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
               title="Input protection requires Admin. Click to restart as Administrator."
               aria-label="Restart as Administrator"
               data-testid="elevation-warning"
-              style={{ color: "var(--color-warning, #f59e0b)" }}
+              style={{ ...titlebarButtonStyle, color: "var(--color-warning, #f59e0b)" }}
             >
               <ShieldAlert size={14} />
             </button>
@@ -150,11 +167,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
-            className="w-7 h-7 flex items-center justify-center rounded"
+            className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
             title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
             aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
             data-testid="theme-toggle"
-            style={{ color: "var(--color-text-secondary)" }}
+            style={titlebarButtonStyle}
           >
             {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
           </button>
@@ -170,24 +187,24 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
             {/* Window controls */}
             <button
               onClick={minimize}
-              className="inline-flex items-center justify-center w-11 hover:opacity-80"
-              style={{ height: titlebarHeight, color: "var(--color-text-secondary)" }}
+              className="titlebar-window-control"
+              style={windowButtonStyle}
               aria-label="Minimize"
             >
               <Minus size={14} />
             </button>
             <button
               onClick={toggleMaximize}
-              className="inline-flex items-center justify-center w-11 hover:opacity-80"
-              style={{ height: titlebarHeight, color: "var(--color-text-secondary)" }}
-              aria-label="Maximize"
+              className="titlebar-window-control"
+              style={windowButtonStyle}
+              aria-label={maximized ? "Restore" : "Maximize"}
             >
               {maximized ? <Copy size={11} /> : <Square size={11} />}
             </button>
             <button
               onClick={close}
-              className="inline-flex items-center justify-center w-11 hover:bg-red-500 hover:text-white transition-colors"
-              style={{ height: titlebarHeight, color: "var(--color-text-secondary)" }}
+              className="titlebar-window-control titlebar-window-control-close"
+              style={windowButtonStyle}
               aria-label="Close"
             >
               <X size={14} />

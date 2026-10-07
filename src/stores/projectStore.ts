@@ -91,6 +91,14 @@ function applyProjectData(
   });
 }
 
+async function publishStreamDeckActiveProject(path: string | null) {
+  try {
+    await backend.setStreamDeckActiveProject(path);
+  } catch (error) {
+    console.warn("Failed to publish Stream Deck active project:", error);
+  }
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projectPath: null,
   projectName: null,
@@ -105,6 +113,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   createProject: async (path, name, description) => {
     const data = await backend.createProject(path, name, description);
     applyProjectData(set, path, data);
+    void publishStreamDeckActiveProject(path);
     set({ scripts: [] });
     saveRecentProject(path, name);
     set({ recentProjects: loadRecentProjects() });
@@ -113,6 +122,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   openProject: async (path) => {
     const data = await backend.openProject(path);
     applyProjectData(set, path, data);
+    void publishStreamDeckActiveProject(path);
     saveRecentProject(path, data.project.name);
     set({ recentProjects: loadRecentProjects() });
 
@@ -125,6 +135,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   closeProject: () => {
+    void publishStreamDeckActiveProject(null);
     set({
       projectPath: null,
       projectName: null,

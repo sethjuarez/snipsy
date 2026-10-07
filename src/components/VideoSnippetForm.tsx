@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
-import type { VideoSnippet, TransitionAction } from "../types";
+import type { VideoSnippet, TransitionAction, StreamDeckIcon } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
+import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
+import IconEditor from "./IconEditor";
 
 interface VideoSnippetFormProps {
   snippet?: VideoSnippet;
@@ -23,6 +25,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   );
   const [muted, setMuted] = useState(snippet?.muted !== false);
   const [pauseStops] = useState(snippet?.pauseStops);
+  const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("video"));
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
   const canSave = Boolean(title.trim()) && Boolean(videoFile.trim()) && hotkeyStatus.state === "available";
@@ -33,7 +36,6 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
       !videoFile.trim() ? "Video file" : null,
       hotkeyStatus.state !== "available" ? "Hotkey" : null,
     ].filter(Boolean).join(", ")}`;
-
   const addTransitionAction = () => {
     setTransitionActions([
       ...transitionActions,
@@ -82,6 +84,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
       speed,
       muted,
       pauseStops,
+      streamDeckIcon,
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
     });
@@ -95,7 +98,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
 
   useEffect(() => {
     if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions]);
+  }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions, streamDeckIcon]);
 
   useEffect(() => {
     onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
@@ -255,6 +258,14 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
           Mute audio during playback
         </label>
       </div>
+
+      <IconEditor
+        icon={streamDeckIcon}
+        title={title || "Clip"}
+        snippetType="video"
+        onChange={setStreamDeckIcon}
+        testIdPrefix="video-streamdeck-icon"
+      />
 
       <div data-testid="transition-actions-section">
         <div className="flex items-center justify-between mb-2">

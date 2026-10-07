@@ -26,6 +26,38 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - uses: actions/checkout@v4
+        if: steps.release.outputs.release_created != 'true'
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync Stream Deck version in release PR
+        if: steps.release.outputs.release_created != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_BRANCH="$(gh pr list --state open --label "autorelease: pending" --json headRefName --jq '.[0].headRefName // ""')"
+          if [ -z "$PR_BRANCH" ]; then
+            echo "No pending release PR found."
+            exit 0
+          fi
+
+          git fetch origin "$PR_BRANCH"
+          git checkout "$PR_BRANCH"
+          node scripts/sync-streamdeck-version.mjs
+
+          if git diff --quiet -- streamdeck-plugin/com.snipsy.streamdeck.sdPlugin/manifest.json; then
+            echo "Stream Deck manifest version is already synced."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add streamdeck-plugin/com.snipsy.streamdeck.sdPlugin/manifest.json
+          git commit -m "chore(streamdeck): sync plugin version"
+          git push origin "HEAD:$PR_BRANCH"
+
   trigger-builds:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'

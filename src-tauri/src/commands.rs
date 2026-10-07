@@ -513,7 +513,7 @@ pub fn delete_script(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::DeliveryMethod;
+    use crate::models::{DeliveryMethod, StreamDeckIcon};
     use tempfile::TempDir;
 
     #[test]
@@ -567,6 +567,11 @@ mod tests {
             hotkey: "Ctrl+Shift+1".into(),
             delivery: DeliveryMethod::FastType,
             type_delay: Some(30),
+            stream_deck_icon: Some(StreamDeckIcon::Preset {
+                value: "code".into(),
+                background: Some("#111827".into()),
+                foreground: Some("#38bdf8".into()),
+            }),
         }];
 
         save_text_snippets(
@@ -580,6 +585,7 @@ mod tests {
         assert_eq!(data.text_snippets.len(), 1);
         assert_eq!(data.text_snippets[0].title, "Hello");
         assert_eq!(data.text_snippets[0].delivery, DeliveryMethod::FastType);
+        assert!(matches!(data.text_snippets[0].stream_deck_icon, Some(StreamDeckIcon::Preset { .. })));
     }
 
     #[test]
@@ -611,6 +617,7 @@ mod tests {
             muted: None,
             pause_stops: None,
             transition_actions: None,
+            stream_deck_icon: None,
         }];
 
         save_video_snippets(

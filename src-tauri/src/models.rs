@@ -17,6 +17,38 @@ pub struct TextSnippet {
     pub delivery: DeliveryMethod,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_delay: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_deck_icon: Option<StreamDeckIcon>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StreamDeckIcon {
+    Preset {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        background: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        foreground: Option<String>,
+    },
+    Emoji {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        background: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        foreground: Option<String>,
+    },
+    Generated {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        background: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        foreground: Option<String>,
+    },
+    Image {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        background: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -53,6 +85,8 @@ pub struct VideoSnippet {
     pub pause_stops: Option<Vec<PauseStop>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transition_actions: Option<Vec<TransitionAction>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_deck_icon: Option<StreamDeckIcon>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

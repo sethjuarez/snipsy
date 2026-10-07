@@ -4,7 +4,9 @@ import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import SpotlightOverlay from "./SpotlightOverlay";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
-import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
+import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
+import IconEditor from "./IconEditor";
 import {
   DEFAULT_SPOTLIGHT_STYLE,
   STOP_EPSILON,
@@ -308,6 +310,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [clickToPlay, setClickToPlay] = useState(existingClip?.clickToPlay ?? false);
   const [muted, setMuted] = useState(existingClip?.muted !== false);
   const [pauseStops, setPauseStops] = useState<PauseStop[]>(existingClip?.pauseStops ?? []);
+  const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(existingClip?.streamDeckIcon ?? defaultStreamDeckIcon("video"));
   const [activePreviewStop, setActivePreviewStop] = useState<PreviewNavigationStop | null>(null);
   const [editingSpotlightIndex, setEditingSpotlightIndex] = useState<number | null>(null);
   const [selectedSpotlightRegion, setSelectedSpotlightRegion] = useState<number | null>(null);
@@ -1118,6 +1121,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       backgroundColor,
       clickToPlay,
       muted,
+      streamDeckIcon,
       pauseStops: normalizedPauseStops.length > 0 ? normalizedPauseStops : undefined,
     };
   };
@@ -1146,6 +1150,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     backgroundColor,
     clickToPlay,
     muted,
+    streamDeckIcon,
     pauseStops,
   ]);
 
@@ -1536,6 +1541,14 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 data-testid="clip-description"
               />
             </div>
+            <IconEditor
+              icon={streamDeckIcon}
+              title={title || "Clip"}
+              snippetType="video"
+              onChange={setStreamDeckIcon}
+              compact
+              testIdPrefix="clip-icon"
+            />
             <div>
               <label htmlFor="clip-hotkey" className="block text-xs font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Hotkey</label>
               <div className="flex items-center gap-1.5">

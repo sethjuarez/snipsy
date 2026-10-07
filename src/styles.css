@@ -169,6 +169,26 @@ input[type="radio"] {
   cursor: pointer;
 }
 
+.titlebar-window-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    color var(--duration-fast) var(--easing-default);
+}
+
+.titlebar-window-control:hover {
+  background-color: var(--color-surface-inset);
+  color: var(--color-text) !important;
+}
+
+.titlebar-window-control-close:hover {
+  background-color: var(--color-danger);
+  color: #ffffff !important;
+}
+
 button {
   min-height: 28px;
 }
