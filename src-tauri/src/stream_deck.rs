@@ -177,6 +177,21 @@ fn render_icon_svg(
     } else {
         "#111827"
     };
+    if let Some(StreamDeckIcon::Image { value, background }) = icon {
+        if is_safe_image_data_url(value) {
+            let background = sanitize_color(background.as_deref(), fallback_bg);
+            return format!(
+                r##"<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs><clipPath id="iconClip"><rect x="10" y="10" width="80" height="80" rx="14"/></clipPath></defs>
+  <rect width="100" height="100" rx="18" fill="{background}"/>
+  <image href="{href}" x="10" y="10" width="80" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#iconClip)"/>
+</svg>"##,
+                background = background,
+                href = escape_xml(value),
+            );
+        }
+    }
+
     let fallback_fg = if snippet_type == "video" {
         "#a78bfa"
     } else {
@@ -245,6 +260,11 @@ fn icon_parts(
             initials(title),
             sanitize_color(background.as_deref(), fallback_bg),
             sanitize_color(foreground.as_deref(), fallback_fg),
+        ),
+        Some(StreamDeckIcon::Image { .. }) => (
+            initials(title),
+            fallback_bg.into(),
+            fallback_fg.into(),
         ),
         None => (
             preset_glyph(
@@ -318,6 +338,23 @@ fn sanitize_color(value: Option<&str>, fallback: &str) -> String {
     }
 }
 
+fn is_safe_image_data_url(value: &str) -> bool {
+    let lower = value.trim().to_ascii_lowercase();
+    let Some(data) = lower
+        .strip_prefix("data:image/png;base64,")
+        .or_else(|| lower.strip_prefix("data:image/jpeg;base64,"))
+        .or_else(|| lower.strip_prefix("data:image/jpg;base64,"))
+        .or_else(|| lower.strip_prefix("data:image/webp;base64,"))
+        .or_else(|| lower.strip_prefix("data:image/gif;base64,"))
+    else {
+        return false;
+    };
+    !data.is_empty()
+        && data
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '+' || ch == '/' || ch == '=')
+}
+
 fn escape_xml(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -359,6 +396,22 @@ mod tests {
         assert!(svg.contains(r##"fill="#111827""##));
         assert!(svg.contains(r##"fill="#38bdf8""##));
         assert!(!svg.contains("onload"));
+    }
+
+    #[test]
+    fn renders_custom_image_icon_inside_safe_frame() {
+        let icon = StreamDeckIcon::Image {
+            value: "data:image/png;base64,aGVsbG8=".into(),
+            background: Some("#020617".into()),
+        };
+        let data_url = render_icon_data_url(Some(&icon), "Custom", "video", None);
+        let encoded = data_url.trim_start_matches("data:image/svg+xml;base64,");
+        let svg = String::from_utf8(general_purpose::STANDARD.decode(encoded).unwrap()).unwrap();
+
+        assert!(svg.contains(r##"fill="#020617""##));
+        assert!(svg.contains(r##"<image href="data:image/png;base64,aGVsbG8=""##));
+        assert!(svg.contains(r##"preserveAspectRatio="xMidYMid slice""##));
+        assert!(!svg.contains("Custom"));
     }
 
     #[test]

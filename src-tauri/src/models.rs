@@ -44,6 +44,11 @@ pub enum StreamDeckIcon {
         #[serde(skip_serializing_if = "Option::is_none")]
         foreground: Option<String>,
     },
+    Image {
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        background: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

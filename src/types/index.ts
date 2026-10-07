@@ -22,6 +22,11 @@ export type StreamDeckIcon =
       kind: "generated";
       background?: string;
       foreground?: string;
+    }
+  | {
+      kind: "image";
+      value: string;
+      background?: string;
     };
 
 export interface TextSnippet {

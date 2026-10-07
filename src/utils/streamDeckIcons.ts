@@ -26,7 +26,14 @@ export function streamDeckIconToSvg(
 ) {
   const resolved = normalizeStreamDeckIcon(icon, snippetType);
   const background = sanitizeColor(resolved.background, snippetType === "video" ? "#1e1b4b" : "#111827");
-  const foreground = sanitizeColor(resolved.foreground, snippetType === "video" ? "#a78bfa" : "#38bdf8");
+  if (resolved.kind === "image" && isSafeImageDataUrl(resolved.value)) {
+    return `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs><clipPath id="iconClip"><rect x="10" y="10" width="80" height="80" rx="14"/></clipPath></defs>
+  <rect width="100" height="100" rx="18" fill="${background}"/>
+  <image href="${escapeXml(resolved.value)}" x="10" y="10" width="80" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#iconClip)"/>
+</svg>`;
+  }
+  const foreground = sanitizeColor(resolved.kind !== "image" ? resolved.foreground : undefined, snippetType === "video" ? "#a78bfa" : "#38bdf8");
   const dim = unavailableReason ? 0.42 : 1;
   const glyph = glyphForIcon(resolved, title);
   const badge = unavailableReason
@@ -52,6 +59,7 @@ export function streamDeckIconToDataUrl(
 }
 
 function glyphForIcon(icon: StreamDeckIcon, title: string) {
+  if (icon.kind === "image") return initials(title);
   if (icon.kind === "emoji") return Array.from(icon.value.trim()).slice(0, 4).join("") || "★";
   if (icon.kind === "generated") return initials(title);
 
@@ -79,6 +87,10 @@ function initials(title: string) {
 function sanitizeColor(value: string | undefined, fallback: string) {
   if (!value) return fallback;
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
+export function isSafeImageDataUrl(value: string) {
+  return /^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/]+=*$/i.test(value.trim());
 }
 
 function escapeXml(value: string) {
