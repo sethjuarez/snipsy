@@ -29,6 +29,10 @@ const descriptor = {
   },
 };
 const pluginDir = new URL("../com.snipsy.streamdeck.sdPlugin/", import.meta.url);
+const windowsClientOptions = {
+  platform: "win32",
+  env: { APPDATA: "C:\\Users\\seth\\AppData\\Roaming" },
+};
 
 test("manifest minimum Stream Deck version supports SDK settings behavior", async () => {
   const manifest = JSON.parse(await readFile(new URL("manifest.json", pluginDir), "utf8"));
@@ -105,7 +109,7 @@ test("rejects descriptors for the wrong host platform", () => {
 test("sends listButtons requests through the advertised descriptor", async () => {
   const requests = [];
   const client = new SnipsyClient({
-    platform: "win32",
+    ...windowsClientOptions,
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
@@ -129,7 +133,7 @@ test("sends listButtons requests through the advertised descriptor", async () =>
 test("sends activeProjectButtons requests through the advertised descriptor", async () => {
   const requests = [];
   const client = new SnipsyClient({
-    platform: "win32",
+    ...windowsClientOptions,
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
@@ -158,7 +162,7 @@ test("deduplicates bursty listButtons requests per project path", async () => {
   let requestCount = 0;
   let now = 1000;
   const client = new SnipsyClient({
-    platform: "win32",
+    ...windowsClientOptions,
     now: () => now,
     listButtonsCacheTtlMs: 1500,
     readFileText: async () => JSON.stringify(descriptor),
@@ -186,7 +190,7 @@ test("deduplicates bursty listButtons requests per project path", async () => {
 test("sends triggerButton requests with semantic snippet bindings", async () => {
   const requests = [];
   const client = new SnipsyClient({
-    platform: "win32",
+    ...windowsClientOptions,
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
@@ -209,7 +213,7 @@ test("sends triggerButton requests with semantic snippet bindings", async () => 
 test("subscribes to project button updates through watchProject", async () => {
   const requests = [];
   const client = new SnipsyClient({
-    platform: "win32",
+    ...windowsClientOptions,
     readFileText: async () => JSON.stringify(descriptor),
     watch: (_descriptor, command, onEvent) => {
       requests.push(command);
