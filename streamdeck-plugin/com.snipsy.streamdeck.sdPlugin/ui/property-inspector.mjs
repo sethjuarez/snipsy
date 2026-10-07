@@ -13,6 +13,7 @@ window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, _info, action
   actionUuid = JSON.parse(actionInfo).action;
   websocket = new WebSocket(`ws://127.0.0.1:${port}`);
   settings = JSON.parse(actionInfo).payload?.settings ?? {};
+  applyStreamDeckTheme(_info);
 
   websocket.addEventListener("open", () => {
     websocket.send(JSON.stringify({ event: registerEvent, uuid }));
@@ -90,4 +91,27 @@ function sendToPlugin(payload) {
     return;
   }
   websocket.send(JSON.stringify({ event: "sendToPlugin", action: actionUuid, context, payload }));
+}
+
+function applyStreamDeckTheme(infoText) {
+  let colors = {};
+  try {
+    colors = JSON.parse(infoText)?.colors ?? {};
+  } catch {
+    colors = {};
+  }
+  const root = document.documentElement;
+  setCssVar(root, "--sd-highlight-color", colors.highlightColor);
+  setCssVar(root, "--sd-control-hover-background", colors.buttonMouseOverBackgroundColor);
+  setCssVar(root, "--sd-control-background", colors.buttonPressedBackgroundColor);
+  setCssVar(root, "--sd-control-border", colors.buttonPressedBorderColor);
+  setCssVar(root, "--sd-text-color", colors.buttonPressedTextColor);
+  setCssVar(root, "--sd-disabled-text-color", colors.disabledColor);
+  setCssVar(root, "--sd-text-muted", colors.disabledColor ?? colors.buttonPressedTextColor);
+}
+
+function setCssVar(root, name, value) {
+  if (typeof value === "string" && value.trim()) {
+    root.style.setProperty(name, value);
+  }
 }
