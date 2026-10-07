@@ -222,7 +222,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   enterDemoMode: async () => {
-    const { textSnippets, videoSnippets, projectPath } = get();
+    const { textSnippets, videoSnippets, scripts, projectPath } = get();
     const hotkeys = [
       ...textSnippets.map((s) => ({
         id: s.id,
@@ -250,6 +250,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         muted: s.muted,
         pauseStops: s.pauseStops,
       })),
+      ...scripts
+        .filter((s) => Boolean(s.hotkey))
+        .map((s) => ({
+          id: s.id,
+          hotkey: s.hotkey ?? "",
+          snippetType: "automation",
+          projectPath: projectPath ?? undefined,
+          scriptId: s.id,
+        })),
     ];
     try {
       await backend.enterDemoMode(hotkeys);

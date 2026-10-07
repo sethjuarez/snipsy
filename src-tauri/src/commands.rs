@@ -34,11 +34,11 @@ pub fn create_project(
     fs::write(project_dir.join("video-snippets.json"), video_json)
         .map_err(|e| format!("Failed to write video-snippets.json: {e}"))?;
 
-    // Create videos/ and scripts/ directories
+    // Create videos/ and automations/ directories
     fs::create_dir_all(project_dir.join("videos"))
         .map_err(|e| format!("Failed to create videos dir: {e}"))?;
-    fs::create_dir_all(project_dir.join("scripts"))
-        .map_err(|e| format!("Failed to create scripts dir: {e}"))?;
+    fs::create_dir_all(project_dir.join("automations"))
+        .map_err(|e| format!("Failed to create automations dir: {e}"))?;
 
     Ok(ProjectData {
         project: Project {
@@ -453,9 +453,9 @@ pub fn save_script(
     script: Script,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    let scripts_dir = PathBuf::from(&project_path).join("scripts");
+    let scripts_dir = PathBuf::from(&project_path).join("automations");
     fs::create_dir_all(&scripts_dir)
-        .map_err(|e| format!("Failed to create scripts directory: {e}"))?;
+        .map_err(|e| format!("Failed to create automations directory: {e}"))?;
 
     let file_path = scripts_dir.join(format!("{}.json", script.id));
     let json = serde_json::to_string_pretty(&script)
@@ -470,24 +470,28 @@ pub fn load_scripts(
     project_path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<Vec<Script>, String> {
-    let scripts_dir = PathBuf::from(&project_path).join("scripts");
-    if !scripts_dir.exists() {
-        return Ok(vec![]);
-    }
-
     let mut scripts = Vec::new();
-    let entries =
-        fs::read_dir(&scripts_dir).map_err(|e| format!("Failed to read scripts directory: {e}"))?;
+    let project_dir = PathBuf::from(&project_path);
+    let script_dirs = [project_dir.join("automations"), project_dir.join("scripts")];
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-        let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "json") {
-            let content = fs::read_to_string(&path)
-                .map_err(|e| format!("Failed to read script file: {e}"))?;
-            let script: Script = serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse script file: {e}"))?;
-            scripts.push(script);
+    for scripts_dir in script_dirs {
+        if !scripts_dir.exists() {
+            continue;
+        }
+        let entries = fs::read_dir(&scripts_dir)
+            .map_err(|e| format!("Failed to read automations directory: {e}"))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json") {
+                let content = fs::read_to_string(&path)
+                    .map_err(|e| format!("Failed to read automation file: {e}"))?;
+                let script: Script = serde_json::from_str(&content)
+                    .map_err(|e| format!("Failed to parse automation file: {e}"))?;
+                if !scripts.iter().any(|existing: &Script| existing.id == script.id) {
+                    scripts.push(script);
+                }
+            }
         }
     }
 
@@ -501,11 +505,14 @@ pub fn delete_script(
     id: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    let file_path = PathBuf::from(&project_path)
-        .join("scripts")
-        .join(format!("{}.json", id));
-    if file_path.exists() {
-        fs::remove_file(&file_path).map_err(|e| format!("Failed to delete script file: {e}"))?;
+    for dir_name in ["automations", "scripts"] {
+        let file_path = PathBuf::from(&project_path)
+            .join(dir_name)
+            .join(format!("{}.json", id));
+        if file_path.exists() {
+            fs::remove_file(&file_path)
+                .map_err(|e| format!("Failed to delete automation file: {e}"))?;
+        }
     }
     Ok(())
 }
@@ -538,7 +545,7 @@ mod tests {
         assert!(project_path.join("text-snippets.json").exists());
         assert!(project_path.join("video-snippets.json").exists());
         assert!(project_path.join("videos").is_dir());
-        assert!(project_path.join("scripts").is_dir());
+        assert!(project_path.join("automations").is_dir());
 
         // Open should return the same data
         let opened = open_project(project_path.to_string_lossy().into_owned(), None);
@@ -774,6 +781,7 @@ mod tests {
             id: "script-1".into(),
             title: "Build Demo Script".into(),
             description: "Runs a build demo".into(),
+            hotkey: Some("CmdOrControl+Shift+5".into()),
             steps: vec![
                 crate::models::ScriptStep::Wait { duration: 1000 },
                 crate::models::ScriptStep::Type {
@@ -781,10 +789,12 @@ mod tests {
                     delay: Some(50),
                 },
             ],
-            output_video: "videos/build-demo.mp4".into(),
+            contribution_groups: vec![],
+            output_video: Some("videos/build-demo.mp4".into()),
             platform: Some("windows".into()),
             start_screenshot: None,
             recorded_at: None,
+            stream_deck_icon: None,
         };
 
         save_script(
@@ -817,11 +827,14 @@ mod tests {
             id: "script-del".into(),
             title: "To Delete".into(),
             description: "Will be deleted".into(),
+            hotkey: None,
             steps: vec![],
-            output_video: "videos/output.mp4".into(),
+            contribution_groups: vec![],
+            output_video: Some("videos/output.mp4".into()),
             platform: None,
             start_screenshot: None,
             recorded_at: None,
+            stream_deck_icon: None,
         };
 
         save_script(project_path.to_string_lossy().into_owned(), script, None).unwrap();

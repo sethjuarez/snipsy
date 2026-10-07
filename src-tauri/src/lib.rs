@@ -104,6 +104,7 @@ pub fn run() {
             recorder::stop_recording_script,
             recorder::is_recording,
             scripting::run_script,
+            scripting::run_automation,
             stream_deck::list_stream_deck_buttons,
             stream_deck::trigger_stream_deck_button,
             stream_deck_control::set_stream_deck_active_project,

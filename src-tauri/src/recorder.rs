@@ -292,21 +292,24 @@ pub fn stop_recording_script(
         id: script_id.clone(),
         title,
         description,
+        hotkey: None,
         steps,
-        output_video,
+        contribution_groups: vec![],
+        output_video: Some(output_video),
         platform: Some(platform),
         start_screenshot: screenshot,
         recorded_at: Some(chrono_now()),
+        stream_deck_icon: None,
     };
 
-    // Save the script to disk
-    let scripts_dir = PathBuf::from(&project_path).join("scripts");
+    // Save the automation to disk
+    let scripts_dir = PathBuf::from(&project_path).join("automations");
     std::fs::create_dir_all(&scripts_dir)
-        .map_err(|e| format!("Failed to create scripts dir: {}", e))?;
+        .map_err(|e| format!("Failed to create automations dir: {}", e))?;
     let script_file = scripts_dir.join(format!("{}.json", script_id));
     let json = serde_json::to_string_pretty(&script)
         .map_err(|e| format!("Failed to serialize script: {}", e))?;
-    std::fs::write(&script_file, json).map_err(|e| format!("Failed to write script: {}", e))?;
+    std::fs::write(&script_file, json).map_err(|e| format!("Failed to write automation: {}", e))?;
 
     Ok(script)
 }

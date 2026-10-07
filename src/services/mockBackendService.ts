@@ -75,10 +75,20 @@ export class MockBackendService implements BackendService {
       id: "sc-1",
       title: "Build Demo Script",
       description: "Opens terminal and runs build",
+      hotkey: "CmdOrControl+Shift+5",
       steps: [
         { action: "wait", duration: 1000 },
         { action: "type", text: "npm run build", delay: 50 },
         { action: "keypress", key: "Enter" },
+      ],
+      contributionGroups: [
+        {
+          id: "group-1",
+          title: "Setup",
+          contributions: [
+            { id: "open-docs", kind: "openSite", title: "Open docs", url: "https://snipsy.dev" },
+          ],
+        },
       ],
       outputVideo: "videos/build-demo.mp4",
       platform: "windows",
@@ -207,6 +217,10 @@ export class MockBackendService implements BackendService {
     return "videos/mock-output.mp4";
   }
 
+  async runAutomation(_projectPath: string, _scriptId: string): Promise<string> {
+    return "Automation completed";
+  }
+
   async checkFfmpeg(): Promise<FfmpegStatus> {
     return {
       available: false,
@@ -296,14 +310,31 @@ export class MockBackendService implements BackendService {
         hotkey: snippet.hotkey,
         iconDataUrl: streamDeckIconToDataUrl(snippet.streamDeckIcon, snippet.title, "video"),
       })),
+      ...this._scripts.map((script) => ({
+        id: script.id,
+        title: script.title,
+        snippetType: "automation" as const,
+        hotkey: script.hotkey ?? "",
+        iconDataUrl: streamDeckIconToDataUrl(script.streamDeckIcon, script.title, "automation"),
+      })),
     ];
   }
 
   async triggerStreamDeckButton(
     _projectPath: string,
     snippetId: string,
-    snippetType: "text" | "video",
+    snippetType: "text" | "video" | "automation",
   ) {
+    if (snippetType === "automation") {
+      const script = this._scripts.find((candidate) => candidate.id === snippetId);
+      if (!script) throw new Error(`automation not found: ${snippetId}`);
+      await this.runAutomation(_projectPath, snippetId);
+      return {
+        id: script.id,
+        title: script.title,
+        snippetType,
+      };
+    }
     const snippets = snippetType === "text" ? this.data.textSnippets : this.data.videoSnippets;
     const snippet = snippets.find((candidate) => candidate.id === snippetId);
     if (!snippet) throw new Error(`${snippetType} snippet not found: ${snippetId}`);
@@ -345,11 +376,13 @@ export class MockBackendService implements BackendService {
       id: `rec-${Date.now()}`,
       title,
       description,
+      hotkey: "",
       steps: [
         { action: "click", x: 500, y: 300, button: "left" },
         { action: "type", text: "recorded text", delay: 30 },
         { action: "keypress", key: "Enter" },
       ],
+      contributionGroups: [],
       outputVideo: "videos/recorded-mock.mp4",
       platform: "windows",
       recordedAt: new Date().toISOString(),

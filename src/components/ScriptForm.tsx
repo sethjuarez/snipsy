@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Monitor } from "lucide-react";
-import type { Script, ScriptStep } from "../types";
+import type { AutomationContributionGroup, Script, ScriptStep } from "../types";
+import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 
 interface ScriptFormProps {
   script?: Script;
   onSave: (script: Script) => void;
+  hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
 }
 
@@ -31,27 +33,79 @@ function createDefaultStep(action: string): ScriptStep {
   }
 }
 
-function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
+function defaultContributionGroups(script?: Script): AutomationContributionGroup[] {
+  return script?.contributionGroups ?? [];
+}
+
+function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: ScriptFormProps) {
   const [title, setTitle] = useState(script?.title ?? "");
   const [description, setDescription] = useState(script?.description ?? "");
+  const [hotkey, setHotkey] = useState(script?.hotkey ?? "");
   const [outputVideo, setOutputVideo] = useState(
-    script?.outputVideo ?? "videos/output.mp4",
+    script?.outputVideo ?? "",
   );
   const [steps, setSteps] = useState<ScriptStep[]>(script?.steps ?? []);
+  const [contributionGroups, setContributionGroups] = useState<AutomationContributionGroup[]>(() => defaultContributionGroups(script));
+  const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
   const coordinateStepCount = steps.filter((step) =>
     step.action === "click" || step.action === "move" || (step.action === "scroll" && (step.x !== undefined || step.y !== undefined)),
   ).length;
-  const canSave = Boolean(title.trim()) && Boolean(outputVideo.trim());
+  const hotkeyStatus = hotkey.trim() ? validateHotkey(hotkey, hotkeyOwners, script?.id) : { state: "available" as const, message: "Optional. Capture a hotkey to run this automation in demo mode." };
+  const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available";
   const readinessText = canSave
     ? "Ready"
     : `Needs ${[
       !title.trim() ? "Name" : null,
-      !outputVideo.trim() ? "Run output" : null,
+      hotkeyStatus.state !== "available" ? "Hotkey" : null,
     ].filter(Boolean).join(", ")}`;
 
   const addStep = () => {
     setSteps([...steps, structuredClone(EMPTY_STEP)]);
+  };
+
+  const addContributionGroup = () => {
+    setContributionGroups([
+      ...contributionGroups,
+      { id: crypto.randomUUID(), title: `Group ${contributionGroups.length + 1}`, contributions: [] },
+    ]);
+  };
+
+  const removeContributionGroup = (groupId: string) => {
+    setContributionGroups(contributionGroups.filter((group) => group.id !== groupId));
+  };
+
+  const updateContributionGroupTitle = (groupId: string, value: string) => {
+    setContributionGroups(contributionGroups.map((group) => group.id === groupId ? { ...group, title: value } : group));
+  };
+
+  const addOpenSiteContribution = (groupId: string) => {
+    setContributionGroups(contributionGroups.map((group) => group.id === groupId
+      ? {
+        ...group,
+        contributions: [
+          ...group.contributions,
+          { id: crypto.randomUUID(), kind: "openSite", title: "Open site", url: "https://" },
+        ],
+      }
+      : group));
+  };
+
+  const removeContribution = (groupId: string, contributionId: string) => {
+    setContributionGroups(contributionGroups.map((group) => group.id === groupId
+      ? { ...group, contributions: group.contributions.filter((contribution) => contribution.id !== contributionId) }
+      : group));
+  };
+
+  const updateOpenSiteContribution = (groupId: string, contributionId: string, field: "title" | "url" | "idempotencyKey", value: string) => {
+    setContributionGroups(contributionGroups.map((group) => group.id === groupId
+      ? {
+        ...group,
+        contributions: group.contributions.map((contribution) => contribution.id === contributionId && contribution.kind === "openSite"
+          ? { ...contribution, [field]: value }
+          : contribution),
+      }
+      : group));
   };
 
   const removeStep = (index: number) => {
@@ -82,18 +136,31 @@ function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
       id: script?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),
+      hotkey: hotkey.trim() || undefined,
       steps,
-      outputVideo: outputVideo.trim(),
+      contributionGroups,
+      outputVideo: outputVideo.trim() || undefined,
       platform: script?.platform,
       startScreenshot: script?.startScreenshot,
       recordedAt: script?.recordedAt,
+      streamDeckIcon: script?.streamDeckIcon,
     });
     setSaveStatus("saved");
   };
 
   useEffect(() => {
     if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [title, description, outputVideo, steps]);
+  }, [title, description, hotkey, outputVideo, steps, contributionGroups]);
+
+  const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const combo = formatKeyCombo(e.nativeEvent);
+    if (combo.includes("+") && !combo.endsWith("+")) {
+      setHotkey(combo);
+      setCapturingHotkey(false);
+    }
+  };
 
   useEffect(() => {
     onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
@@ -119,7 +186,7 @@ function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
           )}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <label htmlFor="script-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
             Name
@@ -137,16 +204,39 @@ function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
           />
         </div>
         <div>
+          <label htmlFor="script-hotkey" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+            Hotkey
+          </label>
+          <input
+            id="script-hotkey"
+            type="text"
+            value={capturingHotkey ? "Press a key combo..." : hotkey}
+            readOnly
+            onFocus={() => setCapturingHotkey(true)}
+            onBlur={() => setCapturingHotkey(false)}
+            onKeyDown={handleHotkeyCapture}
+            placeholder="Optional hotkey"
+            className="w-full px-3 py-2 rounded font-mono text-md"
+            style={capturingHotkey
+              ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
+              : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            data-testid="script-hotkey"
+            aria-describedby="script-hotkey-status"
+          />
+          <p id="script-hotkey-status" className="mt-1 text-sm" style={{ color: hotkeyStatus.state === "available" ? "var(--color-text-secondary)" : "var(--color-danger)" }} data-testid="script-hotkey-status">
+            {hotkeyStatus.message}
+          </p>
+        </div>
+        <div>
           <label htmlFor="script-output" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Run Output
+            Recording Output
           </label>
           <input
             id="script-output"
             type="text"
             value={outputVideo}
             onChange={(e) => setOutputVideo(e.target.value)}
-            placeholder="videos/automation-output.mp4"
-            required
+            placeholder="Optional video output"
             className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
             data-testid="script-output"
@@ -178,7 +268,7 @@ function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
         <div>
           <div className="text-sm font-medium" style={{ color: "var(--color-text-secondary)" }}>Workflow</div>
           <div className="text-base" style={{ color: "var(--color-text)" }}>
-            {steps.length} step{steps.length === 1 ? "" : "s"}
+            {contributionGroups.reduce((sum, group) => sum + group.contributions.length, 0)} contribution{contributionGroups.reduce((sum, group) => sum + group.contributions.length, 0) === 1 ? "" : "s"}
           </div>
         </div>
         <div>
@@ -195,10 +285,86 @@ function ScriptForm({ script, onSave, onSaveStateChange }: ScriptFormProps) {
         </div>
       </div>
 
+      <div data-testid="automation-contributions-section">
+        <div className="flex items-center justify-between mb-2">
+          <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
+            Contribution Groups
+          </label>
+          <button
+            type="button"
+            onClick={addContributionGroup}
+            className="text-base font-medium"
+            style={{ color: "var(--color-accent)" }}
+            data-testid="add-contribution-group"
+          >
+            + Add Group
+          </button>
+        </div>
+        {contributionGroups.length === 0 && (
+          <p className="text-base" style={{ color: "var(--color-text-secondary)" }} data-testid="no-contributions">
+            No contribution groups yet. Add a group, then add ordered contributions.
+          </p>
+        )}
+        {contributionGroups.map((group, groupIndex) => (
+          <div key={group.id} className="mb-3 p-3 rounded" style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border-subtle)" }} data-testid={`contribution-group-${groupIndex}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="text"
+                value={group.title}
+                onChange={(e) => updateContributionGroupTitle(group.id, e.target.value)}
+                className="flex-1 px-2 py-1 rounded text-base"
+                style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                data-testid={`contribution-group-title-${groupIndex}`}
+              />
+              <button type="button" onClick={() => addOpenSiteContribution(group.id)} className="text-base font-medium" style={{ color: "var(--color-accent)" }} data-testid={`add-open-site-${groupIndex}`}>
+                + Open Site
+              </button>
+              <button type="button" onClick={() => removeContributionGroup(group.id)} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-group-${groupIndex}`}>
+                Remove
+              </button>
+            </div>
+            {group.contributions.map((contribution, contributionIndex) => (
+              <div key={contribution.id} className="grid grid-cols-[1fr_2fr_1fr_auto] gap-2 mb-2" data-testid={`contribution-${groupIndex}-${contributionIndex}`}>
+                <input
+                  type="text"
+                  value={contribution.title ?? ""}
+                  onChange={(e) => updateOpenSiteContribution(group.id, contribution.id, "title", e.target.value)}
+                  placeholder="Title"
+                  className="px-2 py-1 rounded text-base"
+                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                  data-testid={`contribution-title-${groupIndex}-${contributionIndex}`}
+                />
+                <input
+                  type="url"
+                  value={contribution.url}
+                  onChange={(e) => updateOpenSiteContribution(group.id, contribution.id, "url", e.target.value)}
+                  placeholder="https://example.com"
+                  className="px-2 py-1 rounded text-base"
+                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                  data-testid={`contribution-url-${groupIndex}-${contributionIndex}`}
+                />
+                <input
+                  type="text"
+                  value={contribution.idempotencyKey ?? ""}
+                  onChange={(e) => updateOpenSiteContribution(group.id, contribution.id, "idempotencyKey", e.target.value)}
+                  placeholder="Idempotency key"
+                  className="px-2 py-1 rounded text-base"
+                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                  data-testid={`contribution-idempotency-${groupIndex}-${contributionIndex}`}
+                />
+                <button type="button" onClick={() => removeContribution(group.id, contribution.id)} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-${groupIndex}-${contributionIndex}`}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
       <div data-testid="script-steps-section">
         <div className="flex items-center justify-between mb-2">
           <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Workflow Steps
+            Recording Steps
           </label>
           <button
             type="button"

@@ -162,11 +162,30 @@ export interface Script {
   id: string;
   title: string;
   description: string;
+  hotkey?: string;
   steps: ScriptStep[];
-  outputVideo: string;
+  contributionGroups?: AutomationContributionGroup[];
+  outputVideo?: string;
   platform?: ScriptPlatform;
   startScreenshot?: string;
   recordedAt?: string;
+  streamDeckIcon?: StreamDeckIcon;
+}
+
+export interface AutomationContributionGroup {
+  id: string;
+  title: string;
+  contributions: AutomationContribution[];
+}
+
+export type AutomationContribution = OpenSiteContribution;
+
+export interface OpenSiteContribution {
+  id: string;
+  kind: "openSite";
+  title?: string;
+  url: string;
+  idempotencyKey?: string;
 }
 
 export interface ImportedVideo {
@@ -185,7 +204,7 @@ export interface ProjectData {
 export interface StreamDeckButton {
   id: string;
   title: string;
-  snippetType: "text" | "video";
+  snippetType: "text" | "video" | "automation";
   hotkey: string;
   iconDataUrl: string;
 }
@@ -193,5 +212,5 @@ export interface StreamDeckButton {
 export interface StreamDeckTriggerResult {
   id: string;
   title: string;
-  snippetType: "text" | "video";
+  snippetType: "text" | "video" | "automation";
 }

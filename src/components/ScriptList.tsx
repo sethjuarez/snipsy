@@ -92,6 +92,7 @@ function AutomationRow({
   lastRun?: AutomationRunHistoryItem;
 }) {
   const portability = getPortability(script);
+  const contributionCount = script.contributionGroups?.reduce((sum, group) => sum + group.contributions.length, 0) ?? 0;
 
   return (
     <div
@@ -107,6 +108,9 @@ function AutomationRow({
             </h3>
             <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-warning)" }}>
               {script.steps.length} step{script.steps.length !== 1 && "s"}
+            </span>
+            <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
+              {contributionCount} contribution{contributionCount !== 1 && "s"}
             </span>
             <span
               className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
@@ -132,9 +136,11 @@ function AutomationRow({
               {script.description}
             </p>
           )}
-          <p className="text-sm mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
-            Run output: {script.outputVideo}
-          </p>
+          {script.outputVideo && (
+            <p className="text-sm mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+              Recording output: {script.outputVideo}
+            </p>
+          )}
           {lastRun && (
             <p className="flex items-center gap-1 text-sm mt-1" style={{ color: lastRun.status === "success" ? "var(--color-success)" : "var(--color-danger)" }} data-testid={`script-last-run-${script.id}`}>
               <History size={11} />

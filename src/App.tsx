@@ -300,13 +300,13 @@ function App() {
     const scriptTitle = scripts.find((script) => script.id === scriptId)?.title ?? "Automation";
     setRunningScriptId(scriptId);
     try {
-      const outputVideo = await backend.runScript(projectPath, scriptId);
-      showToast("Automation completed", `Output saved to ${outputVideo}`, "success");
+      const message = await backend.runAutomation(projectPath, scriptId);
+      showToast("Automation completed", message, "success");
       const historyItem: AutomationRunHistoryItem = {
         scriptId,
         title: scriptTitle,
         status: "success",
-        message: `Output saved to ${outputVideo}`,
+        message,
         completedAt: new Date().toISOString(),
       };
       setAutomationRunHistory((items) => [
@@ -594,6 +594,7 @@ function App() {
                     <ScriptForm
                       script={editingScript}
                       onSave={handleScriptSave}
+                      hotkeyOwners={hotkeyOwners}
                       onSaveStateChange={setScriptSaveState}
                     />
                   </div>

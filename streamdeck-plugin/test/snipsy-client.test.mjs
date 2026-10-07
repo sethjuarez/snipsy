@@ -210,6 +210,29 @@ test("sends triggerButton requests with semantic snippet bindings", async () => 
   ]);
 });
 
+test("sends triggerButton requests with automation bindings", async () => {
+  const requests = [];
+  const client = new SnipsyClient({
+    ...windowsClientOptions,
+    readFileText: async () => JSON.stringify(descriptor),
+    request: async (_descriptor, command) => {
+      requests.push(command);
+      return { status: "triggered" };
+    },
+  });
+
+  await client.triggerButton("C:\\demo", "automation-1", "automation");
+
+  assert.deepEqual(requests, [
+    {
+      command: "triggerButton",
+      projectPath: "C:\\demo",
+      snippetId: "automation-1",
+      snippetType: "automation",
+    },
+  ]);
+});
+
 test("subscribes to project button updates through watchProject", async () => {
   const requests = [];
   const client = new SnipsyClient({

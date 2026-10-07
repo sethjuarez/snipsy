@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{DeliveryMethod, ProjectData, StreamDeckIcon, TextSnippet, VideoSnippet};
+use crate::models::{DeliveryMethod, ProjectData, Script, StreamDeckIcon, TextSnippet, VideoSnippet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +25,7 @@ pub struct StreamDeckTriggerResult {
 pub enum StreamDeckAction {
     Text(TextSnippet),
     Video(VideoSnippet),
+    Automation(Script),
 }
 
 #[tauri::command]
@@ -33,10 +34,12 @@ pub fn list_stream_deck_buttons(
     project_path: String,
     auditaur_trace_context: Option<tauri_plugin_auditaur::IpcTraceContext>,
 ) -> Result<Vec<StreamDeckButton>, String> {
-    let data = crate::commands::open_project(project_path, None)?;
+    let data = crate::commands::open_project(project_path.clone(), None)?;
+    let scripts = crate::commands::load_scripts(project_path, None)?;
     Ok(buttons_for_project(
         &data.text_snippets,
         &data.video_snippets,
+        &scripts,
     ))
 }
 
@@ -50,7 +53,8 @@ pub async fn trigger_stream_deck_button(
     auditaur_trace_context: Option<tauri_plugin_auditaur::IpcTraceContext>,
 ) -> Result<StreamDeckTriggerResult, String> {
     let data = crate::commands::open_project(project_path.clone(), None)?;
-    let action = resolve_action(&data, &snippet_id, &snippet_type)?;
+    let scripts = crate::commands::load_scripts(project_path.clone(), None)?;
+    let action = resolve_action(&data, &scripts, &snippet_id, &snippet_type)?;
 
     match action {
         StreamDeckAction::Text(snippet) => {
@@ -91,12 +95,21 @@ pub async fn trigger_stream_deck_button(
                 snippet_type: "video".into(),
             })
         }
+        StreamDeckAction::Automation(script) => {
+            crate::scripting::run_automation(project_path, script.id.clone(), None).await?;
+            Ok(StreamDeckTriggerResult {
+                id: script.id,
+                title: script.title,
+                snippet_type: "automation".into(),
+            })
+        }
     }
 }
 
 pub fn buttons_for_project(
     text_snippets: &[TextSnippet],
     video_snippets: &[VideoSnippet],
+    scripts: &[Script],
 ) -> Vec<StreamDeckButton> {
     text_snippets
         .iter()
@@ -124,11 +137,24 @@ pub fn buttons_for_project(
                 None,
             ),
         }))
+        .chain(scripts.iter().map(|script| StreamDeckButton {
+            id: script.id.clone(),
+            title: script.title.clone(),
+            snippet_type: "automation".into(),
+            hotkey: script.hotkey.clone().unwrap_or_default(),
+            icon_data_url: render_icon_data_url(
+                script.stream_deck_icon.as_ref(),
+                &script.title,
+                "automation",
+                None,
+            ),
+        }))
         .collect()
 }
 
 pub fn resolve_action(
     data: &ProjectData,
+    scripts: &[Script],
     snippet_id: &str,
     snippet_type: &str,
 ) -> Result<StreamDeckAction, String> {
@@ -148,6 +174,14 @@ pub fn resolve_action(
             .map(StreamDeckAction::Video)
             .ok_or_else(|| {
                 format!("Video snippet not found for Stream Deck binding: {snippet_id}")
+            }),
+        "automation" => scripts
+            .iter()
+            .find(|script| script.id == snippet_id)
+            .cloned()
+            .map(StreamDeckAction::Automation)
+            .ok_or_else(|| {
+                format!("Automation not found for Stream Deck binding: {snippet_id}")
             }),
         other => Err(format!("Unknown Stream Deck snippet type: {other}")),
     }
@@ -174,6 +208,8 @@ fn render_icon_svg(
 ) -> String {
     let fallback_bg = if snippet_type == "video" {
         "#1e1b4b"
+    } else if snippet_type == "automation" {
+        "#052e16"
     } else {
         "#111827"
     };
@@ -194,6 +230,8 @@ fn render_icon_svg(
 
     let fallback_fg = if snippet_type == "video" {
         "#a78bfa"
+    } else if snippet_type == "automation" {
+        "#86efac"
     } else {
         "#38bdf8"
     };
@@ -290,6 +328,7 @@ fn preset_glyph(value: &str, snippet_type: &str) -> &'static str {
         "rocket" => "🚀",
         "text" => "T",
         _ if snippet_type == "video" => "▶",
+        _ if snippet_type == "automation" => "🚀",
         _ => "T",
     }
 }
@@ -446,10 +485,33 @@ mod tests {
             stream_deck_icon: None,
         };
 
-        let buttons = buttons_for_project(&[text], &[video]);
+        let buttons = buttons_for_project(&[text], &[video], &[]);
         assert_eq!(buttons.len(), 2);
         assert_eq!(buttons[0].snippet_type, "text");
         assert_eq!(buttons[1].snippet_type, "video");
+    }
+
+    #[test]
+    fn buttons_include_automations() {
+        let script = Script {
+            id: "automation-1".into(),
+            title: "Open Docs".into(),
+            description: "".into(),
+            hotkey: Some("Ctrl+Shift+5".into()),
+            steps: vec![],
+            contribution_groups: vec![],
+            output_video: None,
+            platform: None,
+            start_screenshot: None,
+            recorded_at: None,
+            stream_deck_icon: None,
+        };
+
+        let buttons = buttons_for_project(&[], &[], &[script]);
+
+        assert_eq!(buttons.len(), 1);
+        assert_eq!(buttons[0].snippet_type, "automation");
+        assert_eq!(buttons[0].hotkey, "Ctrl+Shift+5");
     }
 
     #[test]
@@ -473,7 +535,7 @@ mod tests {
             video_snippets: vec![],
         };
 
-        let action = resolve_action(&data, "text-1", "text").unwrap();
+        let action = resolve_action(&data, &[], "text-1", "text").unwrap();
 
         assert!(matches!(action, StreamDeckAction::Text(snippet) if snippet.text == "hello"));
     }
@@ -489,7 +551,7 @@ mod tests {
             video_snippets: vec![],
         };
 
-        let error = resolve_action(&data, "missing", "text").unwrap_err();
+        let error = resolve_action(&data, &[], "missing", "text").unwrap_err();
 
         assert!(error.contains("Text snippet not found"));
         assert!(error.contains("missing"));
@@ -525,7 +587,7 @@ mod tests {
             video_snippets: vec![video],
         };
 
-        let action = resolve_action(&data, "video-1", "video").unwrap();
+        let action = resolve_action(&data, &[], "video-1", "video").unwrap();
 
         assert!(
             matches!(action, StreamDeckAction::Video(snippet) if snippet.video_file == "videos/clip.mp4")
@@ -543,10 +605,39 @@ mod tests {
             video_snippets: vec![],
         };
 
-        let error = resolve_action(&data, "snippet-1", "script").unwrap_err();
+        let error = resolve_action(&data, &[], "snippet-1", "script").unwrap_err();
 
         assert!(error.contains("Unknown Stream Deck snippet type"));
         assert!(error.contains("script"));
+    }
+
+    #[test]
+    fn resolve_action_finds_automation_by_id_and_type() {
+        let script = Script {
+            id: "automation-1".into(),
+            title: "Open Docs".into(),
+            description: "".into(),
+            hotkey: None,
+            steps: vec![],
+            contribution_groups: vec![],
+            output_video: None,
+            platform: None,
+            start_screenshot: None,
+            recorded_at: None,
+            stream_deck_icon: None,
+        };
+        let data = ProjectData {
+            project: crate::models::Project {
+                name: "Demo".into(),
+                description: "".into(),
+            },
+            text_snippets: vec![],
+            video_snippets: vec![],
+        };
+
+        let action = resolve_action(&data, &[script], "automation-1", "automation").unwrap();
+
+        assert!(matches!(action, StreamDeckAction::Automation(script) if script.title == "Open Docs"));
     }
 
     #[test]

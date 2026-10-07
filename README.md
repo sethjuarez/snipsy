@@ -12,7 +12,7 @@ A **Project** is the top-level organizational unit in Snipsy. A project is store
 
 - **Text Snippets** — reusable blocks of text with assigned hotkeys.
 - **Video Snippets** — pre-recorded screen capture clips with assigned hotkeys, playback speeds, and optional transition actions.
-- **Scripts** (Advanced mode) — automation definitions used to capture screen recordings programmatically.
+- **Automations** (Advanced mode) — ordered, reusable actions that can prepare a demo, open sites, or capture screen recordings programmatically.
 
 A user can have multiple projects (e.g., one per talk or demo). All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
 
@@ -50,22 +50,28 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - A timeline view (similar to video editing software) allows the user to scrub through imported video, select time ranges, and create video snippets from those ranges.
 - Each snippet created from the timeline gets its own title, description, hotkey, speed, and optional transition actions.
 
-### Video Snippets - Advanced Mode (Scripted Capture)
+### Video Snippets - Advanced Mode (Automation Capture)
 
-- A project can contain **scripts** — automation definitions that drive the user's screen to perform a sequence of actions while recording.
-- A script is a series of steps, for example:
+- A project can contain **automations** — ordered contribution groups plus optional recorded input steps.
+- A contribution is an extensible action someone can add to an automation. Contributions run in group order, and each contribution is idempotent within a run.
+- The first built-in contribution is `openSite`, which opens an `http://` or `https://` URL in the default browser.
+- An automation can also include recorded input steps, for example:
   - Open an application or URL.
   - Wait for a condition (e.g., a window to appear).
   - Perform keyboard/mouse actions (type text, click coordinates, use shortcuts).
   - Pause/resume recording.
   - Insert delays.
-- When a script is executed, Snipsy:
+- When an automation is executed, Snipsy:
+  1. Runs each contribution group in order.
+  2. Skips duplicate contribution idempotency keys that already ran in the same automation execution.
+  3. Executes any recorded input steps in order.
+- When an automation is run as a recording capture, Snipsy:
   1. Starts a screen recording (via FFmpeg).
   2. Executes each step in order using OS-level input simulation.
   3. Stops the recording and saves the video file into the project folder.
 - The resulting video can then be used to create video snippets in the same way as manually imported video (timeline view, time range selection, hotkey/speed assignment, transition actions).
-- Scripts can be edited and re-run to regenerate the video when the underlying demo content changes (e.g., a new version of the software being demoed), avoiding manual re-recording.
-- Scripts are stored as human-editable JSON files within the project folder.
+- Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
+- Automations are stored as human-editable JSON files within the project folder.
 
 ## Data Model
 
@@ -78,7 +84,7 @@ my-demo-project/
 ├── project.json          # Project metadata (name, description, settings)
 ├── text-snippets.json    # Array of text snippet definitions
 ├── video-snippets.json   # Array of video snippet definitions
-├── scripts/              # Automation scripts (Advanced mode)
+├── automations/          # Automation definitions (Advanced mode)
 │   ├── setup-build.json
 │   └── deploy-flow.json
 └── videos/               # Video asset files
@@ -139,13 +145,29 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 - `pauseStops` (optional): Source-video timestamps where playback pauses on the designated frame until the presenter clicks or presses Space. Stops still target the same frame when playback speed is changed.
 - `transitionActions` (optional): Array of automation actions to execute during/at the end of playback for seamless transitions.
 
-### Script Schema (Advanced Mode)
+### Automation Schema (Advanced Mode)
 
 ```json
 {
   "id": "unique-id",
   "title": "Setup Build Demo",
   "description": "Opens terminal and runs build command",
+  "hotkey": "Ctrl+Shift+3",
+  "contributionGroups": [
+    {
+      "id": "group-1",
+      "title": "Sites",
+      "contributions": [
+        {
+          "id": "open-docs",
+          "kind": "openSite",
+          "title": "Open docs",
+          "url": "https://snipsy.dev",
+          "idempotencyKey": "openSite:https://snipsy.dev"
+        }
+      ]
+    }
+  ],
   "steps": [
     { "action": "launch", "target": "cmd.exe" },
     { "action": "wait", "duration": 1000 },
@@ -157,6 +179,10 @@ All configuration is stored as **JSON files**, making projects human-readable, v
   "outputVideo": "videos/build-process.mp4"
 }
 ```
+
+Supported contribution kinds:
+
+- `openSite` — Open an `http://` or `https://` URL in the default browser.
 
 Supported step actions:
 
@@ -180,11 +206,11 @@ Supported step actions:
 |---|---|---|
 | Desktop shell | `tauri` | Window management, IPC, system tray, bundling |
 | Global hotkeys | `global-hotkey` (or Tauri's built-in global shortcut API) | Register/unregister system-wide hotkeys |
-| Input simulation | `enigo` | Simulate keyboard and mouse input for fast-type delivery, transition actions, and script execution |
-| Screen recording | FFmpeg (bundled or system-installed) | Capture screen video for scripted recording in Advanced mode |
+| Input simulation | `enigo` | Simulate keyboard and mouse input for fast-type delivery, transition actions, and automation step execution |
+| Screen recording | FFmpeg (bundled or system-installed) | Capture screen video for automation recordings in Advanced mode |
 | Video playback | HTML `<video>` element + FFmpeg for transcoding | Fullscreen chromeless playback of video snippets |
 | File system | `std::fs` + `serde_json` | Read/write project JSON files and manage video assets |
-| Async runtime | `tokio` | Async operations for script execution, recording, and file I/O |
+| Async runtime | `tokio` | Async operations for automation execution, recording, and file I/O |
 | Observability | Auditaur | Local-first telemetry for frontend errors, console logs, Tauri events, IPC, traces, and full-app drive/smoke workflows |
 
 ### Frontend Stack
@@ -204,10 +230,11 @@ Supported step actions:
 All hotkeys are **global OS-level shortcuts** registered through Tauri's global shortcut API (or the `global-hotkey` crate). The flow:
 
 1. User opens a project and enters **demo mode**.
-2. All hotkeys defined in that project's text and video snippet JSON files are registered as global shortcuts.
+2. All hotkeys defined in that project's text snippets, video snippets, and automations are registered as global shortcuts.
 3. When a global hotkey fires:
    - **Text snippet**: The Rust backend uses `enigo` to either simulate keystrokes (fast-type) or write to the system clipboard and simulate Ctrl+V (paste) in the currently focused application.
    - **Video snippet**: The Rust backend signals the frontend to open a frameless, fullscreen, always-on-top window that plays the video segment. Simultaneously, any transition actions are scheduled and executed via `enigo`.
+   - **Automation**: The Rust backend runs contribution groups and recorded steps in order.
 4. When demo mode is exited, all global shortcuts are unregistered.
 
 ### Video Playback System
@@ -220,13 +247,13 @@ Video playback uses a **dedicated frameless Tauri window**:
 - When playback completes, the window is closed, returning focus to whatever was underneath.
 - If `transitionActions` are defined, they are executed by the Rust backend on a timed schedule relative to playback progress.
 
-### Scripted Screen Capture (Advanced Mode)
+### Automation Capture (Advanced Mode)
 
-The scripting engine runs entirely on the Rust backend:
+The automation engine runs entirely on the Rust backend:
 
-1. The user triggers a script run from the UI.
+1. The user triggers an automation run from the UI, a hotkey, or a Stream Deck button.
 2. The backend spawns an FFmpeg process to begin screen recording.
-3. The backend iterates through the script steps, using `enigo` to simulate input and `tokio::time::sleep` for delays.
+3. The backend runs contribution groups, then iterates through recorded steps using `enigo` to simulate input and `tokio::time::sleep` for delays.
 4. When all steps complete (or the user manually stops), the FFmpeg process is signaled to finalize the recording.
 5. The output video file is saved to the project's `videos/` folder.
 6. The user can then create video snippets from this recording using the timeline view.

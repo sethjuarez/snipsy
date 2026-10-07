@@ -152,14 +152,43 @@ pub struct Script {
     pub id: String,
     pub title: String,
     pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hotkey: Option<String>,
+    #[serde(default)]
     pub steps: Vec<ScriptStep>,
-    pub output_video: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contribution_groups: Vec<AutomationContributionGroup>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_video: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_screenshot: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recorded_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_deck_icon: Option<StreamDeckIcon>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationContributionGroup {
+    pub id: String,
+    pub title: String,
+    pub contributions: Vec<AutomationContribution>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AutomationContribution {
+    OpenSite {
+        id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        url: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        idempotency_key: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -426,7 +455,7 @@ mod tests {
         }"#;
         let script: Script = serde_json::from_str(json).unwrap();
         assert_eq!(script.steps.len(), 6);
-        assert_eq!(script.output_video, "videos/build-process.mp4");
+        assert_eq!(script.output_video.as_deref(), Some("videos/build-process.mp4"));
 
         let re_json = serde_json::to_string(&script).unwrap();
         let re_script: Script = serde_json::from_str(&re_json).unwrap();
@@ -499,5 +528,39 @@ mod tests {
         assert!(script.platform.is_none());
         assert!(script.start_screenshot.is_none());
         assert_eq!(script.steps.len(), 2);
+    }
+
+    #[test]
+    fn automation_contributions_round_trip() {
+        let json = r#"{
+            "id": "automation-1",
+            "title": "Prep Demo",
+            "description": "Opens required sites",
+            "hotkey": "CmdOrControl+Shift+5",
+            "steps": [],
+            "contributionGroups": [
+                {
+                    "id": "group-1",
+                    "title": "Setup",
+                    "contributions": [
+                        {
+                            "id": "docs",
+                            "kind": "openSite",
+                            "title": "Docs",
+                            "url": "https://snipsy.dev",
+                            "idempotencyKey": "openSite:https://snipsy.dev"
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let script: Script = serde_json::from_str(json).unwrap();
+        assert_eq!(script.hotkey.as_deref(), Some("CmdOrControl+Shift+5"));
+        assert_eq!(script.contribution_groups.len(), 1);
+        assert_eq!(script.contribution_groups[0].contributions.len(), 1);
+
+        let re_json = serde_json::to_string(&script).unwrap();
+        let re_script: Script = serde_json::from_str(&re_json).unwrap();
+        assert_eq!(script, re_script);
     }
 }

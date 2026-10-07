@@ -18,7 +18,7 @@ const ACTION_UUID = "com.snipsy.streamdeck.trigger-snippet";
 interface SnipsyActionSettings extends JsonObject {
   projectPath?: string;
   snippetId?: string;
-  snippetType?: "text" | "video";
+  snippetType?: "text" | "video" | "automation";
   title?: string;
   iconDataUrl?: string;
 }

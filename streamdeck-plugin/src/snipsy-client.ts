@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 
 export const CONTROL_PROTOCOL_VERSION = 1;
 
-export type SnipsySnippetType = "text" | "video";
+export type SnipsySnippetType = "text" | "video" | "automation";
 
 export interface StreamDeckButton {
   [key: string]: string | undefined;

@@ -121,6 +121,10 @@ export class TauriBackendService implements BackendService {
     return invoke("run_script", { projectPath, scriptId });
   }
 
+  async runAutomation(projectPath: string, scriptId: string): Promise<string> {
+    return invoke("run_automation", { projectPath, scriptId });
+  }
+
   async checkFfmpeg(): Promise<FfmpegStatus> {
     return invoke<FfmpegStatus>("check_ffmpeg");
   }
@@ -190,7 +194,7 @@ export class TauriBackendService implements BackendService {
   async triggerStreamDeckButton(
     projectPath: string,
     snippetId: string,
-    snippetType: "text" | "video",
+    snippetType: "text" | "video" | "automation",
   ): Promise<StreamDeckTriggerResult> {
     return invoke<StreamDeckTriggerResult>("trigger_stream_deck_button", {
       projectPath,
