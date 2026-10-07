@@ -29,7 +29,7 @@
   "Actions": [
     {
       "UUID": "com.snipsy.streamdeck.trigger-snippet",
-      "Name": "Trigger Snipsy Snippet",
+      "Name": "Trigger Snipper",
       "Icon": "static/imgs/actions/trigger/icon",
       "Tooltip": "Triggers a bound Snipsy text or video snippet.",
       "PropertyInspectorPath": "ui/property-inspector.html",

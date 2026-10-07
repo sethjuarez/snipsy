@@ -37,7 +37,7 @@ Visible keys subscribe with `watchProject`. Snipsy keeps that native transport c
 
 ## Current scope
 
-- One keypad action: **Trigger Snipsy Snippet**.
+- One keypad action: **Trigger Snipper**.
 - Property inspector can set a project path, refresh Snipsy buttons, and save a selected text/video snippet binding.
 - Key press sends `triggerButton` through Snipsy's native IPC and shows Stream Deck alert/checkmark feedback.
 
@@ -48,7 +48,7 @@ The official Stream Deck plugin package targets Windows and macOS. The Snipsy ba
 1. Run `npm run package:streamdeck`.
 2. Open `dist/streamdeck/Snipsy.streamDeckPlugin` with Stream Deck.
 3. Start Snipsy and open the project you want to control.
-4. Add **Trigger Snipsy Snippet** to a Stream Deck key.
+4. Add **Trigger Snipper** to a Stream Deck key.
 5. In the property inspector, enter the Snipsy project path, refresh, choose a snippet, and save.
 6. Press the key. Text snippets should deliver through Snipsy; video snippets should open the Snipsy playback window.
 
