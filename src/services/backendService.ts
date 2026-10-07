@@ -33,6 +33,7 @@ export interface SnippetHotkey {
   clickToPlay?: boolean;
   muted?: boolean;
   pauseStops?: PauseStop[];
+  scriptId?: string;
 }
 
 export interface FfmpegToolStatus {
@@ -84,10 +85,10 @@ export interface BackendService {
   ): Promise<void>;
   showPlaybackWindow(): Promise<void>;
   closePlaybackWindow(): Promise<void>;
-  saveScript(projectPath: string, script: Script): Promise<void>;
-  loadScripts(projectPath: string): Promise<Script[]>;
-  deleteScript(projectPath: string, id: string): Promise<void>;
-  runScript(projectPath: string, scriptId: string): Promise<string>;
+  saveAutomation(projectPath: string, script: Script): Promise<void>;
+  loadAutomations(projectPath: string): Promise<Script[]>;
+  deleteAutomation(projectPath: string, id: string): Promise<void>;
+  runAutomation(projectPath: string, scriptId: string): Promise<string>;
   checkFfmpeg(): Promise<FfmpegStatus>;
   setFfmpegPaths(
     ffmpegExecutablePath: string | null,
@@ -107,9 +108,6 @@ export interface BackendService {
   triggerStreamDeckButton(
     projectPath: string,
     snippetId: string,
-    snippetType: "text" | "video",
+    snippetType: "text" | "video" | "automation",
   ): Promise<StreamDeckTriggerResult>;
-  startRecordingScript(projectPath: string): Promise<string>;
-  stopRecordingScript(projectPath: string, title: string, description: string): Promise<Script>;
-  isRecording(): Promise<boolean>;
 }

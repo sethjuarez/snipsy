@@ -29,6 +29,7 @@ pub struct SnippetHotkey {
     pub click_to_play: Option<bool>,
     pub muted: Option<bool>,
     pub pause_stops: Option<Vec<crate::models::PauseStop>>,
+    pub script_id: Option<String>,
 }
 
 /// State tracking for demo mode
@@ -240,6 +241,45 @@ pub fn enter_demo_mode(
                     }),
                 );
             }
+        } else if hk.snippet_type == "automation" {
+            let project_path = hk.project_path.clone().unwrap_or_default();
+            let script_id = hk.script_id.clone().unwrap_or_else(|| hk.id.clone());
+            let result = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let project_path = project_path.clone();
+                    let script_id = script_id.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = crate::scripting::run_automation(project_path, script_id, None).await {
+                            tracing::error!(error = %e, "Automation hotkey action failed");
+                        }
+                    });
+                }
+            });
+
+            if let Err(e) = result {
+                tracing::warn!(
+                    hotkey = %hk.hotkey,
+                    error = %e,
+                    "RegisterHotKey failed; falling back to low-level hook"
+                );
+                let project_path = hk.project_path.clone().unwrap_or_default();
+                let script_id = hk.script_id.clone().unwrap_or_else(|| hk.id.clone());
+                let _ = crate::keyboard_hook::register_hook_fallback(
+                    &hk.hotkey,
+                    Box::new(move || {
+                        let project_path = project_path.clone();
+                        let script_id = script_id.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = crate::scripting::run_automation(project_path, script_id, None).await {
+                                tracing::error!(
+                                    error = %e,
+                                    "Automation low-level hook fallback action failed"
+                                );
+                            }
+                        });
+                    }),
+                );
+            }
         }
     }
 
@@ -310,6 +350,7 @@ mod tests {
             click_to_play: None,
             muted: None,
             pause_stops: None,
+            script_id: None,
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();
@@ -344,6 +385,7 @@ mod tests {
                 label: Some("Explain output".into()),
                 spotlight: None,
             }]),
+            script_id: None,
         };
         let json = serde_json::to_string(&hotkey).unwrap();
         let deserialized: SnippetHotkey = serde_json::from_str(&json).unwrap();

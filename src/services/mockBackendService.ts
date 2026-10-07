@@ -70,19 +70,21 @@ const FIXTURE_PROJECT: ProjectData = {
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
-  private _scripts: Script[] = [
+  private _automations: Script[] = [
     {
       id: "sc-1",
       title: "Build Demo Script",
       description: "Opens terminal and runs build",
-      steps: [
-        { action: "wait", duration: 1000 },
-        { action: "type", text: "npm run build", delay: 50 },
-        { action: "keypress", key: "Enter" },
+      hotkey: "CmdOrControl+Shift+5",
+      contributionGroups: [
+        {
+          id: "group-1",
+          title: "Setup",
+          contributions: [
+            { id: "open-docs", kind: "openSite", title: "Open docs", url: "https://snipsy.dev" },
+          ],
+        },
       ],
-      outputVideo: "videos/build-demo.mp4",
-      platform: "windows",
-      recordedAt: "2026-03-01T12:00:00Z",
     },
   ];
 
@@ -186,25 +188,25 @@ export class MockBackendService implements BackendService {
     // Mock: no-op in test mode
   }
 
-  async saveScript(_projectPath: string, script: Script): Promise<void> {
-    const index = this._scripts.findIndex((s) => s.id === script.id);
+  async saveAutomation(_projectPath: string, script: Script): Promise<void> {
+    const index = this._automations.findIndex((s) => s.id === script.id);
     if (index >= 0) {
-      this._scripts[index] = structuredClone(script);
+      this._automations[index] = structuredClone(script);
     } else {
-      this._scripts.push(structuredClone(script));
+      this._automations.push(structuredClone(script));
     }
   }
 
-  async loadScripts(_projectPath: string): Promise<Script[]> {
-    return structuredClone(this._scripts);
+  async loadAutomations(_projectPath: string): Promise<Script[]> {
+    return structuredClone(this._automations);
   }
 
-  async deleteScript(_projectPath: string, id: string): Promise<void> {
-    this._scripts = this._scripts.filter((s) => s.id !== id);
+  async deleteAutomation(_projectPath: string, id: string): Promise<void> {
+    this._automations = this._automations.filter((s) => s.id !== id);
   }
 
-  async runScript(_projectPath: string, _scriptId: string): Promise<string> {
-    return "videos/mock-output.mp4";
+  async runAutomation(_projectPath: string, _scriptId: string): Promise<string> {
+    return "Automation completed";
   }
 
   async checkFfmpeg(): Promise<FfmpegStatus> {
@@ -276,8 +278,6 @@ export class MockBackendService implements BackendService {
     return "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AKwA//9k=";
   }
 
-  private _isRecording = false;
-
   async setStreamDeckActiveProject(_projectPath: string | null): Promise<void> {}
 
   async listStreamDeckButtons(_projectPath: string): Promise<StreamDeckButton[]> {
@@ -296,14 +296,31 @@ export class MockBackendService implements BackendService {
         hotkey: snippet.hotkey,
         iconDataUrl: streamDeckIconToDataUrl(snippet.streamDeckIcon, snippet.title, "video"),
       })),
+      ...this._automations.map((script) => ({
+        id: script.id,
+        title: script.title,
+        snippetType: "automation" as const,
+        hotkey: script.hotkey ?? "",
+        iconDataUrl: streamDeckIconToDataUrl(script.streamDeckIcon, script.title, "automation"),
+      })),
     ];
   }
 
   async triggerStreamDeckButton(
     _projectPath: string,
     snippetId: string,
-    snippetType: "text" | "video",
+    snippetType: "text" | "video" | "automation",
   ) {
+    if (snippetType === "automation") {
+      const script = this._automations.find((candidate) => candidate.id === snippetId);
+      if (!script) throw new Error(`automation not found: ${snippetId}`);
+      await this.runAutomation(_projectPath, snippetId);
+      return {
+        id: script.id,
+        title: script.title,
+        snippetType,
+      };
+    }
     const snippets = snippetType === "text" ? this.data.textSnippets : this.data.videoSnippets;
     const snippet = snippets.find((candidate) => candidate.id === snippetId);
     if (!snippet) throw new Error(`${snippetType} snippet not found: ${snippetId}`);
@@ -334,31 +351,4 @@ export class MockBackendService implements BackendService {
     };
   }
 
-  async startRecordingScript(_projectPath: string): Promise<string> {
-    this._isRecording = true;
-    return "screenshots/mock-start.png";
-  }
-
-  async stopRecordingScript(_projectPath: string, title: string, description: string): Promise<import("../types").Script> {
-    this._isRecording = false;
-    const script: import("../types").Script = {
-      id: `rec-${Date.now()}`,
-      title,
-      description,
-      steps: [
-        { action: "click", x: 500, y: 300, button: "left" },
-        { action: "type", text: "recorded text", delay: 30 },
-        { action: "keypress", key: "Enter" },
-      ],
-      outputVideo: "videos/recorded-mock.mp4",
-      platform: "windows",
-      recordedAt: new Date().toISOString(),
-    };
-    this._scripts.push(script);
-    return structuredClone(script);
-  }
-
-  async isRecording(): Promise<boolean> {
-    return this._isRecording;
-  }
 }

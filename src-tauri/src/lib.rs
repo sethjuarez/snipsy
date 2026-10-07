@@ -7,7 +7,6 @@ mod focus;
 mod keyboard_hook;
 mod models;
 mod playback;
-mod recorder;
 mod scripting;
 mod stream_deck;
 mod stream_deck_control;
@@ -22,7 +21,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(demo::AppState::default())
-        .manage(recorder::RecorderState::default())
         .plugin(
             tauri_plugin_auditaur::Builder::new()
                 .service_name("snipsy")
@@ -88,9 +86,9 @@ pub fn run() {
             commands::capture_monitor_preview,
             commands::check_ffmpeg,
             commands::set_ffmpeg_paths,
-            commands::save_script,
-            commands::load_scripts,
-            commands::delete_script,
+            commands::save_automation,
+            commands::load_automations,
+            commands::delete_automation,
             demo::enter_demo_mode,
             demo::exit_demo_mode,
             demo::is_demo_mode,
@@ -100,10 +98,7 @@ pub fn run() {
             playback::play_video,
             playback::show_playback_window,
             playback::close_playback_window,
-            recorder::start_recording_script,
-            recorder::stop_recording_script,
-            recorder::is_recording,
-            scripting::run_script,
+            scripting::run_automation,
             stream_deck::list_stream_deck_buttons,
             stream_deck::trigger_stream_deck_button,
             stream_deck_control::set_stream_deck_active_project,

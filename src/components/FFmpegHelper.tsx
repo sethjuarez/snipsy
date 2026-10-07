@@ -106,7 +106,7 @@ function FFmpegHelper({ onClose, onFixed }: FFmpegHelperProps) {
 
         <div className="px-5 py-4 space-y-4">
           <p className="text-base leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
-            Snipsy uses FFmpeg and FFprobe for video processing and automation recordings. They are not bundled with Snipsy.
+            Snipsy uses FFmpeg and FFprobe for video processing. They are not bundled with Snipsy.
           </p>
 
           {(["ffmpeg", "ffprobe"] as const).map((tool) => {

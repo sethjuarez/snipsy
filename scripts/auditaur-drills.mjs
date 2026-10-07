@@ -676,8 +676,8 @@ waitForAnySelector(['[data-testid="empty-state"]', '[data-testid="text-snippet-l
 click('[data-testid="nav-videos"]');
 waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);
 
-click('[data-testid="nav-scripts"]');
-waitForAnySelector(['[data-testid="script-empty-state"]', '[data-testid="script-list"]']);
+click('[data-testid="nav-automations"]');
+waitForAnySelector(['[data-testid="automation-empty-state"]', '[data-testid="automation-list"]']);
 
 runClipEditorDrills();
 runPlaybackWindowDrill();

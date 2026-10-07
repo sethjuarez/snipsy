@@ -1,6 +1,6 @@
 import { Home, LayoutDashboard, FileText, Film, Video, ScrollText, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
 
-export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "scripts";
+export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "automations";
 
 interface NavItem {
   id: AppView;
@@ -13,7 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "text-snippets", label: "Text", Icon: FileText },
   { id: "videos", label: "Videos", Icon: Video },
   { id: "video-snippets", label: "Clips", Icon: Film },
-  { id: "scripts", label: "Automations", Icon: ScrollText },
+  { id: "automations", label: "Automations", Icon: ScrollText },
 ];
 
 interface SidebarProps {

@@ -100,25 +100,25 @@ export class TauriBackendService implements BackendService {
     return invoke("close_playback_window");
   }
 
-  async saveScript(
+  async saveAutomation(
     projectPath: string,
     script: import("../types").Script,
   ): Promise<void> {
-    return invoke("save_script", { projectPath, script });
+    return invoke("save_automation", { projectPath, script });
   }
 
-  async loadScripts(
+  async loadAutomations(
     projectPath: string,
   ): Promise<import("../types").Script[]> {
-    return invoke("load_scripts", { projectPath });
+    return invoke("load_automations", { projectPath });
   }
 
-  async deleteScript(projectPath: string, id: string): Promise<void> {
-    return invoke("delete_script", { projectPath, id });
+  async deleteAutomation(projectPath: string, id: string): Promise<void> {
+    return invoke("delete_automation", { projectPath, id });
   }
 
-  async runScript(projectPath: string, scriptId: string): Promise<string> {
-    return invoke("run_script", { projectPath, scriptId });
+  async runAutomation(projectPath: string, scriptId: string): Promise<string> {
+    return invoke("run_automation", { projectPath, scriptId });
   }
 
   async checkFfmpeg(): Promise<FfmpegStatus> {
@@ -190,24 +190,12 @@ export class TauriBackendService implements BackendService {
   async triggerStreamDeckButton(
     projectPath: string,
     snippetId: string,
-    snippetType: "text" | "video",
+    snippetType: "text" | "video" | "automation",
   ): Promise<StreamDeckTriggerResult> {
     return invoke<StreamDeckTriggerResult>("trigger_stream_deck_button", {
       projectPath,
       snippetId,
       snippetType,
     });
-  }
-
-  async startRecordingScript(projectPath: string): Promise<string> {
-    return invoke<string>("start_recording_script", { projectPath });
-  }
-
-  async stopRecordingScript(projectPath: string, title: string, description: string): Promise<import("../types").Script> {
-    return invoke<import("../types").Script>("stop_recording_script", { projectPath, title, description });
-  }
-
-  async isRecording(): Promise<boolean> {
-    return invoke<boolean>("is_recording");
   }
 }

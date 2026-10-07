@@ -31,9 +31,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 tauri-plugin-auditaur = "0.4.1"
 
-# Cross-platform active window detection
 active-win-pos-rs = "0.8"
-rdev = "0.5"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

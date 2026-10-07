@@ -289,7 +289,10 @@ pub async fn execute_request(
 }
 
 fn command_error_code(error: &str) -> &'static str {
-    if error.contains("Text snippet not found") || error.contains("Video snippet not found") {
+    if error.contains("Text snippet not found")
+        || error.contains("Video snippet not found")
+        || error.contains("Automation not found")
+    {
         "snippetNotFound"
     } else if error.contains("Unknown Stream Deck snippet type") {
         "unknownSnippetType"
@@ -1560,6 +1563,10 @@ mod tests {
         );
         assert_eq!(
             command_error_code("Video snippet not found for Stream Deck binding: video-1"),
+            "snippetNotFound"
+        );
+        assert_eq!(
+            command_error_code("Automation not found for Stream Deck binding: automation-1"),
             "snippetNotFound"
         );
         assert_eq!(

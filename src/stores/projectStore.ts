@@ -48,7 +48,7 @@ interface ProjectState {
   projectDescription: string | null;
   textSnippets: TextSnippet[];
   videoSnippets: VideoSnippet[];
-  scripts: Script[];
+  automations: Script[];
   demoMode: boolean;
   ffmpegAvailable: boolean | null;
   recentProjects: RecentProject[];
@@ -67,9 +67,9 @@ interface ProjectState {
   setTextSnippets: (snippets: TextSnippet[]) => Promise<void>;
   setVideoSnippets: (snippets: VideoSnippet[]) => Promise<void>;
 
-  loadScripts: () => Promise<void>;
-  saveScript: (script: Script) => Promise<void>;
-  deleteScript: (id: string) => Promise<void>;
+  loadAutomations: () => Promise<void>;
+  saveAutomation: (script: Script) => Promise<void>;
+  deleteAutomation: (id: string) => Promise<void>;
   checkFfmpeg: () => Promise<void>;
 
   enterDemoMode: () => Promise<void>;
@@ -105,7 +105,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectDescription: null,
   textSnippets: [],
   videoSnippets: [],
-  scripts: [],
+  automations: [],
   demoMode: false,
   ffmpegAvailable: null,
   recentProjects: loadRecentProjects(),
@@ -114,7 +114,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const data = await backend.createProject(path, name, description);
     applyProjectData(set, path, data);
     void publishStreamDeckActiveProject(path);
-    set({ scripts: [] });
+    set({ automations: [] });
     saveRecentProject(path, name);
     set({ recentProjects: loadRecentProjects() });
   },
@@ -126,12 +126,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     saveRecentProject(path, data.project.name);
     set({ recentProjects: loadRecentProjects() });
 
-    // Load scripts and check FFmpeg in parallel (non-blocking)
-    const [scripts, ffmpegStatus] = await Promise.all([
-      backend.loadScripts(path),
+    // Load automations and check FFmpeg in parallel (non-blocking)
+    const [automations, ffmpegStatus] = await Promise.all([
+      backend.loadAutomations(path),
       backend.checkFfmpeg(),
     ]);
-    set({ scripts, ffmpegAvailable: ffmpegStatus.available });
+    set({ automations, ffmpegAvailable: ffmpegStatus.available });
   },
 
   closeProject: () => {
@@ -142,7 +142,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectDescription: null,
       textSnippets: [],
       videoSnippets: [],
-      scripts: [],
+      automations: [],
       demoMode: false,
     });
   },
@@ -185,35 +185,35 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ videoSnippets: snippets });
   },
 
-  loadScripts: async () => {
+  loadAutomations: async () => {
     const { projectPath } = get();
     if (projectPath) {
-      const scripts = await backend.loadScripts(projectPath);
-      set({ scripts });
+      const automations = await backend.loadAutomations(projectPath);
+      set({ automations });
     }
   },
 
-  saveScript: async (script) => {
-    const { projectPath, scripts } = get();
+  saveAutomation: async (script) => {
+    const { projectPath, automations } = get();
     if (projectPath) {
-      await backend.saveScript(projectPath, script);
+      await backend.saveAutomation(projectPath, script);
     }
-    const existing = scripts.findIndex((s) => s.id === script.id);
+    const existing = automations.findIndex((s) => s.id === script.id);
     if (existing >= 0) {
-      const updated = [...scripts];
+      const updated = [...automations];
       updated[existing] = script;
-      set({ scripts: updated });
+      set({ automations: updated });
     } else {
-      set({ scripts: [...scripts, script] });
+      set({ automations: [...automations, script] });
     }
   },
 
-  deleteScript: async (id) => {
-    const { projectPath, scripts } = get();
+  deleteAutomation: async (id) => {
+    const { projectPath, automations } = get();
     if (projectPath) {
-      await backend.deleteScript(projectPath, id);
+      await backend.deleteAutomation(projectPath, id);
     }
-    set({ scripts: scripts.filter((s) => s.id !== id) });
+    set({ automations: automations.filter((s) => s.id !== id) });
   },
 
   checkFfmpeg: async () => {
@@ -222,7 +222,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   enterDemoMode: async () => {
-    const { textSnippets, videoSnippets, projectPath } = get();
+    const { textSnippets, videoSnippets, automations, projectPath } = get();
     const hotkeys = [
       ...textSnippets.map((s) => ({
         id: s.id,
@@ -250,6 +250,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         muted: s.muted,
         pauseStops: s.pauseStops,
       })),
+      ...automations
+        .filter((s) => Boolean(s.hotkey))
+        .map((s) => ({
+          id: s.id,
+          hotkey: s.hotkey ?? "",
+          snippetType: "automation",
+          projectPath: projectPath ?? undefined,
+          scriptId: s.id,
+        })),
     ];
     try {
       await backend.enterDemoMode(hotkeys);

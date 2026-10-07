@@ -2,18 +2,20 @@ import type { StreamDeckIcon } from "../types";
 
 export const STREAM_DECK_PRESETS = ["text", "code", "terminal", "play", "rocket"] as const;
 
-export function defaultStreamDeckIcon(snippetType: "text" | "video"): StreamDeckIcon {
+type StreamDeckSurfaceType = "text" | "video" | "automation";
+
+export function defaultStreamDeckIcon(snippetType: StreamDeckSurfaceType): StreamDeckIcon {
   return {
     kind: "preset",
-    value: snippetType === "video" ? "play" : "text",
-    background: snippetType === "video" ? "#1e1b4b" : "#111827",
-    foreground: snippetType === "video" ? "#a78bfa" : "#38bdf8",
+    value: snippetType === "video" ? "play" : snippetType === "automation" ? "rocket" : "text",
+    background: snippetType === "video" ? "#1e1b4b" : snippetType === "automation" ? "#052e16" : "#111827",
+    foreground: snippetType === "video" ? "#a78bfa" : snippetType === "automation" ? "#86efac" : "#38bdf8",
   };
 }
 
 export function normalizeStreamDeckIcon(
   icon: StreamDeckIcon | undefined,
-  snippetType: "text" | "video",
+  snippetType: StreamDeckSurfaceType,
 ): StreamDeckIcon {
   return icon ?? defaultStreamDeckIcon(snippetType);
 }
@@ -21,11 +23,11 @@ export function normalizeStreamDeckIcon(
 export function streamDeckIconToSvg(
   icon: StreamDeckIcon | undefined,
   title: string,
-  snippetType: "text" | "video",
+  snippetType: StreamDeckSurfaceType,
   unavailableReason?: string,
 ) {
   const resolved = normalizeStreamDeckIcon(icon, snippetType);
-  const background = sanitizeColor(resolved.background, snippetType === "video" ? "#1e1b4b" : "#111827");
+  const background = sanitizeColor(resolved.background, snippetType === "video" ? "#1e1b4b" : snippetType === "automation" ? "#052e16" : "#111827");
   if (resolved.kind === "image" && isSafeImageDataUrl(resolved.value)) {
     return `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs><clipPath id="iconClip"><rect x="10" y="10" width="80" height="80" rx="14"/></clipPath></defs>
@@ -33,7 +35,7 @@ export function streamDeckIconToSvg(
   <image href="${escapeXml(resolved.value)}" x="10" y="10" width="80" height="80" preserveAspectRatio="xMidYMid slice" clip-path="url(#iconClip)"/>
 </svg>`;
   }
-  const foreground = sanitizeColor(resolved.kind !== "image" ? resolved.foreground : undefined, snippetType === "video" ? "#a78bfa" : "#38bdf8");
+  const foreground = sanitizeColor(resolved.kind !== "image" ? resolved.foreground : undefined, snippetType === "video" ? "#a78bfa" : snippetType === "automation" ? "#86efac" : "#38bdf8");
   const dim = unavailableReason ? 0.42 : 1;
   const glyph = glyphForIcon(resolved, title);
   const badge = unavailableReason
@@ -52,7 +54,7 @@ export function streamDeckIconToSvg(
 export function streamDeckIconToDataUrl(
   icon: StreamDeckIcon | undefined,
   title: string,
-  snippetType: "text" | "video",
+  snippetType: StreamDeckSurfaceType,
   unavailableReason?: string,
 ) {
   return `data:image/svg+xml,${encodeURIComponent(streamDeckIconToSvg(icon, title, snippetType, unavailableReason))}`;
