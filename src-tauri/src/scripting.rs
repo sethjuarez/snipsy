@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::process::Command;
 
 use crate::models::{AutomationContribution, Script};
@@ -102,29 +100,7 @@ fn open_site(url: &str) -> Result<(), String> {
     validate_site_url(url)?;
     let url = url.trim();
     #[cfg(target_os = "windows")]
-    {
-        use windows::core::{w, HSTRING, PCWSTR};
-        use windows::Win32::UI::Shell::ShellExecuteW;
-        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-        let target = HSTRING::from(url);
-        let result = unsafe {
-            ShellExecuteW(
-                None,
-                w!("open"),
-                &target,
-                PCWSTR::null(),
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-
-        if result.0 as isize <= 32 {
-            return Err(format!("open site error: ShellExecuteW failed with code {:?}", result.0));
-        }
-
-        tracing::info!(url, shell_result = ?result.0, "Windows shell accepted open site URL");
-    }
+    open_site_windows(url)?;
     #[cfg(target_os = "macos")]
     Command::new("open")
         .arg(url)
@@ -136,6 +112,149 @@ fn open_site(url: &str) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("open site error: {}", e))?;
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn open_site_windows(url: &str) -> Result<(), String> {
+    match default_browser_command(url) {
+        Ok((program, args)) => {
+            Command::new(&program)
+                .args(&args)
+                .spawn()
+                .map_err(|e| format!("open site error: failed to launch default browser: {}", e))?;
+            tracing::info!(
+                url,
+                browser = %program,
+                "Launched open site URL in default browser"
+            );
+            Ok(())
+        }
+        Err(error) => {
+            tracing::warn!(
+                url,
+                error = %error,
+                "Falling back to Windows shell for open site URL"
+            );
+            shell_execute_url(url)
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_execute_url(url: &str) -> Result<(), String> {
+    use windows::core::{w, HSTRING, PCWSTR};
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let target = HSTRING::from(url);
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &target,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+
+    if result.0 as isize <= 32 {
+        return Err(format!(
+            "open site error: ShellExecuteW failed with code {:?}",
+            result.0
+        ));
+    }
+
+    tracing::info!(url, shell_result = ?result.0, "Windows shell accepted open site URL");
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn default_browser_command(url: &str) -> Result<(String, Vec<String>), String> {
+    use winreg::enums::{HKEY_CLASSES_ROOT, HKEY_CURRENT_USER};
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let user_choice = hkcu
+        .open_subkey(
+            r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice",
+        )
+        .map_err(|e| format!("failed to read default HTTPS association: {}", e))?;
+    let prog_id: String = user_choice
+        .get_value("ProgId")
+        .map_err(|e| format!("failed to read default HTTPS ProgId: {}", e))?;
+
+    let classes_root = RegKey::predef(HKEY_CLASSES_ROOT);
+    let command_key = classes_root
+        .open_subkey(format!(r"{}\shell\open\command", prog_id))
+        .map_err(|e| format!("failed to read browser command for {}: {}", prog_id, e))?;
+    let command_template: String = command_key.get_value("").map_err(|e| {
+        format!(
+            "failed to read browser command value for {}: {}",
+            prog_id, e
+        )
+    })?;
+
+    command_from_template(&command_template, url)
+}
+
+#[cfg(target_os = "windows")]
+fn command_from_template(
+    command_template: &str,
+    url: &str,
+) -> Result<(String, Vec<String>), String> {
+    let mut parts = split_windows_command_line(command_template);
+    if parts.is_empty() {
+        return Err("default browser command is empty".into());
+    }
+
+    let program = parts.remove(0);
+    let mut replaced_url = false;
+    let mut args = Vec::new();
+    for arg in parts {
+        let mut replaced = arg;
+        for placeholder in ["%1", "%L", "%l", "%u", "%U"] {
+            if replaced.contains(placeholder) {
+                replaced = replaced.replace(placeholder, url);
+                replaced_url = true;
+            }
+        }
+
+        if !replaced.trim().is_empty() {
+            args.push(replaced);
+        }
+    }
+
+    if !replaced_url {
+        args.push(url.to_string());
+    }
+
+    Ok((program, args))
+}
+
+#[cfg(target_os = "windows")]
+fn split_windows_command_line(command: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+
+    for ch in command.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ch if ch.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if !current.is_empty() {
+        parts.push(current);
+    }
+
+    parts
 }
 
 fn execute_contribution(contribution: &AutomationContribution) -> Result<(), String> {
@@ -253,5 +372,36 @@ mod tests {
             summary.message(),
             "Opened 2 sites: Caldova, Teams. Skipped 1 duplicate."
         );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn default_browser_command_preserves_query_string_as_one_argument() {
+        let url =
+            "https://teams.microsoft.com/v2/l/chat/0/0?tenantId=tenant&users=contracts@caldova.com";
+        let (program, args) = command_from_template(
+            r#""C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --single-argument "%1""#,
+            url,
+        )
+        .unwrap();
+
+        assert_eq!(
+            program,
+            r#"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"#
+        );
+        assert_eq!(args, vec!["--single-argument", url]);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn default_browser_command_appends_url_without_placeholder() {
+        let (program, args) = command_from_template(
+            r#""C:\Browser\browser.exe" --new-tab"#,
+            "https://snipsy.dev",
+        )
+        .unwrap();
+
+        assert_eq!(program, r#"C:\Browser\browser.exe"#);
+        assert_eq!(args, vec!["--new-tab", "https://snipsy.dev"]);
     }
 }
