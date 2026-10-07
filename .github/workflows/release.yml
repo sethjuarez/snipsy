@@ -37,7 +37,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_BRANCH="$(gh pr list --state open --label "autorelease: pending" --json headRefName --jq '.[0].headRefName // ""')"
+          PR_BRANCH=""
+          for attempt in 1 2 3 4 5 6; do
+            PR_BRANCH="$(gh pr list --state open --label "autorelease: pending" --json headRefName --jq '.[0].headRefName // ""')"
+            if [ -n "$PR_BRANCH" ]; then
+              break
+            fi
+            echo "Pending release PR not visible yet; retrying (${attempt}/6)."
+            sleep 10
+          done
+
           if [ -z "$PR_BRANCH" ]; then
             echo "No pending release PR found."
             exit 0
