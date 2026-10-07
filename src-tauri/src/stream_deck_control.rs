@@ -4,6 +4,7 @@
 //! trigger requests can type into the foreground app and start video playback.
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     ffi::c_void,
     fs,
     path::PathBuf,
@@ -128,6 +129,12 @@ pub struct StreamDeckControlEvent {
     pub payload: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<StreamDeckControlError>,
+}
+
+#[derive(Default)]
+struct ProjectWatchState {
+    last_buttons: Option<Vec<crate::stream_deck::StreamDeckButton>>,
+    last_error_code: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -342,33 +349,155 @@ fn event_response(event: impl Into<String>, payload: Value) -> StreamDeckControl
     }
 }
 
-fn event_error(
-    event: impl Into<String>,
-    code: impl Into<String>,
-    message: impl Into<String>,
+fn project_watch_tick(
+    project_path: &str,
+    state: &mut ProjectWatchState,
+) -> Vec<StreamDeckControlEvent> {
+    project_watch_tick_from_result(project_path, state, read_project_buttons(project_path))
+}
+
+fn project_watch_tick_from_result(
+    project_path: &str,
+    state: &mut ProjectWatchState,
+    result: Result<Vec<crate::stream_deck::StreamDeckButton>, String>,
+) -> Vec<StreamDeckControlEvent> {
+    match result {
+        Ok(buttons) => {
+            let mut events = Vec::new();
+            if state.last_error_code.take().is_some() {
+                events.push(project_available_event(project_path, &buttons));
+            }
+            match state.last_buttons.as_ref() {
+                None => {
+                    events.push(project_snapshot_event_from_buttons(
+                        project_path,
+                        buttons.clone(),
+                    ));
+                }
+                Some(previous) if previous != &buttons => {
+                    events.push(project_changed_event(project_path, previous, &buttons));
+                    events.push(project_snapshot_event_from_buttons(
+                        project_path,
+                        buttons.clone(),
+                    ));
+                }
+                Some(_) => {}
+            }
+            state.last_buttons = Some(buttons);
+            events
+        }
+        Err(error) => {
+            let code = command_error_code(&error).to_string();
+            let should_emit = state.last_error_code.as_deref() != Some(code.as_str())
+                || state.last_buttons.is_some();
+            state.last_error_code = Some(code);
+            state.last_buttons = None;
+            if should_emit {
+                vec![project_unavailable_event(project_path, error)]
+            } else {
+                Vec::new()
+            }
+        }
+    }
+}
+
+fn project_watching_event(project_path: &str) -> StreamDeckControlEvent {
+    event_response(
+        "snipsy.project.watching",
+        serde_json::json!({ "projectPath": project_path }),
+    )
+}
+
+fn project_snapshot_event_from_buttons(
+    project_path: &str,
+    buttons: Vec<crate::stream_deck::StreamDeckButton>,
 ) -> StreamDeckControlEvent {
+    event_response(
+        "snipsy.project.snapshot",
+        serde_json::json!({
+            "projectPath": project_path,
+            "buttons": buttons,
+        }),
+    )
+}
+
+fn project_changed_event(
+    project_path: &str,
+    previous: &[crate::stream_deck::StreamDeckButton],
+    current: &[crate::stream_deck::StreamDeckButton],
+) -> StreamDeckControlEvent {
+    let previous_by_key = buttons_by_key(previous);
+    let current_by_key = buttons_by_key(current);
+    let previous_keys = previous_by_key.keys().cloned().collect::<BTreeSet<_>>();
+    let current_keys = current_by_key.keys().cloned().collect::<BTreeSet<_>>();
+    let added = current_keys
+        .difference(&previous_keys)
+        .cloned()
+        .collect::<Vec<_>>();
+    let removed = previous_keys
+        .difference(&current_keys)
+        .cloned()
+        .collect::<Vec<_>>();
+    let updated = current_keys
+        .intersection(&previous_keys)
+        .filter(|key| previous_by_key.get(*key) != current_by_key.get(*key))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    event_response(
+        "snipsy.project.changed",
+        serde_json::json!({
+            "projectPath": project_path,
+            "added": added,
+            "removed": removed,
+            "updated": updated,
+            "buttons": current,
+        }),
+    )
+}
+
+fn project_available_event(
+    project_path: &str,
+    buttons: &[crate::stream_deck::StreamDeckButton],
+) -> StreamDeckControlEvent {
+    event_response(
+        "snipsy.project.available",
+        serde_json::json!({
+            "projectPath": project_path,
+            "buttons": buttons,
+        }),
+    )
+}
+
+fn project_unavailable_event(project_path: &str, error: String) -> StreamDeckControlEvent {
     StreamDeckControlEvent {
         protocol_version: CONTROL_PROTOCOL_VERSION,
-        event: event.into(),
-        payload: None,
+        event: "snipsy.project.unavailable".into(),
+        payload: Some(serde_json::json!({ "projectPath": project_path })),
         error: Some(StreamDeckControlError {
-            code: code.into(),
-            message: message.into(),
+            code: command_error_code(&error).into(),
+            message: error,
         }),
     }
 }
 
-fn project_snapshot_event(project_path: &str) -> StreamDeckControlEvent {
-    match crate::stream_deck::list_stream_deck_buttons(project_path.to_string(), None) {
-        Ok(buttons) => event_response(
-            "snipsy.project.snapshot",
-            serde_json::json!({
-                "projectPath": project_path,
-                "buttons": buttons,
-            }),
-        ),
-        Err(error) => event_error("snipsy.project.error", command_error_code(&error), error),
-    }
+fn read_project_buttons(
+    project_path: &str,
+) -> Result<Vec<crate::stream_deck::StreamDeckButton>, String> {
+    crate::stream_deck::list_stream_deck_buttons(project_path.to_string(), None)
+}
+
+fn button_key(button: &crate::stream_deck::StreamDeckButton) -> String {
+    format!("{}:{}", button.snippet_type, button.id)
+}
+
+fn buttons_by_key(
+    buttons: &[crate::stream_deck::StreamDeckButton],
+) -> BTreeMap<String, crate::stream_deck::StreamDeckButton> {
+    buttons
+        .iter()
+        .map(|button| (button_key(button), button.clone()))
+        .collect()
 }
 
 fn serialize_event_line(event: &StreamDeckControlEvent) -> Result<String, String> {
@@ -757,23 +886,26 @@ fn project_watch_events(
     project_path: &str,
     stop: Arc<AtomicBool>,
 ) -> impl Iterator<Item = StreamDeckControlEvent> + '_ {
-    std::iter::once(true)
-        .chain(std::iter::repeat(false).take(29))
-        .scan((), move |_, immediate| {
-            if !immediate {
-                for _ in 0..20 {
-                    if stop.load(Ordering::SeqCst) {
-                        return None;
+    std::iter::once(project_watching_event(project_path)).chain(
+        std::iter::once(true)
+            .chain(std::iter::repeat(false).take(29))
+            .scan(ProjectWatchState::default(), move |state, immediate| {
+                if !immediate {
+                    for _ in 0..20 {
+                        if stop.load(Ordering::SeqCst) {
+                            return None;
+                        }
+                        thread::sleep(std::time::Duration::from_millis(100));
                     }
-                    thread::sleep(std::time::Duration::from_millis(100));
                 }
-            }
-            if stop.load(Ordering::SeqCst) {
-                None
-            } else {
-                Some(project_snapshot_event(project_path))
-            }
-        })
+                if stop.load(Ordering::SeqCst) {
+                    None
+                } else {
+                    Some(project_watch_tick(project_path, state))
+                }
+            })
+            .flatten(),
+    )
 }
 
 #[cfg(unix)]
@@ -1248,6 +1380,98 @@ mod tests {
         assert_eq!(value["protocolVersion"], CONTROL_PROTOCOL_VERSION);
         assert_eq!(value["event"], "snipsy.project.snapshot");
         assert_eq!(value["payload"]["projectPath"], "C:\\demo");
+    }
+
+    #[test]
+    fn changed_event_reports_added_removed_and_updated_buttons() {
+        let previous = vec![
+            test_button("text-1", "text", "Old"),
+            test_button("video-1", "video", "Removed"),
+        ];
+        let current = vec![
+            test_button("text-1", "text", "New"),
+            test_button("text-2", "text", "Added"),
+        ];
+
+        let event = project_changed_event("C:\\demo", &previous, &current);
+        let payload = event.payload.unwrap();
+
+        assert_eq!(event.event, "snipsy.project.changed");
+        assert_eq!(payload["added"], serde_json::json!(["text:text-2"]));
+        assert_eq!(payload["removed"], serde_json::json!(["video:video-1"]));
+        assert_eq!(payload["updated"], serde_json::json!(["text:text-1"]));
+        assert_eq!(payload["buttons"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn project_watch_tick_suppresses_unchanged_snapshots() {
+        let mut state = ProjectWatchState::default();
+        let buttons = vec![test_button("text-1", "text", "One")];
+
+        let first = project_watch_tick_from_result("C:\\demo", &mut state, Ok(buttons.clone()));
+        let second = project_watch_tick_from_result("C:\\demo", &mut state, Ok(buttons));
+
+        assert_eq!(
+            first
+                .iter()
+                .map(|event| event.event.as_str())
+                .collect::<Vec<_>>(),
+            vec!["snipsy.project.snapshot"]
+        );
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn project_watch_tick_reports_change_and_recovery() {
+        let mut state = ProjectWatchState::default();
+        let first_buttons = vec![test_button("text-1", "text", "One")];
+        let changed_buttons = vec![test_button("text-1", "text", "Two")];
+
+        let _ = project_watch_tick_from_result("C:\\demo", &mut state, Ok(first_buttons));
+        let changed =
+            project_watch_tick_from_result("C:\\demo", &mut state, Ok(changed_buttons.clone()));
+        let unavailable = project_watch_tick_from_result(
+            "C:\\demo",
+            &mut state,
+            Err("Failed to read project.json: missing".into()),
+        );
+        let repeated_unavailable = project_watch_tick_from_result(
+            "C:\\demo",
+            &mut state,
+            Err("Failed to read project.json: still missing".into()),
+        );
+        let recovered = project_watch_tick_from_result("C:\\demo", &mut state, Ok(changed_buttons));
+
+        assert_eq!(
+            changed
+                .iter()
+                .map(|event| event.event.as_str())
+                .collect::<Vec<_>>(),
+            vec!["snipsy.project.changed", "snipsy.project.snapshot"]
+        );
+        assert_eq!(unavailable[0].event, "snipsy.project.unavailable");
+        assert!(repeated_unavailable.is_empty());
+        assert_eq!(
+            recovered
+                .iter()
+                .map(|event| event.event.as_str())
+                .collect::<Vec<_>>(),
+            vec!["snipsy.project.available", "snipsy.project.snapshot"]
+        );
+    }
+
+    fn test_button(
+        id: &str,
+        snippet_type: &str,
+        title: &str,
+    ) -> crate::stream_deck::StreamDeckButton {
+        crate::stream_deck::StreamDeckButton {
+            id: id.into(),
+            title: title.into(),
+            snippet_type: snippet_type.into(),
+            hotkey: "CmdOrControl+1".into(),
+            icon_data_url: format!("data:image/svg+xml;base64,{id}-{title}"),
+        }
     }
 
     #[test]

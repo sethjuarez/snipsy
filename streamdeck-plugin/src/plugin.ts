@@ -219,7 +219,7 @@ async function handleProjectEvent(projectPath: string, event: StreamDeckControlE
     }
     return;
   }
-  if (event.event !== "snipsy.project.snapshot" || !isProjectSnapshot(event.payload)) {
+  if (!isProjectButtonsEvent(event.event) || !isProjectButtonsPayload(event.payload)) {
     return;
   }
   client.clearListButtonsCache(projectPath);
@@ -261,7 +261,14 @@ function trackKeyProject(action: KeyAction<SnipsyActionSettings>, projectPath?: 
   visibleKeyProjectPaths.delete(action.id);
 }
 
-function isProjectSnapshot(payload: unknown): payload is { buttons: StreamDeckButton[] } {
+function isProjectButtonsEvent(eventName: string): boolean {
+  return (
+    eventName === "snipsy.project.snapshot" ||
+    eventName === "snipsy.project.changed"
+  );
+}
+
+function isProjectButtonsPayload(payload: unknown): payload is { buttons: StreamDeckButton[] } {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return false;
   }

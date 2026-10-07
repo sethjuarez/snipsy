@@ -442,6 +442,7 @@ test("plugin key refresh surfaces stale and offline states", async () => {
   assert.match(source, /client\.listButtons\(settings\.projectPath\)/);
   assert.match(source, /client\.watchProject\(/);
   assert.match(source, /snipsy\.project\.snapshot/);
+  assert.match(source, /snipsy\.project\.changed/);
   assert.match(source, /Stale\\nBinding/);
   assert.match(source, /Open\\nSnipsy/);
   assert.match(source, /Snipsy\\nOffline/);

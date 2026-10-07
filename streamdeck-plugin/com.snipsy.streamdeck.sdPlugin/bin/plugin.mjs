@@ -17896,7 +17896,7 @@ async function handleProjectEvent(projectPath, event) {
     }
     return;
   }
-  if (event.event !== "snipsy.project.snapshot" || !isProjectSnapshot(event.payload)) {
+  if (!isProjectButtonsEvent(event.event) || !isProjectButtonsPayload(event.payload)) {
     return;
   }
   client.clearListButtonsCache(projectPath);
@@ -17934,7 +17934,10 @@ function trackKeyProject(action2, projectPath) {
   }
   visibleKeyProjectPaths.delete(action2.id);
 }
-function isProjectSnapshot(payload) {
+function isProjectButtonsEvent(eventName) {
+  return eventName === "snipsy.project.snapshot" || eventName === "snipsy.project.changed";
+}
+function isProjectButtonsPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return false;
   }

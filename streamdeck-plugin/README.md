@@ -23,6 +23,18 @@ dist/streamdeck/Snipsy.streamDeckPlugin
 
 The plugin discovers Snipsy through `stream-deck-control.json`, then uses the advertised native transport. On Windows, that transport is an owner/SYSTEM-only named pipe owned by the running Snipsy process. On macOS and Linux, Snipsy advertises an owner-only Unix domain socket.
 
+## Control events
+
+Visible keys subscribe with `watchProject`. Snipsy keeps that native transport connection open and streams newline-delimited event envelopes:
+
+| Event | Meaning |
+| --- | --- |
+| `snipsy.project.watching` | The watch connection was accepted for a project path. |
+| `snipsy.project.snapshot` | Full current button model for reconciliation. Sent initially and after changes. |
+| `snipsy.project.changed` | Button model changed; payload includes `added`, `removed`, `updated`, and `buttons`. |
+| `snipsy.project.unavailable` | The project path cannot currently be read. |
+| `snipsy.project.available` | A previously unavailable project is readable again; a fresh snapshot follows. |
+
 ## Current scope
 
 - One keypad action: **Trigger Snipsy Snippet**.
