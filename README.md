@@ -150,8 +150,7 @@ All configuration is stored as **JSON files**, making projects human-readable, v
           "id": "open-docs",
           "kind": "openSite",
           "title": "Open docs",
-          "url": "https://snipsy.dev",
-          "idempotencyKey": "openSite:https://snipsy.dev"
+          "url": "https://snipsy.dev"
         }
       ]
     }
@@ -162,6 +161,8 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 Supported contribution kinds:
 
 - `openSite` — Open an `http://` or `https://` URL in the default browser.
+
+Open-site contributions are idempotent by URL within one automation run. If the same normalized URL appears in multiple groups, Snipsy opens it once and skips later duplicates.
 
 ## Architecture
 

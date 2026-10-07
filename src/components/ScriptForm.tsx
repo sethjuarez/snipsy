@@ -62,7 +62,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
       : group));
   };
 
-  const updateOpenSiteContribution = (groupId: string, contributionId: string, field: "title" | "url" | "idempotencyKey", value: string) => {
+  const updateOpenSiteContribution = (groupId: string, contributionId: string, field: "title" | "url", value: string) => {
     setContributionGroups(contributionGroups.map((group) => group.id === groupId
       ? {
         ...group,
@@ -211,7 +211,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
               </button>
             </div>
             {group.contributions.map((contribution, contributionIndex) => (
-              <div key={contribution.id} className="grid grid-cols-[1fr_2fr_1fr_auto] gap-2 mb-2" data-testid={`contribution-${groupIndex}-${contributionIndex}`}>
+              <div key={contribution.id} className="grid grid-cols-[1fr_2fr_auto] gap-2 mb-2" data-testid={`contribution-${groupIndex}-${contributionIndex}`}>
                 <input
                   type="text"
                   value={contribution.title ?? ""}
@@ -229,15 +229,6 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                   className="px-2 py-1 rounded text-base"
                   style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
                   data-testid={`contribution-url-${groupIndex}-${contributionIndex}`}
-                />
-                <input
-                  type="text"
-                  value={contribution.idempotencyKey ?? ""}
-                  onChange={(e) => updateOpenSiteContribution(group.id, contribution.id, "idempotencyKey", e.target.value)}
-                  placeholder="Idempotency key"
-                  className="px-2 py-1 rounded text-base"
-                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-                  data-testid={`contribution-idempotency-${groupIndex}-${contributionIndex}`}
                 />
                 <button type="button" onClick={() => removeContribution(group.id, contribution.id)} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-${groupIndex}-${contributionIndex}`}>
                   Remove
