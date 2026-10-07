@@ -53,7 +53,11 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
   const minimize = useCallback(() => {
     appWindow?.hide();
   }, [appWindow]);
-  const toggleMaximize = useCallback(() => appWindow?.toggleMaximize(), [appWindow]);
+  const toggleMaximize = useCallback(async () => {
+    if (!appWindow) return;
+    await appWindow.toggleMaximize();
+    appWindow.isMaximized().then(setMaximized).catch(() => {});
+  }, [appWindow]);
   // Close actually quits the app (with confirmation)
   const close = useCallback(async () => {
     if (!appWindow) return;
@@ -72,14 +76,16 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
 
   const handleTitlebarMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (!appWindow || event.button !== 0 || isInteractiveTitlebarTarget(event.target)) return;
-
-    if (event.detail === 2) {
-      appWindow.toggleMaximize?.().catch?.(() => {});
-      return;
-    }
+    if (event.detail > 1) return;
 
     appWindow.startDragging?.().catch?.(() => {});
   }, [appWindow]);
+
+  const handleTitlebarDoubleClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (isInteractiveTitlebarTarget(event.target)) return;
+    event.preventDefault();
+    void toggleMaximize();
+  }, [toggleMaximize]);
 
   const titlebarHeight = isMac ? "var(--macos-titlebar-height)" : "var(--titlebar-height)";
   const titlebarButtonStyle: CSSProperties = {
@@ -97,6 +103,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
     <div
       data-tauri-drag-region
       onMouseDown={handleTitlebarMouseDown}
+      onDoubleClick={handleTitlebarDoubleClick}
       className="no-select flex items-center justify-between shrink-0"
       style={{
         height: titlebarHeight,
@@ -190,7 +197,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
               onClick={toggleMaximize}
               className="titlebar-window-control"
               style={windowButtonStyle}
-              aria-label="Maximize"
+              aria-label={maximized ? "Restore" : "Maximize"}
             >
               {maximized ? <Copy size={11} /> : <Square size={11} />}
             </button>
