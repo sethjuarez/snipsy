@@ -1,7 +1,9 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{DeliveryMethod, ProjectData, Script, StreamDeckIcon, TextSnippet, VideoSnippet};
+use crate::models::{
+    DeliveryMethod, ProjectData, Script, StreamDeckIcon, TextSnippet, VideoSnippet,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -180,9 +182,7 @@ pub fn resolve_action(
             .find(|script| script.id == snippet_id)
             .cloned()
             .map(StreamDeckAction::Automation)
-            .ok_or_else(|| {
-                format!("Automation not found for Stream Deck binding: {snippet_id}")
-            }),
+            .ok_or_else(|| format!("Automation not found for Stream Deck binding: {snippet_id}")),
         other => Err(format!("Unknown Stream Deck snippet type: {other}")),
     }
 }
@@ -299,11 +299,9 @@ fn icon_parts(
             sanitize_color(background.as_deref(), fallback_bg),
             sanitize_color(foreground.as_deref(), fallback_fg),
         ),
-        Some(StreamDeckIcon::Image { .. }) => (
-            initials(title),
-            fallback_bg.into(),
-            fallback_fg.into(),
-        ),
+        Some(StreamDeckIcon::Image { .. }) => {
+            (initials(title), fallback_bg.into(), fallback_fg.into())
+        }
         None => (
             preset_glyph(
                 if snippet_type == "video" {
@@ -498,12 +496,7 @@ mod tests {
             title: "Open Docs".into(),
             description: "".into(),
             hotkey: Some("Ctrl+Shift+5".into()),
-            steps: vec![],
             contribution_groups: vec![],
-            output_video: None,
-            platform: None,
-            start_screenshot: None,
-            recorded_at: None,
             stream_deck_icon: None,
         };
 
@@ -618,12 +611,7 @@ mod tests {
             title: "Open Docs".into(),
             description: "".into(),
             hotkey: None,
-            steps: vec![],
             contribution_groups: vec![],
-            output_video: None,
-            platform: None,
-            start_screenshot: None,
-            recorded_at: None,
             stream_deck_icon: None,
         };
         let data = ProjectData {
@@ -637,7 +625,9 @@ mod tests {
 
         let action = resolve_action(&data, &[script], "automation-1", "automation").unwrap();
 
-        assert!(matches!(action, StreamDeckAction::Automation(script) if script.title == "Open Docs"));
+        assert!(
+            matches!(action, StreamDeckAction::Automation(script) if script.title == "Open Docs")
+        );
     }
 
     #[test]

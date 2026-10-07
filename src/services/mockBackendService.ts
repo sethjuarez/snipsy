@@ -76,11 +76,6 @@ export class MockBackendService implements BackendService {
       title: "Build Demo Script",
       description: "Opens terminal and runs build",
       hotkey: "CmdOrControl+Shift+5",
-      steps: [
-        { action: "wait", duration: 1000 },
-        { action: "type", text: "npm run build", delay: 50 },
-        { action: "keypress", key: "Enter" },
-      ],
       contributionGroups: [
         {
           id: "group-1",
@@ -90,9 +85,6 @@ export class MockBackendService implements BackendService {
           ],
         },
       ],
-      outputVideo: "videos/build-demo.mp4",
-      platform: "windows",
-      recordedAt: "2026-03-01T12:00:00Z",
     },
   ];
 
@@ -286,8 +278,6 @@ export class MockBackendService implements BackendService {
     return "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AKwA//9k=";
   }
 
-  private _isRecording = false;
-
   async setStreamDeckActiveProject(_projectPath: string | null): Promise<void> {}
 
   async listStreamDeckButtons(_projectPath: string): Promise<StreamDeckButton[]> {
@@ -361,33 +351,4 @@ export class MockBackendService implements BackendService {
     };
   }
 
-  async startRecordingScript(_projectPath: string): Promise<string> {
-    this._isRecording = true;
-    return "screenshots/mock-start.png";
-  }
-
-  async stopRecordingScript(_projectPath: string, title: string, description: string): Promise<import("../types").Script> {
-    this._isRecording = false;
-    const script: import("../types").Script = {
-      id: `rec-${Date.now()}`,
-      title,
-      description,
-      hotkey: "",
-      steps: [
-        { action: "click", x: 500, y: 300, button: "left" },
-        { action: "type", text: "recorded text", delay: 30 },
-        { action: "keypress", key: "Enter" },
-      ],
-      contributionGroups: [],
-      outputVideo: "videos/recorded-mock.mp4",
-      platform: "windows",
-      recordedAt: new Date().toISOString(),
-    };
-    this._automations.push(script);
-    return structuredClone(script);
-  }
-
-  async isRecording(): Promise<boolean> {
-    return this._isRecording;
-  }
 }

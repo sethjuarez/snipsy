@@ -1,12 +1,6 @@
-import { AlertTriangle, CheckCircle, History, Pencil, Trash2, Monitor, Play } from "lucide-react";
+import { History, Pencil, Play, Trash2 } from "lucide-react";
 import EmptyState from "./EmptyState";
-import type { Script, ScriptStep } from "../types";
-
-const PLATFORM_LABELS: Record<string, string> = {
-  windows: "Windows",
-  macos: "macOS",
-  linux: "Linux",
-};
+import type { Script } from "../types";
 
 interface ScriptListProps {
   automations: Script[];
@@ -23,33 +17,6 @@ export interface AutomationRunHistoryItem {
   status: "success" | "error";
   message: string;
   completedAt: string;
-}
-
-function getPortability(script: Script): { state: "portable" | "review"; label: string; detail: string } {
-  if (script.platform) {
-    return {
-      state: "review",
-      label: "Platform-specific",
-      detail: `Recorded on ${PLATFORM_LABELS[script.platform] ?? script.platform}. Review before reusing on another OS.`,
-    };
-  }
-
-  const coordinateStep = script.steps.find((step: ScriptStep) =>
-    step.action === "click" || step.action === "move" || (step.action === "scroll" && (step.x !== undefined || step.y !== undefined)),
-  );
-  if (coordinateStep) {
-    return {
-      state: "review",
-      label: "Needs review",
-      detail: "Uses pointer coordinates, so layout or monitor changes may affect playback.",
-    };
-  }
-
-  return {
-    state: "portable",
-    label: "Portable",
-    detail: "Uses keyboard, typing, waits, and launch actions only.",
-  };
 }
 
 function ScriptList({ automations, onEdit, onDelete, onRun, runningScriptId, runHistory = [] }: ScriptListProps) {
@@ -91,7 +58,6 @@ function AutomationRow({
   running: boolean;
   lastRun?: AutomationRunHistoryItem;
 }) {
-  const portability = getPortability(script);
   const contributionCount = script.contributionGroups?.reduce((sum, group) => sum + group.contributions.length, 0) ?? 0;
 
   return (
@@ -106,39 +72,13 @@ function AutomationRow({
             <h3 className="font-medium truncate text-md" style={{ color: "var(--color-text)" }}>
               {script.title}
             </h3>
-            <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-warning)" }}>
-              {script.steps.length} step{script.steps.length !== 1 && "s"}
-            </span>
             <span className="text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }}>
               {contributionCount} contribution{contributionCount !== 1 && "s"}
             </span>
-            <span
-              className="flex items-center gap-1 text-sm px-2 py-0.5 rounded"
-              title={portability.detail}
-              style={{
-                backgroundColor: "var(--color-surface-inset)",
-                color: portability.state === "portable" ? "var(--color-success)" : "var(--color-warning)",
-              }}
-              data-testid={`automation-portability-${script.id}`}
-            >
-              {portability.state === "portable" ? <CheckCircle size={10} /> : <AlertTriangle size={10} />}
-              {portability.label}
-            </span>
-            {script.platform && (
-              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid={`automation-platform-${script.id}`}>
-                <Monitor size={10} />
-                {PLATFORM_LABELS[script.platform] ?? script.platform}
-              </span>
-            )}
           </div>
           {script.description && (
             <p className="text-base mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
               {script.description}
-            </p>
-          )}
-          {script.outputVideo && (
-            <p className="text-sm mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
-              Recording output: {script.outputVideo}
             </p>
           )}
           {lastRun && (

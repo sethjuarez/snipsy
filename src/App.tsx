@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useProjectStore } from "./stores/projectStore";
 import { useUpdateStore } from "./stores/updateStore";
-import { Plus, AlertTriangle, X as XIcon, Circle, Square, CheckCircle, Radio, Save, Upload } from "lucide-react";
+import { Plus, AlertTriangle, X as XIcon, CheckCircle, Circle, Radio, Save, Upload } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -75,8 +75,6 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [showRecordingDialog, setShowRecordingDialog] = useState(false);
   const [runningScriptId, setRunningScriptId] = useState<string | null>(null);
   const [automationRunHistory, setAutomationRunHistory] = useState<AutomationRunHistoryItem[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -87,7 +85,6 @@ function App() {
   const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const videoListRef = useRef<VideoListHandle>(null);
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
-  const loadAutomations = useProjectStore((s) => s.loadAutomations);
   const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, automations);
 
   const showToast = useCallback((title: string, detail?: string, tone: ToastTone = "info") => {
@@ -267,34 +264,6 @@ function App() {
     videoSnippetSaveState,
   ]);
 
-  // -- Recording handlers --
-  const handleStartRecording = useCallback(async () => {
-    if (!projectPath) return;
-    try {
-      await backend.startRecordingScript(projectPath);
-      setIsRecording(true);
-    } catch (e) {
-      showToast("Failed to start recording", String(e), "error");
-    }
-  }, [projectPath, showToast]);
-
-  const handleStopRecording = useCallback(async () => {
-    if (!projectPath) return;
-    setShowRecordingDialog(true);
-  }, [projectPath]);
-
-  const handleSaveRecording = useCallback(async (title: string, description: string) => {
-    if (!projectPath) return;
-    try {
-      await backend.stopRecordingScript(projectPath, title, description);
-      setIsRecording(false);
-      setShowRecordingDialog(false);
-      await loadAutomations();
-    } catch (e) {
-      showToast("Failed to save recording", String(e), "error");
-    }
-  }, [projectPath, loadAutomations, showToast]);
-
   const handleRunScript = useCallback(async (scriptId: string) => {
     if (!projectPath) return;
     const scriptTitle = automations.find((script) => script.id === scriptId)?.title ?? "Automation";
@@ -381,9 +350,6 @@ function App() {
               clipEditingVideo !== null ||
               (activeView === "automations" && showScriptForm)
             }
-            isRecording={isRecording}
-            onRecord={handleStartRecording}
-            onStopRecord={handleStopRecording}
             onAdd={() => {
               if (activeView === "text-snippets") {
                 setEditingSnippet(undefined);
@@ -547,48 +513,6 @@ function App() {
 
             {activeView === "automations" && (
               <>
-                {isRecording && (
-                  <div
-                    className="mb-4 p-3 rounded-lg text-base flex items-center gap-2 w-full"
-                    data-testid="recording-indicator"
-                    style={{
-                      backgroundColor: "var(--color-surface-inset)",
-                      border: "1px solid var(--color-danger)",
-                      color: "var(--color-danger)",
-                    }}
-                  >
-                    <Circle size={10} fill="currentColor" className="animate-pulse" />
-                    <span className="font-medium">Recording in progress...</span>
-                    <button
-                      onClick={handleStopRecording}
-                      className="ml-auto flex items-center gap-1 px-3 py-1 rounded text-sm font-medium"
-                      style={{ backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }}
-                      data-testid="stop-recording"
-                    >
-                      <Square size={10} fill="currentColor" /> Stop Recording
-                    </button>
-                  </div>
-                )}
-                {showRecordingDialog && (
-                  <RecordingSaveDialog
-                    onSave={handleSaveRecording}
-                    onCancel={() => { setShowRecordingDialog(false); }}
-                  />
-                )}
-                {ffmpegAvailable === false && (
-                  <button
-                    onClick={() => setShowFfmpegHelper(true)}
-                    className="mb-4 p-3 rounded-lg text-base flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
-                    data-testid="ffmpeg-warning"
-                    style={{
-                      backgroundColor: "var(--color-surface-inset)",
-                      border: "1px solid var(--color-border)",
-                      color: "var(--color-warning)",
-                    }}
-                  >
-                    <AlertTriangle size={14} /> FFmpeg not found — click to install
-                  </button>
-                )}
                 {showScriptForm ? (
                   <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                     <ScriptForm
@@ -699,7 +623,7 @@ function DemoReadinessPanel({
       </div>
       {ffmpegAvailable === false && (
         <p className="text-sm mt-3 flex items-center gap-1" style={{ color: "var(--color-warning)" }} data-testid="demo-readiness-warning">
-          <AlertTriangle size={13} /> FFmpeg is missing, so automation run recordings may not be available.
+          <AlertTriangle size={13} /> FFmpeg is missing, so video processing may not be available.
         </p>
       )}
     </section>
@@ -734,9 +658,6 @@ function ContentHeader({
   view,
   editLabel,
   showForm,
-  isRecording,
-  onRecord,
-  onStopRecord,
   onAdd,
   onCloseForm,
   saveAction,
@@ -746,9 +667,6 @@ function ContentHeader({
   view: AppView;
   editLabel?: string;
   showForm: boolean;
-  isRecording?: boolean;
-  onRecord?: () => void;
-  onStopRecord?: () => void;
   onAdd: () => void;
   onCloseForm: () => void;
   videoImporting?: boolean;
@@ -763,27 +681,6 @@ function ContentHeader({
   };
 }) {
   const canAdd = view !== "videos" && view !== "home";
-  const actions: ToolbarAction[] = [];
-
-  if (view === "automations" && !showForm && !isRecording) {
-    actions.push({
-      label: "Record",
-      icon: <Circle size={10} fill="currentColor" />,
-      onClick: onRecord,
-      testId: "record-automation",
-      tone: "danger",
-    });
-  }
-
-  if (view === "automations" && isRecording) {
-    actions.push({
-      label: "Stop",
-      icon: <Square size={10} fill="currentColor" />,
-      onClick: onStopRecord,
-      testId: "stop-recording-header",
-      tone: "danger",
-    });
-  }
 
   const primaryAction: ToolbarAction | undefined = showForm && saveAction
     ? {
@@ -835,78 +732,10 @@ function ContentHeader({
         ? "clip-readiness"
         : saveAction?.testId ? `${saveAction.testId}-status` : undefined}
       statusTone={showForm && saveAction?.state.canSave ? "success" : "muted"}
-      actions={actions}
+      actions={[]}
       primaryAction={primaryAction}
       secondaryAction={secondaryAction}
     />
-  );
-}
-
-/* ── Recording save dialog ── */
-function RecordingSaveDialog({
-  onSave,
-  onCancel,
-}: {
-  onSave: (title: string, description: string) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-
-  return (
-    <div
-      className="mb-4 rounded-lg p-5"
-      style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
-      data-testid="recording-save-dialog"
-    >
-      <h3 className="text-md font-semibold mb-3" style={{ color: "var(--color-text)" }}>
-        Save Recorded Automation
-      </h3>
-      <div className="space-y-3">
-        <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="My Recorded Automation"
-            className="w-full rounded px-3 py-1.5 text-base"
-            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="recording-title"
-            autoFocus
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Description</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional description"
-            className="w-full rounded px-3 py-1.5 text-base"
-            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="recording-description"
-          />
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-4 py-1.5 rounded text-sm font-medium"
-            style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onSave(title || "Untitled Recording", description)}
-            className="px-4 py-1.5 rounded text-sm font-medium"
-            style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-            data-testid="recording-save"
-          >
-            Save Automation
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 

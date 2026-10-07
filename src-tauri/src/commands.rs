@@ -586,7 +586,10 @@ mod tests {
         assert_eq!(data.text_snippets.len(), 1);
         assert_eq!(data.text_snippets[0].title, "Hello");
         assert_eq!(data.text_snippets[0].delivery, DeliveryMethod::FastType);
-        assert!(matches!(data.text_snippets[0].stream_deck_icon, Some(StreamDeckIcon::Preset { .. })));
+        assert!(matches!(
+            data.text_snippets[0].stream_deck_icon,
+            Some(StreamDeckIcon::Preset { .. })
+        ));
     }
 
     #[test]
@@ -776,18 +779,7 @@ mod tests {
             title: "Build Demo Script".into(),
             description: "Runs a build demo".into(),
             hotkey: Some("CmdOrControl+Shift+5".into()),
-            steps: vec![
-                crate::models::ScriptStep::Wait { duration: 1000 },
-                crate::models::ScriptStep::Type {
-                    text: "npm run build".into(),
-                    delay: Some(50),
-                },
-            ],
             contribution_groups: vec![],
-            output_video: Some("videos/build-demo.mp4".into()),
-            platform: Some("windows".into()),
-            start_screenshot: None,
-            recorded_at: None,
             stream_deck_icon: None,
         };
 
@@ -803,7 +795,7 @@ mod tests {
         assert_eq!(automations.len(), 1);
         assert_eq!(automations[0].id, "script-1");
         assert_eq!(automations[0].title, "Build Demo Script");
-        assert_eq!(automations[0].steps.len(), 2);
+        assert!(automations[0].contribution_groups.is_empty());
     }
 
     #[test]
@@ -823,12 +815,7 @@ mod tests {
             title: "To Delete".into(),
             description: "Will be deleted".into(),
             hotkey: None,
-            steps: vec![],
             contribution_groups: vec![],
-            output_video: Some("videos/output.mp4".into()),
-            platform: None,
-            start_screenshot: None,
-            recorded_at: None,
             stream_deck_icon: None,
         };
 

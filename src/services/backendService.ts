@@ -110,7 +110,4 @@ export interface BackendService {
     snippetId: string,
     snippetType: "text" | "video" | "automation",
   ): Promise<StreamDeckTriggerResult>;
-  startRecordingScript(projectPath: string): Promise<string>;
-  stopRecordingScript(projectPath: string, title: string, description: string): Promise<Script>;
-  isRecording(): Promise<boolean>;
 }
