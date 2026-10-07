@@ -4,7 +4,8 @@ import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import SpotlightOverlay from "./SpotlightOverlay";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
-import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
+import { STREAM_DECK_PRESETS, defaultStreamDeckIcon, streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 import {
   DEFAULT_SPOTLIGHT_STYLE,
   STOP_EPSILON,
@@ -308,6 +309,12 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [clickToPlay, setClickToPlay] = useState(existingClip?.clickToPlay ?? false);
   const [muted, setMuted] = useState(existingClip?.muted !== false);
   const [pauseStops, setPauseStops] = useState<PauseStop[]>(existingClip?.pauseStops ?? []);
+  const initialIcon = existingClip?.streamDeckIcon ?? defaultStreamDeckIcon("video");
+  const [iconKind, setIconKind] = useState<StreamDeckIcon["kind"]>(initialIcon.kind);
+  const [iconPreset, setIconPreset] = useState<string>(initialIcon.kind === "preset" ? initialIcon.value : "play");
+  const [iconEmoji, setIconEmoji] = useState(initialIcon.kind === "emoji" ? initialIcon.value : "▶");
+  const [iconBackground, setIconBackground] = useState(initialIcon.background ?? "#1e1b4b");
+  const [iconForeground, setIconForeground] = useState(initialIcon.foreground ?? "#a78bfa");
   const [activePreviewStop, setActivePreviewStop] = useState<PreviewNavigationStop | null>(null);
   const [editingSpotlightIndex, setEditingSpotlightIndex] = useState<number | null>(null);
   const [selectedSpotlightRegion, setSelectedSpotlightRegion] = useState<number | null>(null);
@@ -326,6 +333,12 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const videoSrc = video.absolutePath && convertFileSrc
     ? convertFileSrc(video.absolutePath)
     : video.absolutePath;
+  const streamDeckIcon: StreamDeckIcon = iconKind === "emoji"
+    ? { kind: "emoji", value: iconEmoji || "▶", background: iconBackground, foreground: iconForeground }
+    : iconKind === "generated"
+      ? { kind: "generated", background: iconBackground, foreground: iconForeground }
+      : { kind: "preset", value: STREAM_DECK_PRESETS.includes(iconPreset as (typeof STREAM_DECK_PRESETS)[number]) ? iconPreset as (typeof STREAM_DECK_PRESETS)[number] : "play", background: iconBackground, foreground: iconForeground };
+  const streamDeckPreview = streamDeckIconToDataUrl(streamDeckIcon, title || "Clip", "video");
 
   // Load available monitors
   useEffect(() => {
@@ -1118,6 +1131,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       backgroundColor,
       clickToPlay,
       muted,
+      streamDeckIcon,
       pauseStops: normalizedPauseStops.length > 0 ? normalizedPauseStops : undefined,
     };
   };
@@ -1146,6 +1160,11 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     backgroundColor,
     clickToPlay,
     muted,
+    iconKind,
+    iconPreset,
+    iconEmoji,
+    iconBackground,
+    iconForeground,
     pauseStops,
   ]);
 
@@ -1535,6 +1554,64 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
                 data-testid="clip-description"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Icon</label>
+              <div className="flex gap-2 items-start">
+                <img src={streamDeckPreview} alt="" className="w-14 h-14 rounded-lg" data-testid="clip-icon-preview" />
+                <div className="grid grid-cols-2 gap-2 flex-1">
+                  <select
+                    value={iconKind}
+                    onChange={(e) => setIconKind(e.target.value as StreamDeckIcon["kind"])}
+                    className="px-2 py-1 rounded text-sm"
+                    style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                    data-testid="clip-icon-kind"
+                  >
+                    <option value="preset">Preset</option>
+                    <option value="emoji">Emoji</option>
+                    <option value="generated">Generated initials</option>
+                  </select>
+                  {iconKind === "preset" ? (
+                    <select
+                      value={iconPreset}
+                      onChange={(e) => setIconPreset(e.target.value)}
+                      className="px-2 py-1 rounded text-sm"
+                      style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                      data-testid="clip-icon-preset"
+                    >
+                      {STREAM_DECK_PRESETS.map((preset) => <option key={preset} value={preset}>{preset}</option>)}
+                    </select>
+                  ) : iconKind === "emoji" ? (
+                    <input
+                      value={iconEmoji}
+                      onChange={(e) => setIconEmoji(e.target.value)}
+                      className="px-2 py-1 rounded text-sm"
+                      style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                      data-testid="clip-icon-emoji"
+                    />
+                  ) : (
+                    <div className="px-2 py-1 rounded text-sm" style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>
+                      Uses name initials
+                    </div>
+                  )}
+                  <input
+                    type="color"
+                    aria-label="Icon background"
+                    value={iconBackground}
+                    onChange={(e) => setIconBackground(e.target.value)}
+                    className="h-8 w-full rounded"
+                    data-testid="clip-icon-background"
+                  />
+                  <input
+                    type="color"
+                    aria-label="Icon foreground"
+                    value={iconForeground}
+                    onChange={(e) => setIconForeground(e.target.value)}
+                    className="h-8 w-full rounded"
+                    data-testid="clip-icon-foreground"
+                  />
+                </div>
+              </div>
             </div>
             <div>
               <label htmlFor="clip-hotkey" className="block text-xs font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Hotkey</label>

@@ -29,8 +29,6 @@ export function streamDeckIconToSvg(
   const foreground = sanitizeColor(resolved.foreground, snippetType === "video" ? "#a78bfa" : "#38bdf8");
   const dim = unavailableReason ? 0.42 : 1;
   const glyph = glyphForIcon(resolved, title);
-  const label = unavailableReason ?? title;
-  const labelText = truncateLabel(label);
   const badge = unavailableReason
     ? `<circle cx="78" cy="22" r="12" fill="#f59e0b"/><text x="78" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#111827">!</text>`
     : "";
@@ -39,7 +37,6 @@ export function streamDeckIconToSvg(
   <rect width="100" height="100" rx="18" fill="${background}"/>
   <g opacity="${dim}">
     <text x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="${Array.from(glyph).length > 2 ? 26 : 34}" font-weight="700" fill="${foreground}">${escapeXml(glyph)}</text>
-    <text x="50" y="84" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#f8fafc">${escapeXml(labelText)}</text>
   </g>
   ${badge}
 </svg>`;
@@ -77,11 +74,6 @@ function initials(title: string) {
   const parts = title.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "S";
   return parts.slice(0, 2).map((part) => Array.from(part)[0]?.toUpperCase()).join("");
-}
-
-function truncateLabel(label: string) {
-  const clean = label.trim();
-  return clean.length > 12 ? `${clean.slice(0, 11)}…` : clean;
 }
 
 function sanitizeColor(value: string | undefined, fallback: string) {

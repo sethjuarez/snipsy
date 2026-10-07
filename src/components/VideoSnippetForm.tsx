@@ -272,7 +272,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
 
       <div>
         <label className="block font-medium mb-2 text-base" style={{ color: "var(--color-text-secondary)" }}>
-          Stream Deck Icon
+          Icon
         </label>
         <div className="flex gap-3 items-start">
           <img src={streamDeckPreview} alt="" className="w-20 h-20 rounded-xl" data-testid="video-streamdeck-icon-preview" />
@@ -313,7 +313,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
             )}
             <input
               type="color"
-              aria-label="Stream Deck icon background"
+              aria-label="Icon background"
               value={iconBackground}
               onChange={(e) => setIconBackground(e.target.value)}
               className="h-10 w-full rounded"
@@ -321,7 +321,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
             />
             <input
               type="color"
-              aria-label="Stream Deck icon foreground"
+              aria-label="Icon foreground"
               value={iconForeground}
               onChange={(e) => setIconForeground(e.target.value)}
               className="h-10 w-full rounded"
