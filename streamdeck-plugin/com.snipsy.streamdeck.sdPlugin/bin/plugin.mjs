@@ -17523,6 +17523,9 @@ var SnipsyClient = class {
     });
     return promise2;
   }
+  async activeProjectButtons() {
+    return this.#send({ command: "activeProjectButtons" });
+  }
   async triggerButton(projectPath, snippetId, snippetType) {
     if (!projectPath.trim() || !snippetId.trim()) {
       throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
@@ -17766,8 +17769,7 @@ var TriggerSnippetAction = class extends (_a = SingletonAction) {
     await refreshKey(ev.action, ev.payload.settings);
   }
   async onPropertyInspectorDidAppear(ev) {
-    const settings2 = await ev.action.getSettings();
-    await sendButtonsToInspector(ev.action, settings2.projectPath);
+    await sendButtonsToInspector(ev.action);
   }
   async onSendToPlugin(ev) {
     const payload = asInspectorMessage(ev.payload);
@@ -17784,7 +17786,7 @@ var TriggerSnippetAction = class extends (_a = SingletonAction) {
       await refreshKey(ev.action, payload.settings);
       return;
     }
-    await sendButtonsToInspector(ev.action, payload.projectPath);
+    await sendButtonsToInspector(ev.action);
   }
   async onKeyDown(ev) {
     const settings2 = await ev.action.getSettings();
@@ -17947,30 +17949,21 @@ function isProjectButtonsPayload(payload) {
 function isTerminalWatchError(error40) {
   return error40 instanceof SnipsyControlError && (error40.code === "unknownCommand" || error40.code === "unsupportedProtocol" || error40.code === "unsupportedTransport" || error40.code === "invalidEvent");
 }
-async function sendButtonsToInspector(actionInstance, projectPath) {
+async function sendButtonsToInspector(actionInstance) {
   const settings2 = await actionInstance.getSettings();
-  const effectiveProjectPath = projectPath ?? settings2.projectPath;
-  if (!effectiveProjectPath) {
-    await plugin_default.ui.sendToPropertyInspector({
-      type: "buttons",
-      buttons: [],
-      error: "Enter a Snipsy project path, then refresh."
-    });
-    return;
-  }
   try {
-    const buttons = await client.listButtons(effectiveProjectPath);
+    const activeProject = await client.activeProjectButtons();
     await plugin_default.ui.sendToPropertyInspector({
       type: "buttons",
-      buttons,
-      projectPath: effectiveProjectPath
+      buttons: activeProject.buttons,
+      projectPath: activeProject.projectPath,
+      selectedSnippetId: settings2.snippetId
     });
   } catch (error40) {
     await plugin_default.ui.sendToPropertyInspector({
       type: "buttons",
       buttons: [],
-      error: labelForError(error40),
-      projectPath: effectiveProjectPath
+      error: labelForError(error40)
     });
   }
 }
@@ -17996,10 +17989,7 @@ function asInspectorMessage(payload) {
   }
   const type = payload.type;
   if (type === "listButtons") {
-    return {
-      type,
-      projectPath: typeof payload.projectPath === "string" ? payload.projectPath : void 0
-    };
+    return { type };
   }
   if (type === "saveBinding" && payload.settings && typeof payload.settings === "object" && !Array.isArray(payload.settings)) {
     const settings2 = payload.settings;

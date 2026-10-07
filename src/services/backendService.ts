@@ -102,6 +102,7 @@ export interface BackendService {
   getVideoFps(videoPath: string): Promise<number>;
   listMonitors(): Promise<MonitorInfo[]>;
   captureMonitorPreview(monitorName: string): Promise<string>;
+  setStreamDeckActiveProject(projectPath: string | null): Promise<void>;
   listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]>;
   triggerStreamDeckButton(
     projectPath: string,

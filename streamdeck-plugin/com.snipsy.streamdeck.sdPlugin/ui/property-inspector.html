@@ -6,59 +6,51 @@
     <script type="module" src="./property-inspector.mjs"></script>
     <style>
       body {
-        color: #f8fafc;
-        background: #111827;
+        color: #d8d8d8;
+        background: transparent;
         font: 13px system-ui, sans-serif;
         margin: 0;
-        padding: 16px;
+        padding: 8px 0;
       }
-      label {
-        display: block;
-        font-weight: 700;
-        margin: 12px 0 6px;
+      .sdpi-item {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+        min-height: 32px;
+        padding: 4px 0;
       }
-      input,
-      select,
-      button {
+      .sdpi-item-label {
+        color: #d8d8d8;
+        flex: 0 0 96px;
+        font-weight: 600;
+        text-align: right;
+      }
+      .sdpi-item-value {
+        flex: 1;
+        min-width: 0;
+      }
+      select {
         box-sizing: border-box;
         width: 100%;
       }
-      input,
-      select {
-        background: #020617;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        color: #f8fafc;
-        padding: 8px;
-      }
-      button {
-        background: #38bdf8;
-        border: 0;
-        border-radius: 6px;
-        color: #082f49;
-        cursor: pointer;
-        font-weight: 700;
-        margin-top: 12px;
-        padding: 8px;
-      }
       .status {
-        color: #cbd5e1;
-        margin-top: 10px;
+        color: #a8a8a8;
+        font-size: 12px;
+        line-height: 1.35;
+        margin: 6px 0 0 106px;
         min-height: 18px;
       }
     </style>
   </head>
   <body>
-    <label for="projectPath">Snipsy project path</label>
-    <input id="projectPath" type="text" placeholder="C:\path\to\snipsy-project" />
-    <button id="refresh" type="button">Refresh snippets</button>
-
-    <label for="buttonSelect">Snippet</label>
-    <select id="buttonSelect">
-      <option value="">Refresh to load snippets</option>
-    </select>
-
-    <button id="save" type="button">Save binding</button>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Snippet</div>
+      <div class="sdpi-item-value">
+        <select id="buttonSelect">
+          <option value="">Loading snippets from Snipsy...</option>
+        </select>
+      </div>
+    </div>
     <div id="status" class="status"></div>
   </body>
 </html>

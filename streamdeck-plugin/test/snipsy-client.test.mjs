@@ -120,6 +120,34 @@ test("sends listButtons requests through the advertised descriptor", async () =>
   assert.deepEqual(requests, [{ command: "listButtons", projectPath: "C:\\demo" }]);
 });
 
+test("sends activeProjectButtons requests through the advertised descriptor", async () => {
+  const requests = [];
+  const client = new SnipsyClient({
+    platform: "win32",
+    readFileText: async () => JSON.stringify(descriptor),
+    request: async (_descriptor, command) => {
+      requests.push(command);
+      return {
+        projectPath: "C:\\demo",
+        buttons: [
+          {
+            id: "snippet-1",
+            title: "Snippet 1",
+            snippetType: "text",
+            iconDataUrl: "data:image/svg+xml;base64,PHN2Zy8+",
+          },
+        ],
+      };
+    },
+  });
+
+  const activeProject = await client.activeProjectButtons();
+
+  assert.equal(activeProject.projectPath, "C:\\demo");
+  assert.equal(activeProject.buttons[0].id, "snippet-1");
+  assert.deepEqual(requests, [{ command: "activeProjectButtons" }]);
+});
+
 test("deduplicates bursty listButtons requests per project path", async () => {
   let requestCount = 0;
   let now = 1000;
@@ -434,12 +462,15 @@ test("property inspector includes the action uuid in sendToPlugin messages", asy
 
   assert.match(source, /actionUuid = JSON\.parse\(actionInfo\)\.action/);
   assert.match(source, /event: "sendToPlugin", action: actionUuid, context, payload/);
+  assert.match(source, /sendToPlugin\(\{ type: "listButtons" \}\)/);
+  assert.match(source, /buttonSelect\.addEventListener\("change", saveBinding\)/);
 });
 
 test("plugin key refresh surfaces stale and offline states", async () => {
   const source = await readFile(new URL("../src/plugin.ts", import.meta.url), "utf8");
 
   assert.match(source, /client\.listButtons\(settings\.projectPath\)/);
+  assert.match(source, /client\.activeProjectButtons\(\)/);
   assert.match(source, /client\.watchProject\(/);
   assert.match(source, /snipsy\.project\.snapshot/);
   assert.match(source, /snipsy\.project\.changed/);

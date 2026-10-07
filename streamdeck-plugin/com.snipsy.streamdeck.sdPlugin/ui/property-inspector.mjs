@@ -3,11 +3,9 @@ let context;
 let actionUuid;
 let settings = {};
 let buttons = [];
+let projectPath = "";
 
-const projectPathInput = document.getElementById("projectPath");
-const refreshButton = document.getElementById("refresh");
 const buttonSelect = document.getElementById("buttonSelect");
-const saveButton = document.getElementById("save");
 const statusText = document.getElementById("status");
 
 window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, _info, actionInfo) => {
@@ -18,7 +16,6 @@ window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, _info, action
 
   websocket.addEventListener("open", () => {
     websocket.send(JSON.stringify({ event: registerEvent, uuid }));
-    projectPathInput.value = settings.projectPath ?? "";
     requestButtons();
   });
 
@@ -26,57 +23,65 @@ window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, _info, action
     const message = JSON.parse(event.data);
     if (message.event === "sendToPropertyInspector" && message.payload?.type === "buttons") {
       buttons = message.payload.buttons ?? [];
-      renderButtons(message.payload.error);
+      projectPath = message.payload.projectPath ?? "";
+      renderButtons(message.payload.error, message.payload.selectedSnippetId);
     }
     if (message.event === "didReceiveSettings") {
       settings = message.payload?.settings ?? {};
-      projectPathInput.value = settings.projectPath ?? "";
+      if (settings.snippetId) {
+        buttonSelect.value = settings.snippetId;
+      }
     }
   });
 };
 
-refreshButton.addEventListener("click", requestButtons);
-saveButton.addEventListener("click", saveBinding);
+buttonSelect.addEventListener("change", saveBinding);
 
 function requestButtons() {
-  sendToPlugin({ type: "listButtons", projectPath: projectPathInput.value.trim() });
-  statusText.textContent = "Refreshing...";
+  sendToPlugin({ type: "listButtons" });
+  statusText.textContent = "Loading snippets from open Snipsy project...";
 }
 
 function saveBinding() {
   const selected = buttons.find((button) => button.id === buttonSelect.value);
-  if (!selected) {
-    statusText.textContent = "Select a Snipsy snippet first.";
+  if (!selected || !projectPath) {
+    statusText.textContent = "Open a Snipsy project, then choose a snippet.";
     return;
   }
   settings = {
-    projectPath: projectPathInput.value.trim(),
+    projectPath,
     snippetId: selected.id,
     snippetType: selected.snippetType,
     title: selected.title,
     iconDataUrl: selected.iconDataUrl,
   };
   sendToPlugin({ type: "saveBinding", settings });
-  statusText.textContent = "Binding saved.";
+  statusText.textContent = `Bound to ${selected.title}.`;
 }
 
-function renderButtons(error) {
+function renderButtons(error, selectedSnippetId) {
   buttonSelect.innerHTML = "";
   if (error) {
-    buttonSelect.add(new Option(error, ""));
-    statusText.textContent = error;
+    const message = error.replace(/\n/g, " ");
+    buttonSelect.add(new Option(message, ""));
+    buttonSelect.disabled = true;
+    statusText.textContent = message;
     return;
   }
   if (buttons.length === 0) {
     buttonSelect.add(new Option("No snippets found", ""));
-    statusText.textContent = "No snippets found.";
+    buttonSelect.disabled = true;
+    statusText.textContent = "No text or video snippets found in the open Snipsy project.";
     return;
   }
+  buttonSelect.disabled = false;
+  buttonSelect.add(new Option("Choose a snippet...", ""));
   for (const button of buttons) {
     buttonSelect.add(new Option(`${button.title} (${button.snippetType})`, button.id));
   }
-  buttonSelect.value = settings.snippetId ?? buttons[0].id;
-  statusText.textContent = `${buttons.length} snippet${buttons.length === 1 ? "" : "s"} loaded.`;
+  const selectedId = selectedSnippetId ?? settings.snippetId ?? "";
+  buttonSelect.value = buttons.some((button) => button.id === selectedId) ? selectedId : "";
+  statusText.textContent = `Loaded ${buttons.length} snippet${buttons.length === 1 ? "" : "s"} from the open Snipsy project.`;
 }
 
 function sendToPlugin(payload) {

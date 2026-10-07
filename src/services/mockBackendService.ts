@@ -278,6 +278,8 @@ export class MockBackendService implements BackendService {
 
   private _isRecording = false;
 
+  async setStreamDeckActiveProject(_projectPath: string | null): Promise<void> {}
+
   async listStreamDeckButtons(_projectPath: string): Promise<StreamDeckButton[]> {
     return [
       ...this.data.textSnippets.map((snippet) => ({

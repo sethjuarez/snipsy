@@ -179,6 +179,10 @@ export class TauriBackendService implements BackendService {
     return invoke<string>("capture_monitor_preview", { monitorName });
   }
 
+  async setStreamDeckActiveProject(projectPath: string | null): Promise<void> {
+    return invoke("set_stream_deck_active_project", { projectPath });
+  }
+
   async listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]> {
     return invoke<StreamDeckButton[]>("list_stream_deck_buttons", { projectPath });
   }

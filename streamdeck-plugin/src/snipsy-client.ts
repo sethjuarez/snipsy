@@ -52,8 +52,14 @@ export interface StreamDeckControlEvent<T = unknown> {
 
 type WatchHandle = { close: () => void };
 
+export interface ActiveProjectButtons {
+  projectPath: string;
+  buttons: StreamDeckButton[];
+}
+
 type Command =
   | { command: "status" }
+  | { command: "activeProjectButtons" }
   | { command: "listButtons"; projectPath: string }
   | { command: "watchProject"; projectPath: string }
   | {
@@ -168,6 +174,10 @@ export class SnipsyClient {
       promise,
     });
     return promise;
+  }
+
+  async activeProjectButtons(): Promise<ActiveProjectButtons> {
+    return this.#send<ActiveProjectButtons>({ command: "activeProjectButtons" });
   }
 
   async triggerButton(

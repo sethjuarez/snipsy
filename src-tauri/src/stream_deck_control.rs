@@ -11,7 +11,7 @@ use std::{
     process,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex, OnceLock,
     },
     thread,
 };
@@ -19,10 +19,12 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_auditaur::IpcTraceContext;
 
 pub const CONTROL_PROTOCOL_VERSION: u32 = 1;
 const DESCRIPTOR_FILE: &str = "stream-deck-control.json";
 static TRIGGER_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+static ACTIVE_PROJECT_PATH: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -82,6 +84,7 @@ pub fn start_control_server(app: &AppHandle) -> Result<StreamDeckControlState, S
 #[serde(tag = "command", rename_all = "camelCase")]
 pub enum StreamDeckControlRequest {
     Status,
+    ActiveProjectButtons,
     ListButtons {
         #[serde(rename = "projectPath")]
         project_path: String,
@@ -98,6 +101,40 @@ pub enum StreamDeckControlRequest {
         #[serde(rename = "snippetType")]
         snippet_type: String,
     },
+}
+
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc]
+pub fn set_stream_deck_active_project(
+    project_path: Option<String>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) {
+    set_active_project_path(project_path);
+}
+
+fn set_active_project_path(project_path: Option<String>) {
+    let normalized = project_path.and_then(|path| {
+        let trimmed = path.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+    if let Ok(mut active) = active_project_path_cell().lock() {
+        *active = normalized;
+    }
+}
+
+fn active_project_path() -> Option<String> {
+    active_project_path_cell()
+        .lock()
+        .ok()
+        .and_then(|active| active.clone())
+}
+
+fn active_project_path_cell() -> &'static Mutex<Option<String>> {
+    ACTIVE_PROJECT_PATH.get_or_init(|| Mutex::new(None))
 }
 
 #[allow(dead_code)]
@@ -218,7 +255,9 @@ pub fn parse_request_line(line: &str) -> Result<StreamDeckControlRequest, Stream
         message: format!("Invalid Stream Deck control request JSON: {error}"),
     })?;
     match value.get("command").and_then(Value::as_str) {
-        Some("status" | "listButtons" | "watchProject" | "triggerButton") => {}
+        Some(
+            "status" | "activeProjectButtons" | "listButtons" | "watchProject" | "triggerButton",
+        ) => {}
         Some(command) => {
             return Err(StreamDeckControlError {
                 code: "unknownCommand".into(),
@@ -283,6 +322,17 @@ async fn execute_request_inner(
             let buttons = crate::stream_deck::list_stream_deck_buttons(project_path, None)?;
             serde_json::to_value(buttons)
                 .map_err(|error| format!("Failed to encode Stream Deck buttons: {error}"))
+        }
+        StreamDeckControlRequest::ActiveProjectButtons => {
+            let project_path = active_project_path()
+                .ok_or_else(|| "No Snipsy project is currently open".to_string())?;
+            let buttons = crate::stream_deck::list_stream_deck_buttons(project_path.clone(), None)?;
+            serde_json::to_value(
+                serde_json::json!({ "projectPath": project_path, "buttons": buttons }),
+            )
+            .map_err(|error| {
+                format!("Failed to encode Stream Deck active project buttons: {error}")
+            })
         }
         StreamDeckControlRequest::WatchProject { project_path } => {
             let buttons = crate::stream_deck::list_stream_deck_buttons(project_path.clone(), None)?;
@@ -1242,6 +1292,23 @@ mod tests {
         let request = parse_request_line(r#"{"command":"status"}"#).unwrap();
 
         assert_eq!(request, StreamDeckControlRequest::Status);
+    }
+
+    #[test]
+    fn parses_active_project_buttons_request() {
+        let request = parse_request_line(r#"{"command":"activeProjectButtons"}"#).unwrap();
+
+        assert_eq!(request, StreamDeckControlRequest::ActiveProjectButtons);
+    }
+
+    #[test]
+    fn active_project_path_is_trimmed_and_clearable() {
+        set_active_project_path(None);
+        set_active_project_path(Some("  C:\\demo  ".into()));
+        assert_eq!(active_project_path().as_deref(), Some("C:\\demo"));
+
+        set_active_project_path(Some("   ".into()));
+        assert_eq!(active_project_path(), None);
     }
 
     #[test]

@@ -24,7 +24,7 @@ interface SnipsyActionSettings extends JsonObject {
 }
 
 type InspectorMessage =
-  | { type: "listButtons"; projectPath?: string }
+  | { type: "listButtons" }
   | { type: "saveBinding"; settings: SnipsyActionSettings };
 
 const client = new SnipsyClient();
@@ -68,8 +68,7 @@ class TriggerSnippetAction extends SingletonAction<SnipsyActionSettings> {
   override async onPropertyInspectorDidAppear(
     ev: PropertyInspectorDidAppearEvent<SnipsyActionSettings>,
   ): Promise<void> {
-    const settings = await ev.action.getSettings();
-    await sendButtonsToInspector(ev.action, settings.projectPath);
+    await sendButtonsToInspector(ev.action);
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, SnipsyActionSettings>): Promise<void> {
@@ -87,7 +86,7 @@ class TriggerSnippetAction extends SingletonAction<SnipsyActionSettings> {
       await refreshKey(ev.action, payload.settings);
       return;
     }
-    await sendButtonsToInspector(ev.action, payload.projectPath);
+    await sendButtonsToInspector(ev.action);
   }
 
   override async onKeyDown(ev: KeyDownEvent<SnipsyActionSettings>): Promise<void> {
@@ -288,32 +287,22 @@ function isTerminalWatchError(error: unknown): boolean {
 
 async function sendButtonsToInspector(
   actionInstance: { getSettings(): Promise<SnipsyActionSettings> },
-  projectPath?: string,
 ): Promise<void> {
   const settings = await actionInstance.getSettings();
-  const effectiveProjectPath = projectPath ?? settings.projectPath;
-  if (!effectiveProjectPath) {
-    await streamDeck.ui.sendToPropertyInspector({
-      type: "buttons",
-      buttons: [],
-      error: "Enter a Snipsy project path, then refresh.",
-    });
-    return;
-  }
 
   try {
-    const buttons = await client.listButtons(effectiveProjectPath);
+    const activeProject = await client.activeProjectButtons();
     await streamDeck.ui.sendToPropertyInspector({
       type: "buttons",
-      buttons,
-      projectPath: effectiveProjectPath,
+      buttons: activeProject.buttons,
+      projectPath: activeProject.projectPath,
+      selectedSnippetId: settings.snippetId,
     });
   } catch (error) {
     await streamDeck.ui.sendToPropertyInspector({
       type: "buttons",
       buttons: [],
       error: labelForError(error),
-      projectPath: effectiveProjectPath,
     });
   }
 }
@@ -342,10 +331,7 @@ function asInspectorMessage(payload: JsonValue): InspectorMessage | undefined {
   }
   const type = payload.type;
   if (type === "listButtons") {
-    return {
-      type,
-      projectPath: typeof payload.projectPath === "string" ? payload.projectPath : undefined,
-    };
+    return { type };
   }
   if (type === "saveBinding" && payload.settings && typeof payload.settings === "object" && !Array.isArray(payload.settings)) {
     const settings = payload.settings as SnipsyActionSettings;

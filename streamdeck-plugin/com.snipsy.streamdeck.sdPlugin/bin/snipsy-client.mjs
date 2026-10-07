@@ -81,6 +81,9 @@ var SnipsyClient = class {
     });
     return promise;
   }
+  async activeProjectButtons() {
+    return this.#send({ command: "activeProjectButtons" });
+  }
   async triggerButton(projectPath, snippetId, snippetType) {
     if (!projectPath.trim() || !snippetId.trim()) {
       throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
