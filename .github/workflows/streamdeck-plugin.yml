@@ -1,0 +1,61 @@
+name: Stream Deck Plugin
+
+on:
+  pull_request:
+    paths:
+      - 'streamdeck-plugin/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/streamdeck-plugin.yml'
+      - 'scripts/*streamdeck*'
+      - 'src-tauri/src/stream_deck*.rs'
+      - 'src-tauri/src/models.rs'
+      - 'src/types/index.ts'
+      - 'src/utils/streamDeckIcons.ts'
+      - 'src/components/IconEditor.tsx'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches:
+      - main
+    paths:
+      - 'streamdeck-plugin/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/streamdeck-plugin.yml'
+      - 'scripts/*streamdeck*'
+      - 'src-tauri/src/stream_deck*.rs'
+      - 'src-tauri/src/models.rs'
+      - 'src/types/index.ts'
+      - 'src/utils/streamDeckIcons.ts'
+      - 'src/components/IconEditor.tsx'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Test Stream Deck plugin
+        run: npm run test:streamdeck
+
+      - name: Package Stream Deck plugin
+        run: npm run package:streamdeck
+
+      - name: Upload Stream Deck plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snipsy.streamDeckPlugin
+          path: dist/streamdeck/Snipsy.streamDeckPlugin

@@ -5,6 +5,7 @@ This is the Stream Deck plugin source package for Snipsy. It binds Stream Deck k
 ## Development
 
 ```powershell
+npm run sync:streamdeck-version
 npm run build:streamdeck
 npm run package:streamdeck
 ```
@@ -20,6 +21,8 @@ The package command writes the installable Stream Deck plugin archive to:
 ```text
 dist/streamdeck/Snipsy.streamDeckPlugin
 ```
+
+`sync:streamdeck-version` keeps the plugin manifest version aligned with the Snipsy app version using Stream Deck's four-part version format.
 
 The plugin discovers Snipsy through `stream-deck-control.json`, then uses the advertised native transport. On Windows, that transport is an owner/SYSTEM-only named pipe owned by the running Snipsy process. On macOS and Linux, Snipsy advertises an owner-only Unix domain socket.
 
@@ -38,7 +41,7 @@ Visible keys subscribe with `watchProject`. Snipsy keeps that native transport c
 ## Current scope
 
 - One keypad action: **Trigger Snipper**.
-- Property inspector can set a project path, refresh Snipsy buttons, and save a selected text/video snippet binding.
+- Property inspector loads snippets from the open Snipsy project and saves the selected text/video snippet binding.
 - Key press sends `triggerButton` through Snipsy's native IPC and shows Stream Deck alert/checkmark feedback.
 
 The official Stream Deck plugin package targets Windows and macOS. The Snipsy backend transport also supports Linux for direct clients and future compatible surfaces.
@@ -49,7 +52,7 @@ The official Stream Deck plugin package targets Windows and macOS. The Snipsy ba
 2. Open `dist/streamdeck/Snipsy.streamDeckPlugin` with Stream Deck.
 3. Start Snipsy and open the project you want to control.
 4. Add **Trigger Snipper** to a Stream Deck key.
-5. In the property inspector, enter the Snipsy project path, refresh, choose a snippet, and save.
+5. In the property inspector, choose a snippet from the open Snipsy project.
 6. Press the key. Text snippets should deliver through Snipsy; video snippets should open the Snipsy playback window.
 
 Expected key states:
