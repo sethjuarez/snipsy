@@ -9,6 +9,40 @@ use tauri_plugin_auditaur::IpcTraceContext;
 
 const OPEN_SITE_SETTLE_MS: u64 = 500;
 
+#[derive(Debug, Default)]
+struct AutomationRunSummary {
+    opened: Vec<String>,
+    skipped: Vec<String>,
+}
+
+impl AutomationRunSummary {
+    fn message(&self) -> String {
+        let opened_count = self.opened.len();
+        let skipped_count = self.skipped.len();
+        let mut message = format!(
+            "Opened {} site{}",
+            opened_count,
+            if opened_count == 1 { "" } else { "s" }
+        );
+
+        if !self.opened.is_empty() {
+            message.push_str(": ");
+            message.push_str(&self.opened.join(", "));
+        }
+
+        if skipped_count > 0 {
+            message.push_str(&format!(
+                ". Skipped {} duplicate{}",
+                skipped_count,
+                if skipped_count == 1 { "" } else { "s" }
+            ));
+        }
+
+        message.push('.');
+        message
+    }
+}
+
 fn automation_file(project_path: &str, script_id: &str) -> PathBuf {
     PathBuf::from(project_path)
         .join("automations")
@@ -39,6 +73,17 @@ fn idempotency_key(contribution: &AutomationContribution) -> String {
                 key
             }
         }
+    }
+}
+
+fn contribution_label(contribution: &AutomationContribution) -> String {
+    match contribution {
+        AutomationContribution::OpenSite { title, url, .. } => title
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| url.trim())
+            .to_string(),
     }
 }
 
@@ -77,6 +122,8 @@ fn open_site(url: &str) -> Result<(), String> {
         if result.0 as isize <= 32 {
             return Err(format!("open site error: ShellExecuteW failed with code {:?}", result.0));
         }
+
+        tracing::info!(url, shell_result = ?result.0, "Windows shell accepted open site URL");
     }
     #[cfg(target_os = "macos")]
     Command::new("open")
@@ -97,23 +144,41 @@ fn execute_contribution(contribution: &AutomationContribution) -> Result<(), Str
     }
 }
 
-fn execute_contribution_groups(script: &Script) -> Result<usize, String> {
+fn execute_contribution_groups(script: &Script) -> Result<AutomationRunSummary, String> {
     let mut executed = HashSet::new();
-    let mut count = 0;
+    let mut summary = AutomationRunSummary::default();
     for group in &script.contribution_groups {
         for contribution in &group.contributions {
             let key = idempotency_key(contribution);
+            let label = contribution_label(contribution);
             if !executed.insert(key.clone()) {
-                tracing::info!(idempotency_key = %key, "Skipping already executed automation contribution");
+                tracing::info!(
+                    group = %group.title,
+                    contribution = %label,
+                    idempotency_key = %key,
+                    "Skipping already executed automation contribution"
+                );
+                summary.skipped.push(label);
                 continue;
             }
-            tracing::info!(idempotency_key = %key, "Executing automation contribution");
+            tracing::info!(
+                group = %group.title,
+                contribution = %label,
+                idempotency_key = %key,
+                "Executing automation contribution"
+            );
             execute_contribution(contribution)?;
-            count += 1;
+            tracing::info!(
+                group = %group.title,
+                contribution = %label,
+                idempotency_key = %key,
+                "Automation contribution accepted"
+            );
+            summary.opened.push(label);
             std::thread::sleep(std::time::Duration::from_millis(OPEN_SITE_SETTLE_MS));
         }
     }
-    Ok(count)
+    Ok(summary)
 }
 
 #[tauri::command]
@@ -125,13 +190,9 @@ pub async fn run_automation(
 ) -> Result<String, String> {
     let script = load_automation(&project_path, &script_id)?;
 
-    let contribution_count = execute_contribution_groups(&script)?;
+    let summary = execute_contribution_groups(&script)?;
 
-    Ok(format!(
-        "Ran {} contribution{}.",
-        contribution_count,
-        if contribution_count == 1 { "" } else { "s" },
-    ))
+    Ok(summary.message())
 }
 
 #[cfg(test)]
@@ -179,5 +240,18 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(keys, vec!["docs", "docs"]);
+    }
+
+    #[test]
+    fn automation_run_summary_lists_opened_and_skipped_sites() {
+        let summary = AutomationRunSummary {
+            opened: vec!["Caldova".into(), "Teams".into()],
+            skipped: vec!["Teams duplicate".into()],
+        };
+
+        assert_eq!(
+            summary.message(),
+            "Opened 2 sites: Caldova, Teams. Skipped 1 duplicate."
+        );
     }
 }
