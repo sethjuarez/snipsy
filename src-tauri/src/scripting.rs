@@ -7,6 +7,8 @@ use std::process::Command;
 use crate::models::{AutomationContribution, Script};
 use tauri_plugin_auditaur::IpcTraceContext;
 
+const OPEN_SITE_SETTLE_MS: u64 = 500;
+
 fn automation_file(project_path: &str, script_id: &str) -> PathBuf {
     PathBuf::from(project_path)
         .join("automations")
@@ -108,7 +110,7 @@ fn execute_contribution_groups(script: &Script) -> Result<usize, String> {
             tracing::info!(idempotency_key = %key, "Executing automation contribution");
             execute_contribution(contribution)?;
             count += 1;
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            std::thread::sleep(std::time::Duration::from_millis(OPEN_SITE_SETTLE_MS));
         }
     }
     Ok(count)
