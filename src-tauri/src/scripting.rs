@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::process::Command;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use std::process::Command;
 
 use crate::models::{AutomationContribution, Script};
 use tauri_plugin_auditaur::IpcTraceContext;
@@ -56,11 +55,27 @@ fn open_site(url: &str) -> Result<(), String> {
     validate_site_url(url)?;
     let url = url.trim();
     #[cfg(target_os = "windows")]
-    Command::new("rundll32.exe")
-        .args(["url.dll,FileProtocolHandler", url])
-        .creation_flags(0x08000000)
-        .spawn()
-        .map_err(|e| format!("open site error: {}", e))?;
+    {
+        use windows::core::{w, HSTRING, PCWSTR};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let target = HSTRING::from(url);
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                w!("open"),
+                &target,
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        if result.0 as isize <= 32 {
+            return Err(format!("open site error: ShellExecuteW failed with code {:?}", result.0));
+        }
+    }
     #[cfg(target_os = "macos")]
     Command::new("open")
         .arg(url)
@@ -90,8 +105,10 @@ fn execute_contribution_groups(script: &Script) -> Result<usize, String> {
                 tracing::info!(idempotency_key = %key, "Skipping already executed automation contribution");
                 continue;
             }
+            tracing::info!(idempotency_key = %key, "Executing automation contribution");
             execute_contribution(contribution)?;
             count += 1;
+            std::thread::sleep(std::time::Duration::from_millis(300));
         }
     }
     Ok(count)
