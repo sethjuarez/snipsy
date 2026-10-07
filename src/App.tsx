@@ -52,9 +52,9 @@ function App() {
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
   const setVideoSnippets = useProjectStore((s) => s.setVideoSnippets);
-  const scripts = useProjectStore((s) => s.scripts);
-  const saveScript = useProjectStore((s) => s.saveScript);
-  const deleteScriptFromStore = useProjectStore((s) => s.deleteScript);
+  const automations = useProjectStore((s) => s.automations);
+  const saveAutomation = useProjectStore((s) => s.saveAutomation);
+  const deleteAutomationFromStore = useProjectStore((s) => s.deleteAutomation);
   const demoMode = useProjectStore((s) => s.demoMode);
   const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
@@ -87,8 +87,8 @@ function App() {
   const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const videoListRef = useRef<VideoListHandle>(null);
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
-  const loadScripts = useProjectStore((s) => s.loadScripts);
-  const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, scripts);
+  const loadAutomations = useProjectStore((s) => s.loadAutomations);
+  const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, automations);
 
   const showToast = useCallback((title: string, detail?: string, tone: ToastTone = "info") => {
     const id = crypto.randomUUID();
@@ -200,13 +200,13 @@ function App() {
       title: "Delete Automation?",
       message: "This will permanently delete this automation. This action cannot be undone.",
       onConfirm: () => {
-        deleteScriptFromStore(id);
+        deleteAutomationFromStore(id);
         setConfirmDialog(null);
       },
     });
   };
   const handleScriptSave = (script: Script) => {
-    saveScript(script);
+    saveAutomation(script);
     setShowScriptForm(false);
     setEditingScript(undefined);
   };
@@ -289,15 +289,15 @@ function App() {
       await backend.stopRecordingScript(projectPath, title, description);
       setIsRecording(false);
       setShowRecordingDialog(false);
-      await loadScripts();
+      await loadAutomations();
     } catch (e) {
       showToast("Failed to save recording", String(e), "error");
     }
-  }, [projectPath, loadScripts, showToast]);
+  }, [projectPath, loadAutomations, showToast]);
 
   const handleRunScript = useCallback(async (scriptId: string) => {
     if (!projectPath) return;
-    const scriptTitle = scripts.find((script) => script.id === scriptId)?.title ?? "Automation";
+    const scriptTitle = automations.find((script) => script.id === scriptId)?.title ?? "Automation";
     setRunningScriptId(scriptId);
     try {
       const message = await backend.runAutomation(projectPath, scriptId);
@@ -329,7 +329,7 @@ function App() {
     } finally {
       setRunningScriptId(null);
     }
-  }, [projectPath, scripts, showToast]);
+  }, [projectPath, automations, showToast]);
 
   const handleToggleDemo = () => {
     if (demoMode) exitDemoMode();
@@ -379,7 +379,7 @@ function App() {
               (activeView === "text-snippets" && showForm) ||
               (activeView === "video-snippets" && showVideoForm) ||
               clipEditingVideo !== null ||
-              (activeView === "scripts" && showScriptForm)
+              (activeView === "automations" && showScriptForm)
             }
             isRecording={isRecording}
             onRecord={handleStartRecording}
@@ -391,7 +391,7 @@ function App() {
               } else if (activeView === "video-snippets") {
                 setEditingVideoSnippet(undefined);
                 setShowVideoForm(true);
-              } else if (activeView === "scripts") {
+              } else if (activeView === "automations") {
                 setEditingScript(undefined);
                 setShowScriptForm(true);
               }
@@ -425,9 +425,9 @@ function App() {
                     ? {
                       label: editingScript ? "Update" : "Create",
                       state: scriptSaveState,
-                      form: "script-editor-form",
-                      testId: "script-save",
-                      cancelTestId: "script-cancel",
+                      form: "automation-editor-form",
+                      testId: "automation-save",
+                      cancelTestId: "automation-cancel",
                     }
                     : undefined}
             videoImporting={videoListToolbarState.importing}
@@ -474,7 +474,7 @@ function App() {
                 <DemoReadinessPanel
                   textCount={textSnippets.length}
                   videoCount={videoSnippets.length}
-                  automationCount={scripts.length}
+                  automationCount={automations.length}
                   demoMode={demoMode}
                   ffmpegAvailable={ffmpegAvailable}
                 />
@@ -545,7 +545,7 @@ function App() {
               )
             )}
 
-            {activeView === "scripts" && (
+            {activeView === "automations" && (
               <>
                 {isRecording && (
                   <div
@@ -600,7 +600,7 @@ function App() {
                   </div>
                 ) : (
                   <ScriptList
-                    scripts={scripts}
+                    automations={automations}
                     onEdit={handleScriptEdit}
                     onDelete={handleScriptDelete}
                     onRun={handleRunScript}
@@ -727,7 +727,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   "text-snippets": "Text Snippets",
   videos: "Videos",
   "video-snippets": "Video Clips",
-  scripts: "Automations",
+  automations: "Automations",
 };
 
 function ContentHeader({
@@ -765,17 +765,17 @@ function ContentHeader({
   const canAdd = view !== "videos" && view !== "home";
   const actions: ToolbarAction[] = [];
 
-  if (view === "scripts" && !showForm && !isRecording) {
+  if (view === "automations" && !showForm && !isRecording) {
     actions.push({
       label: "Record",
       icon: <Circle size={10} fill="currentColor" />,
       onClick: onRecord,
-      testId: "record-script",
+      testId: "record-automation",
       tone: "danger",
     });
   }
 
-  if (view === "scripts" && isRecording) {
+  if (view === "automations" && isRecording) {
     actions.push({
       label: "Stop",
       icon: <Square size={10} fill="currentColor" />,
@@ -810,7 +810,7 @@ function ContentHeader({
         label: "Add",
         icon: <Plus size={12} />,
         onClick: onAdd,
-        testId: view === "text-snippets" ? "add-snippet" : view === "video-snippets" ? "add-video-snippet" : "add-script",
+        testId: view === "text-snippets" ? "add-snippet" : view === "video-snippets" ? "add-video-snippet" : "add-automation",
         tone: "primary",
       }
       : undefined;

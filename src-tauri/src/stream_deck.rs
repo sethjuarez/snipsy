@@ -35,11 +35,11 @@ pub fn list_stream_deck_buttons(
     auditaur_trace_context: Option<tauri_plugin_auditaur::IpcTraceContext>,
 ) -> Result<Vec<StreamDeckButton>, String> {
     let data = crate::commands::open_project(project_path.clone(), None)?;
-    let scripts = crate::commands::load_scripts(project_path, None)?;
+    let automations = crate::commands::load_automations(project_path, None)?;
     Ok(buttons_for_project(
         &data.text_snippets,
         &data.video_snippets,
-        &scripts,
+        &automations,
     ))
 }
 
@@ -53,8 +53,8 @@ pub async fn trigger_stream_deck_button(
     auditaur_trace_context: Option<tauri_plugin_auditaur::IpcTraceContext>,
 ) -> Result<StreamDeckTriggerResult, String> {
     let data = crate::commands::open_project(project_path.clone(), None)?;
-    let scripts = crate::commands::load_scripts(project_path.clone(), None)?;
-    let action = resolve_action(&data, &scripts, &snippet_id, &snippet_type)?;
+    let automations = crate::commands::load_automations(project_path.clone(), None)?;
+    let action = resolve_action(&data, &automations, &snippet_id, &snippet_type)?;
 
     match action {
         StreamDeckAction::Text(snippet) => {
@@ -109,7 +109,7 @@ pub async fn trigger_stream_deck_button(
 pub fn buttons_for_project(
     text_snippets: &[TextSnippet],
     video_snippets: &[VideoSnippet],
-    scripts: &[Script],
+    automations: &[Script],
 ) -> Vec<StreamDeckButton> {
     text_snippets
         .iter()
@@ -137,7 +137,7 @@ pub fn buttons_for_project(
                 None,
             ),
         }))
-        .chain(scripts.iter().map(|script| StreamDeckButton {
+        .chain(automations.iter().map(|script| StreamDeckButton {
             id: script.id.clone(),
             title: script.title.clone(),
             snippet_type: "automation".into(),
@@ -154,7 +154,7 @@ pub fn buttons_for_project(
 
 pub fn resolve_action(
     data: &ProjectData,
-    scripts: &[Script],
+    automations: &[Script],
     snippet_id: &str,
     snippet_type: &str,
 ) -> Result<StreamDeckAction, String> {
@@ -175,7 +175,7 @@ pub fn resolve_action(
             .ok_or_else(|| {
                 format!("Video snippet not found for Stream Deck binding: {snippet_id}")
             }),
-        "automation" => scripts
+        "automation" => automations
             .iter()
             .find(|script| script.id == snippet_id)
             .cloned()

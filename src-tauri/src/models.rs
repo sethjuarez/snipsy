@@ -513,10 +513,10 @@ mod tests {
     }
 
     #[test]
-    fn legacy_script_without_platform_deserializes() {
+    fn automation_without_optional_fields_deserializes() {
         let json = r#"{
-            "id": "old-1",
-            "title": "Old Script",
+            "id": "automation-1",
+            "title": "Automation",
             "description": "No platform field",
             "steps": [
                 { "action": "click", "x": 100, "y": 200 },

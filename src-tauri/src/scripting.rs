@@ -1,109 +1,12 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::Command;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 use crate::models::{AutomationContribution, Script, ScriptStep};
 use tauri_plugin_auditaur::IpcTraceContext;
-
-/// Start FFmpeg screen recording.
-/// Returns the child process handle so we can stop it later.
-fn start_recording(app: &tauri::AppHandle, output_path: &str) -> Result<Child, String> {
-    // Use GDI grab on Windows for screen capture
-    #[cfg(target_os = "windows")]
-    let child = {
-        let mut command = crate::ffmpeg::command_for_ffmpeg(app)?;
-        command
-            .args([
-                "-y",
-                "-f",
-                "gdigrab",
-                "-framerate",
-                "30",
-                "-i",
-                "desktop",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                output_path,
-            ])
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Failed to start FFmpeg: {}", e))?
-    };
-
-    #[cfg(target_os = "macos")]
-    let child = {
-        let mut command = crate::ffmpeg::command_for_ffmpeg(app)?;
-        command
-            .args([
-                "-y",
-                "-f",
-                "avfoundation",
-                "-framerate",
-                "30",
-                "-i",
-                "1:",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                output_path,
-            ])
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Failed to start FFmpeg: {}", e))?
-    };
-
-    #[cfg(target_os = "linux")]
-    let child = {
-        let mut command = crate::ffmpeg::command_for_ffmpeg(app)?;
-        command
-            .args([
-                "-y",
-                "-f",
-                "x11grab",
-                "-framerate",
-                "30",
-                "-i",
-                ":0.0",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                output_path,
-            ])
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Failed to start FFmpeg: {}", e))?
-    };
-
-    Ok(child)
-}
-
-/// Stop FFmpeg recording by sending 'q' to stdin.
-fn stop_recording(mut child: Child) -> Result<(), String> {
-    if let Some(ref mut stdin) = child.stdin {
-        use std::io::Write;
-        let _ = stdin.write_all(b"q");
-        let _ = stdin.flush();
-    }
-
-    // Wait for FFmpeg to finish (with timeout)
-    match child.wait() {
-        Ok(_) => Ok(()),
-        Err(e) => Err(format!("Failed to stop FFmpeg: {}", e)),
-    }
-}
 
 /// Parse a key name string into an enigo Key.
 fn parse_key(name: &str) -> Result<enigo::Key, String> {
@@ -345,15 +248,9 @@ fn execute_step(step: &ScriptStep) -> Result<(), String> {
 }
 
 fn automation_file(project_path: &str, script_id: &str) -> PathBuf {
-    let project_dir = PathBuf::from(project_path);
-    let automation_path = project_dir
+    PathBuf::from(project_path)
         .join("automations")
-        .join(format!("{}.json", script_id));
-    if automation_path.exists() {
-        automation_path
-    } else {
-        project_dir.join("scripts").join(format!("{}.json", script_id))
-    }
+        .join(format!("{}.json", script_id))
 }
 
 fn load_automation(project_path: &str, script_id: &str) -> Result<Script, String> {
@@ -455,59 +352,6 @@ fn validate_script_platform(script: &Script) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-#[tauri::command]
-#[tauri_plugin_auditaur::instrument_ipc(err)]
-pub async fn run_script(
-    app: tauri::AppHandle,
-    project_path: String,
-    script_id: String,
-    auditaur_trace_context: Option<IpcTraceContext>,
-) -> Result<String, String> {
-    let script = load_automation(&project_path, &script_id)?;
-    validate_script_platform(&script)?;
-
-    let ffmpeg_status = crate::ffmpeg::check_status(&app);
-    if !ffmpeg_status.ffmpeg.available {
-        return Err(ffmpeg_status
-            .ffmpeg
-            .error
-            .unwrap_or_else(|| "FFmpeg is unavailable.".to_string()));
-    }
-
-    let output_video = script
-        .output_video
-        .clone()
-        .ok_or_else(|| "This automation does not define a recording output video.".to_string())?;
-    let output_path = PathBuf::from(&project_path).join(&output_video);
-    if let Some(parent) = output_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create output directory: {}", e))?;
-    }
-
-    let output_str = output_path
-        .to_str()
-        .ok_or("Invalid output path")?
-        .to_string();
-
-    // Start recording
-    let child = start_recording(&app, &output_str)?;
-
-    // Small delay for FFmpeg to initialize
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    // Execute steps
-    for (i, step) in script.steps.iter().enumerate() {
-        if let Err(e) = execute_step(step) {
-            tracing::error!(step_index = i, error = %e, "Script step failed");
-        }
-    }
-
-    // Stop recording
-    stop_recording(child)?;
-
-    Ok(output_video)
 }
 
 #[tauri::command]

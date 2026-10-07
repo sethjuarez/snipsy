@@ -70,7 +70,7 @@ const FIXTURE_PROJECT: ProjectData = {
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
-  private _scripts: Script[] = [
+  private _automations: Script[] = [
     {
       id: "sc-1",
       title: "Build Demo Script",
@@ -196,25 +196,21 @@ export class MockBackendService implements BackendService {
     // Mock: no-op in test mode
   }
 
-  async saveScript(_projectPath: string, script: Script): Promise<void> {
-    const index = this._scripts.findIndex((s) => s.id === script.id);
+  async saveAutomation(_projectPath: string, script: Script): Promise<void> {
+    const index = this._automations.findIndex((s) => s.id === script.id);
     if (index >= 0) {
-      this._scripts[index] = structuredClone(script);
+      this._automations[index] = structuredClone(script);
     } else {
-      this._scripts.push(structuredClone(script));
+      this._automations.push(structuredClone(script));
     }
   }
 
-  async loadScripts(_projectPath: string): Promise<Script[]> {
-    return structuredClone(this._scripts);
+  async loadAutomations(_projectPath: string): Promise<Script[]> {
+    return structuredClone(this._automations);
   }
 
-  async deleteScript(_projectPath: string, id: string): Promise<void> {
-    this._scripts = this._scripts.filter((s) => s.id !== id);
-  }
-
-  async runScript(_projectPath: string, _scriptId: string): Promise<string> {
-    return "videos/mock-output.mp4";
+  async deleteAutomation(_projectPath: string, id: string): Promise<void> {
+    this._automations = this._automations.filter((s) => s.id !== id);
   }
 
   async runAutomation(_projectPath: string, _scriptId: string): Promise<string> {
@@ -310,7 +306,7 @@ export class MockBackendService implements BackendService {
         hotkey: snippet.hotkey,
         iconDataUrl: streamDeckIconToDataUrl(snippet.streamDeckIcon, snippet.title, "video"),
       })),
-      ...this._scripts.map((script) => ({
+      ...this._automations.map((script) => ({
         id: script.id,
         title: script.title,
         snippetType: "automation" as const,
@@ -326,7 +322,7 @@ export class MockBackendService implements BackendService {
     snippetType: "text" | "video" | "automation",
   ) {
     if (snippetType === "automation") {
-      const script = this._scripts.find((candidate) => candidate.id === snippetId);
+      const script = this._automations.find((candidate) => candidate.id === snippetId);
       if (!script) throw new Error(`automation not found: ${snippetId}`);
       await this.runAutomation(_projectPath, snippetId);
       return {
@@ -387,7 +383,7 @@ export class MockBackendService implements BackendService {
       platform: "windows",
       recordedAt: new Date().toISOString(),
     };
-    this._scripts.push(script);
+    this._automations.push(script);
     return structuredClone(script);
   }
 

@@ -121,7 +121,7 @@ export type ScriptStep =
       // Legacy absolute coords (always present for backward compat)
       x: number;
       y: number;
-      // Window-relative context (present on newly recorded scripts)
+      // Window-relative context (present on newly recorded automations)
       windowTitle?: string;
       windowClass?: string;
       xPercent?: number;

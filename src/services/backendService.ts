@@ -85,10 +85,9 @@ export interface BackendService {
   ): Promise<void>;
   showPlaybackWindow(): Promise<void>;
   closePlaybackWindow(): Promise<void>;
-  saveScript(projectPath: string, script: Script): Promise<void>;
-  loadScripts(projectPath: string): Promise<Script[]>;
-  deleteScript(projectPath: string, id: string): Promise<void>;
-  runScript(projectPath: string, scriptId: string): Promise<string>;
+  saveAutomation(projectPath: string, script: Script): Promise<void>;
+  loadAutomations(projectPath: string): Promise<Script[]>;
+  deleteAutomation(projectPath: string, id: string): Promise<void>;
   runAutomation(projectPath: string, scriptId: string): Promise<string>;
   checkFfmpeg(): Promise<FfmpegStatus>;
   setFfmpegPaths(

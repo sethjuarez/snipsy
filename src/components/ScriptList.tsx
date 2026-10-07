@@ -9,7 +9,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 interface ScriptListProps {
-  scripts: Script[];
+  automations: Script[];
   onEdit: (script: Script) => void;
   onDelete: (id: string) => void;
   onRun?: (scriptId: string) => void;
@@ -52,16 +52,16 @@ function getPortability(script: Script): { state: "portable" | "review"; label: 
   };
 }
 
-function ScriptList({ scripts, onEdit, onDelete, onRun, runningScriptId, runHistory = [] }: ScriptListProps) {
-  if (scripts.length === 0) {
+function ScriptList({ automations, onEdit, onDelete, onRun, runningScriptId, runHistory = [] }: ScriptListProps) {
+  if (automations.length === 0) {
     return (
-      <EmptyState title="No automations yet" description="Create an automation to run repeatable demo actions." data-testid="script-empty-state" />
+      <EmptyState title="No automations yet" description="Create an automation to run repeatable demo actions." data-testid="automation-empty-state" />
     );
   }
 
   return (
-    <div className="space-y-2" data-testid="script-list">
-      {scripts.map((script) => (
+    <div className="space-y-2" data-testid="automation-list">
+      {automations.map((script) => (
         <AutomationRow
           key={script.id}
           script={script}
@@ -98,7 +98,7 @@ function AutomationRow({
     <div
       className="rounded-lg px-4 py-3"
       style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
-      data-testid={`script-${script.id}`}
+      data-testid={`automation-${script.id}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -119,13 +119,13 @@ function AutomationRow({
                 backgroundColor: "var(--color-surface-inset)",
                 color: portability.state === "portable" ? "var(--color-success)" : "var(--color-warning)",
               }}
-              data-testid={`script-portability-${script.id}`}
+              data-testid={`automation-portability-${script.id}`}
             >
               {portability.state === "portable" ? <CheckCircle size={10} /> : <AlertTriangle size={10} />}
               {portability.label}
             </span>
             {script.platform && (
-              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid={`script-platform-${script.id}`}>
+              <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid={`automation-platform-${script.id}`}>
                 <Monitor size={10} />
                 {PLATFORM_LABELS[script.platform] ?? script.platform}
               </span>
@@ -142,7 +142,7 @@ function AutomationRow({
             </p>
           )}
           {lastRun && (
-            <p className="flex items-center gap-1 text-sm mt-1" style={{ color: lastRun.status === "success" ? "var(--color-success)" : "var(--color-danger)" }} data-testid={`script-last-run-${script.id}`}>
+            <p className="flex items-center gap-1 text-sm mt-1" style={{ color: lastRun.status === "success" ? "var(--color-success)" : "var(--color-danger)" }} data-testid={`automation-last-run-${script.id}`}>
               <History size={11} />
               Last run {new Date(lastRun.completedAt).toLocaleTimeString()}: {lastRun.message}
             </p>
@@ -155,7 +155,7 @@ function AutomationRow({
               disabled={running}
               className="flex items-center gap-1 text-base"
               style={{ color: running ? "var(--color-text-secondary)" : "var(--color-success, #22c55e)", cursor: running ? "progress" : "pointer" }}
-              data-testid={`script-run-${script.id}`}
+              data-testid={`automation-run-${script.id}`}
               aria-label={`${running ? "Running" : "Run"} ${script.title}`}
             >
               <Play size={12} /> {running ? "Running..." : "Run"}
@@ -165,7 +165,7 @@ function AutomationRow({
             onClick={() => onEdit(script)}
             className="flex items-center gap-1 text-base"
             style={{ color: "var(--color-accent)" }}
-            data-testid={`script-edit-${script.id}`}
+            data-testid={`automation-edit-${script.id}`}
             aria-label={`Edit ${script.title}`}
           >
             <Pencil size={12} /> Edit
@@ -174,7 +174,7 @@ function AutomationRow({
             onClick={() => onDelete(script.id)}
             className="flex items-center gap-1 text-base"
             style={{ color: "var(--color-danger)" }}
-            data-testid={`script-delete-${script.id}`}
+            data-testid={`automation-delete-${script.id}`}
             aria-label={`Delete ${script.title}`}
           >
             <Trash2 size={12} /> Delete

@@ -448,71 +448,65 @@ pub fn capture_monitor_preview(
 
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
-pub fn save_script(
+pub fn save_automation(
     project_path: String,
     script: Script,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    let scripts_dir = PathBuf::from(&project_path).join("automations");
-    fs::create_dir_all(&scripts_dir)
+    let automations_dir = PathBuf::from(&project_path).join("automations");
+    fs::create_dir_all(&automations_dir)
         .map_err(|e| format!("Failed to create automations directory: {e}"))?;
 
-    let file_path = scripts_dir.join(format!("{}.json", script.id));
+    let file_path = automations_dir.join(format!("{}.json", script.id));
     let json = serde_json::to_string_pretty(&script)
-        .map_err(|e| format!("Failed to serialize script: {e}"))?;
-    fs::write(file_path, json).map_err(|e| format!("Failed to write script file: {e}"))?;
+        .map_err(|e| format!("Failed to serialize automation: {e}"))?;
+    fs::write(file_path, json).map_err(|e| format!("Failed to write automation file: {e}"))?;
     Ok(())
 }
 
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
-pub fn load_scripts(
+pub fn load_automations(
     project_path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<Vec<Script>, String> {
-    let mut scripts = Vec::new();
-    let project_dir = PathBuf::from(&project_path);
-    let script_dirs = [project_dir.join("automations"), project_dir.join("scripts")];
+    let mut automations = Vec::new();
+    let automations_dir = PathBuf::from(&project_path).join("automations");
 
-    for scripts_dir in script_dirs {
-        if !scripts_dir.exists() {
-            continue;
-        }
-        let entries = fs::read_dir(&scripts_dir)
-            .map_err(|e| format!("Failed to read automations directory: {e}"))?;
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json") {
-                let content = fs::read_to_string(&path)
-                    .map_err(|e| format!("Failed to read automation file: {e}"))?;
-                let script: Script = serde_json::from_str(&content)
-                    .map_err(|e| format!("Failed to parse automation file: {e}"))?;
-                if !scripts.iter().any(|existing: &Script| existing.id == script.id) {
-                    scripts.push(script);
-                }
-            }
+    if !automations_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let entries = fs::read_dir(&automations_dir)
+        .map_err(|e| format!("Failed to read automations directory: {e}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "json") {
+            let content = fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read automation file: {e}"))?;
+            let automation: Script = serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse automation file: {e}"))?;
+            automations.push(automation);
         }
     }
 
-    Ok(scripts)
+    Ok(automations)
 }
 
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
-pub fn delete_script(
+pub fn delete_automation(
     project_path: String,
     id: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    for dir_name in ["automations", "scripts"] {
-        let file_path = PathBuf::from(&project_path)
-            .join(dir_name)
-            .join(format!("{}.json", id));
-        if file_path.exists() {
-            fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete automation file: {e}"))?;
-        }
+    let file_path = PathBuf::from(&project_path)
+        .join("automations")
+        .join(format!("{}.json", id));
+    if file_path.exists() {
+        fs::remove_file(&file_path)
+            .map_err(|e| format!("Failed to delete automation file: {e}"))?;
     }
     Ok(())
 }
@@ -766,7 +760,7 @@ mod tests {
     }
 
     #[test]
-    fn save_and_load_scripts() {
+    fn save_and_load_automations() {
         let tmp = TempDir::new().unwrap();
         let project_path = tmp.path().join("test-project");
         create_project(
@@ -797,22 +791,23 @@ mod tests {
             stream_deck_icon: None,
         };
 
-        save_script(
+        save_automation(
             project_path.to_string_lossy().into_owned(),
             script.clone(),
             None,
         )
         .unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
-        assert_eq!(scripts.len(), 1);
-        assert_eq!(scripts[0].id, "script-1");
-        assert_eq!(scripts[0].title, "Build Demo Script");
-        assert_eq!(scripts[0].steps.len(), 2);
+        let automations =
+            load_automations(project_path.to_string_lossy().into_owned(), None).unwrap();
+        assert_eq!(automations.len(), 1);
+        assert_eq!(automations[0].id, "script-1");
+        assert_eq!(automations[0].title, "Build Demo Script");
+        assert_eq!(automations[0].steps.len(), 2);
     }
 
     #[test]
-    fn delete_script_removes_file() {
+    fn delete_automation_removes_file() {
         let tmp = TempDir::new().unwrap();
         let project_path = tmp.path().join("test-project");
         create_project(
@@ -837,24 +832,26 @@ mod tests {
             stream_deck_icon: None,
         };
 
-        save_script(project_path.to_string_lossy().into_owned(), script, None).unwrap();
+        save_automation(project_path.to_string_lossy().into_owned(), script, None).unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
-        assert_eq!(scripts.len(), 1);
+        let automations =
+            load_automations(project_path.to_string_lossy().into_owned(), None).unwrap();
+        assert_eq!(automations.len(), 1);
 
-        delete_script(
+        delete_automation(
             project_path.to_string_lossy().into_owned(),
             "script-del".into(),
             None,
         )
         .unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
-        assert_eq!(scripts.len(), 0);
+        let automations =
+            load_automations(project_path.to_string_lossy().into_owned(), None).unwrap();
+        assert_eq!(automations.len(), 0);
     }
 
     #[test]
-    fn load_scripts_empty_dir() {
+    fn load_automations_empty_dir() {
         let tmp = TempDir::new().unwrap();
         let project_path = tmp.path().join("test-project");
         create_project(
@@ -865,7 +862,8 @@ mod tests {
         )
         .unwrap();
 
-        let scripts = load_scripts(project_path.to_string_lossy().into_owned(), None).unwrap();
-        assert!(scripts.is_empty());
+        let automations =
+            load_automations(project_path.to_string_lossy().into_owned(), None).unwrap();
+        assert!(automations.is_empty());
     }
 }

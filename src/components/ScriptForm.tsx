@@ -169,13 +169,13 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   return (
     <form
       onSubmit={handleSubmit}
-      id="script-editor-form"
+      id="automation-editor-form"
       className="space-y-4"
-      data-testid="script-form"
+      data-testid="automation-form"
     >
       {script?.platform && (
         <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid="script-platform-badge">
+          <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }} data-testid="automation-platform-badge">
             <Monitor size={10} />
             {script.platform}
           </span>
@@ -188,11 +188,11 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
       )}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label htmlFor="script-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+          <label htmlFor="automation-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
             Name
           </label>
           <input
-            id="script-title"
+            id="automation-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -200,15 +200,15 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
             required
             className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="script-title"
+            data-testid="automation-title"
           />
         </div>
         <div>
-          <label htmlFor="script-hotkey" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+          <label htmlFor="automation-hotkey" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
             Hotkey
           </label>
           <input
-            id="script-hotkey"
+            id="automation-hotkey"
             type="text"
             value={capturingHotkey ? "Press a key combo..." : hotkey}
             readOnly
@@ -220,43 +220,43 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
             style={capturingHotkey
               ? { backgroundColor: "var(--color-surface-inset)", border: "2px solid var(--color-accent)", color: "var(--color-text)" }
               : { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="script-hotkey"
-            aria-describedby="script-hotkey-status"
+            data-testid="automation-hotkey"
+            aria-describedby="automation-hotkey-status"
           />
-          <p id="script-hotkey-status" className="mt-1 text-sm" style={{ color: hotkeyStatus.state === "available" ? "var(--color-text-secondary)" : "var(--color-danger)" }} data-testid="script-hotkey-status">
+          <p id="automation-hotkey-status" className="mt-1 text-sm" style={{ color: hotkeyStatus.state === "available" ? "var(--color-text-secondary)" : "var(--color-danger)" }} data-testid="automation-hotkey-status">
             {hotkeyStatus.message}
           </p>
         </div>
         <div>
-          <label htmlFor="script-output" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+          <label htmlFor="automation-output" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
             Recording Output
           </label>
           <input
-            id="script-output"
+            id="automation-output"
             type="text"
             value={outputVideo}
             onChange={(e) => setOutputVideo(e.target.value)}
             placeholder="Optional video output"
             className="w-full px-3 py-2 rounded text-md"
             style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="script-output"
+            data-testid="automation-output"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="script-description" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+        <label htmlFor="automation-description" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
           Description
         </label>
         <input
-          id="script-description"
+          id="automation-description"
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description"
           className="w-full px-3 py-2 rounded text-md"
           style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-          data-testid="script-description"
+          data-testid="automation-description"
         />
       </div>
 
@@ -361,7 +361,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
         ))}
       </div>
 
-      <div data-testid="script-steps-section">
+      <div data-testid="automation-steps-section">
         <div className="flex items-center justify-between mb-2">
           <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
             Recording Steps

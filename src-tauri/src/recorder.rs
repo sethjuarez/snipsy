@@ -303,10 +303,10 @@ pub fn stop_recording_script(
     };
 
     // Save the automation to disk
-    let scripts_dir = PathBuf::from(&project_path).join("automations");
-    std::fs::create_dir_all(&scripts_dir)
+    let automations_dir = PathBuf::from(&project_path).join("automations");
+    std::fs::create_dir_all(&automations_dir)
         .map_err(|e| format!("Failed to create automations dir: {}", e))?;
-    let script_file = scripts_dir.join(format!("{}.json", script_id));
+    let script_file = automations_dir.join(format!("{}.json", script_id));
     let json = serde_json::to_string_pretty(&script)
         .map_err(|e| format!("Failed to serialize script: {}", e))?;
     std::fs::write(&script_file, json).map_err(|e| format!("Failed to write automation: {}", e))?;
