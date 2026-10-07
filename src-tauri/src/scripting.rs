@@ -64,7 +64,7 @@ fn idempotency_key(contribution: &AutomationContribution) -> String {
         } => {
             let key = idempotency_key
                 .clone()
-                .unwrap_or_else(|| format!("openSite:{}", url.trim().to_ascii_lowercase()));
+                .unwrap_or_else(|| format!("openSite:{}", url.trim()));
             if key.trim().is_empty() {
                 id.clone()
             } else {
@@ -286,7 +286,7 @@ fn execute_contribution_groups(script: &Script) -> Result<AutomationRunSummary, 
                 idempotency_key = %key,
                 "Executing automation contribution"
             );
-            execute_contribution(contribution)?;
+            execute_contribution(contribution).map_err(|error| format!("{label}: {error}"))?;
             tracing::info!(
                 group = %group.title,
                 contribution = %label,
@@ -309,7 +309,10 @@ pub async fn run_automation(
 ) -> Result<String, String> {
     let script = load_automation(&project_path, &script_id)?;
 
-    let summary = execute_contribution_groups(&script)?;
+    let summary =
+        tauri::async_runtime::spawn_blocking(move || execute_contribution_groups(&script))
+            .await
+            .map_err(|error| format!("Automation task failed: {error}"))??;
 
     Ok(summary.message())
 }
@@ -359,6 +362,24 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(keys, vec!["docs", "docs"]);
+    }
+
+    #[test]
+    fn default_idempotency_key_preserves_url_case() {
+        let first = AutomationContribution::OpenSite {
+            id: "site-1".into(),
+            title: None,
+            url: "https://example.com/Path".into(),
+            idempotency_key: None,
+        };
+        let second = AutomationContribution::OpenSite {
+            id: "site-2".into(),
+            title: None,
+            url: "https://example.com/path".into(),
+            idempotency_key: None,
+        };
+
+        assert_ne!(idempotency_key(&first), idempotency_key(&second));
     }
 
     #[test]
