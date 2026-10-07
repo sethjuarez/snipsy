@@ -11,7 +11,7 @@
   "CodePath": "bin/plugin.mjs",
   "SDKVersion": 2,
   "Software": {
-    "MinimumVersion": "6.6"
+    "MinimumVersion": "7.1"
   },
   "Nodejs": {
     "Version": "20"

@@ -30,6 +30,12 @@ const descriptor = {
 };
 const pluginDir = new URL("../com.snipsy.streamdeck.sdPlugin/", import.meta.url);
 
+test("manifest minimum Stream Deck version supports SDK settings behavior", async () => {
+  const manifest = JSON.parse(await readFile(new URL("manifest.json", pluginDir), "utf8"));
+
+  assert.equal(manifest.Software.MinimumVersion, "7.1");
+});
+
 test("resolves the Windows descriptor path from APPDATA", () => {
   assert.equal(
     defaultDescriptorPath("win32", { APPDATA: "C:\\Users\\seth\\AppData\\Roaming" }, "C:\\Users\\seth"),
