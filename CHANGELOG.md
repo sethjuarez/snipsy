@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/sethjuarez/snipsy/compare/v0.17.1...v0.18.0) (2026-10-07)
+
+
+### Features
+
+* **streamdeck:** add Stream Deck plugin integration ([575cd46](https://github.com/sethjuarez/snipsy/commit/575cd46e228ca47e97ba616bea29c190d50f77f8))
+
 ## [0.17.1](https://github.com/sethjuarez/snipsy/compare/v0.17.0...v0.17.1) (2026-07-14)
 
 
