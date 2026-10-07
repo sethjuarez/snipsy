@@ -189,7 +189,6 @@ fn render_icon_svg(
     } else {
         "1"
     };
-    let label = truncate_label(unavailable_reason.unwrap_or(title));
     let badge = if unavailable_reason.is_some() {
         r##"<circle cx="78" cy="22" r="12" fill="#f59e0b"/><text x="78" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#111827">!</text>"##
     } else {
@@ -201,7 +200,6 @@ fn render_icon_svg(
   <rect width="100" height="100" rx="18" fill="{background}"/>
   <g opacity="{dim}">
     <text x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="{font_size}" font-weight="700" fill="{foreground}">{glyph}</text>
-    <text x="50" y="84" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#f8fafc">{label}</text>
   </g>
   {badge}
 </svg>"##,
@@ -210,7 +208,6 @@ fn render_icon_svg(
         font_size = if glyph.chars().count() > 2 { 26 } else { 34 },
         foreground = foreground,
         glyph = escape_xml(&glyph),
-        label = escape_xml(&label),
         badge = badge,
     )
 }
@@ -307,15 +304,6 @@ fn emoji_glyph(value: &str) -> String {
     }
 }
 
-fn truncate_label(label: &str) -> String {
-    let clean = label.trim();
-    if clean.chars().count() > 12 {
-        format!("{}…", clean.chars().take(11).collect::<String>())
-    } else {
-        clean.into()
-    }
-}
-
 fn sanitize_color(value: Option<&str>, fallback: &str) -> String {
     let Some(value) = value else {
         return fallback.into();
@@ -355,6 +343,7 @@ mod tests {
         let svg = String::from_utf8(general_purpose::STANDARD.decode(encoded).unwrap()).unwrap();
         assert!(svg.contains(r##"fill="#111827""##));
         assert!(svg.contains("&lt;/&gt;") || svg.contains("&gt;_"));
+        assert!(!svg.contains("Build terminal"));
     }
 
     #[test]
