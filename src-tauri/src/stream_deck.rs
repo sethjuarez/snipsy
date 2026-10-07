@@ -306,6 +306,8 @@ fn icon_parts(
             preset_glyph(
                 if snippet_type == "video" {
                     "play"
+                } else if snippet_type == "automation" {
+                    "rocket"
                 } else {
                     "text"
                 },
@@ -403,6 +405,11 @@ fn escape_xml(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn decode_icon_data_url(data_url: &str) -> String {
+        let encoded = data_url.trim_start_matches("data:image/svg+xml;base64,");
+        String::from_utf8(general_purpose::STANDARD.decode(encoded).unwrap()).unwrap()
+    }
 
     #[test]
     fn renders_svg_data_url_for_preset_icon() {
@@ -505,6 +512,9 @@ mod tests {
         assert_eq!(buttons.len(), 1);
         assert_eq!(buttons[0].snippet_type, "automation");
         assert_eq!(buttons[0].hotkey, "Ctrl+Shift+5");
+
+        let icon_svg = decode_icon_data_url(&buttons[0].icon_data_url);
+        assert!(icon_svg.contains("🚀"));
     }
 
     #[test]
