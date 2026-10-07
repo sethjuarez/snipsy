@@ -40,9 +40,22 @@ interface ControlResponse<T> {
   };
 }
 
+export interface StreamDeckControlEvent<T = unknown> {
+  protocolVersion: number;
+  event: string;
+  payload?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+type WatchHandle = { close: () => void };
+
 type Command =
   | { command: "status" }
   | { command: "listButtons"; projectPath: string }
+  | { command: "watchProject"; projectPath: string }
   | {
       command: "triggerButton";
       projectPath: string;
@@ -57,6 +70,12 @@ export interface SnipsyClientOptions {
   now?: () => number;
   readFileText?: (path: string) => Promise<string>;
   request?: <T>(descriptor: StreamDeckControlDescriptor, command: Command) => Promise<T>;
+  watch?: (
+    descriptor: StreamDeckControlDescriptor,
+    command: Command,
+    onEvent: (event: StreamDeckControlEvent) => void,
+    onError: (error: unknown) => void,
+  ) => WatchHandle;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
   homeDir?: string;
@@ -78,6 +97,12 @@ export class SnipsyClient {
   readonly #now: () => number;
   readonly #readFileText: (path: string) => Promise<string>;
   readonly #request?: <T>(descriptor: StreamDeckControlDescriptor, command: Command) => Promise<T>;
+  readonly #watch: (
+    descriptor: StreamDeckControlDescriptor,
+    command: Command,
+    onEvent: (event: StreamDeckControlEvent) => void,
+    onError: (error: unknown) => void,
+  ) => WatchHandle;
   readonly #env: NodeJS.ProcessEnv;
   readonly #platform: NodeJS.Platform;
   readonly #homeDir: string;
@@ -90,6 +115,7 @@ export class SnipsyClient {
     this.#now = options.now ?? Date.now;
     this.#readFileText = options.readFileText ?? ((path) => readFile(path, "utf8"));
     this.#request = options.request;
+    this.#watch = options.watch ?? watchEvents;
     this.#env = options.env ?? process.env;
     this.#platform = options.platform ?? process.platform;
     this.#homeDir = options.homeDir ?? homedir();
@@ -153,6 +179,32 @@ export class SnipsyClient {
       throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
     }
     return this.#send({ command: "triggerButton", projectPath, snippetId, snippetType });
+  }
+
+  clearListButtonsCache(projectPath?: string): void {
+    if (projectPath) {
+      this.#listButtonsCache.delete(projectPath.trim());
+      return;
+    }
+    this.#listButtonsCache.clear();
+  }
+
+  async watchProject(
+    projectPath: string,
+    onEvent: (event: StreamDeckControlEvent) => void,
+    onError: (error: unknown) => void = () => undefined,
+  ): Promise<WatchHandle> {
+    const normalizedProjectPath = projectPath.trim();
+    if (!normalizedProjectPath) {
+      throw new SnipsyControlError("Project path is required before watching a project.", "missingProjectPath");
+    }
+    const descriptor = await this.readDescriptor();
+    return this.#watch(
+      descriptor,
+      { command: "watchProject", projectPath: normalizedProjectPath },
+      onEvent,
+      onError,
+    );
   }
 
   async #send<T>(command: Command): Promise<T> {
@@ -246,6 +298,82 @@ export async function sendRequest<T>(
     );
   }
   return response.result as T;
+}
+
+export function watchEvents(
+  descriptor: StreamDeckControlDescriptor,
+  command: Command,
+  onEvent: (event: StreamDeckControlEvent) => void,
+  onError: (error: unknown) => void,
+): WatchHandle {
+  const socket = createConnection(descriptor.transport.endpoint);
+  let buffer = "";
+  let closed = false;
+  let errorNotified = false;
+
+  const notifyError = (error: unknown) => {
+    if (errorNotified) {
+      return;
+    }
+    errorNotified = true;
+    onError(error);
+  };
+
+  socket.on("connect", () => {
+    socket.write(`${JSON.stringify(command)}\n`, "utf8");
+  });
+  socket.on("data", (chunk) => {
+    buffer += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line) {
+        try {
+          const frame = JSON.parse(line);
+          if (isControlResponse(frame)) {
+            throw new SnipsyControlError(
+              frame.error?.message ?? "Snipsy does not support project watch events.",
+              frame.error?.code ?? "watchUnavailable",
+            );
+          }
+          const event = frame as StreamDeckControlEvent;
+          if (event.protocolVersion !== CONTROL_PROTOCOL_VERSION) {
+            throw new SnipsyControlError(
+              "Snipsy returned an unsupported event protocol version.",
+              "unsupportedProtocol",
+            );
+          }
+          if (typeof event.event !== "string") {
+            throw new SnipsyControlError("Snipsy returned a malformed watch event.", "invalidEvent");
+          }
+          onEvent(event);
+        } catch (error) {
+          notifyError(error);
+          socket.destroy();
+          return;
+        }
+      }
+      newline = buffer.indexOf("\n");
+    }
+  });
+  socket.on("error", notifyError);
+  socket.on("close", () => {
+    if (!closed && !errorNotified) {
+      notifyError(new SnipsyControlError("Snipsy project watch ended.", "watchClosed"));
+    }
+  });
+
+  return {
+    close: () => {
+      closed = true;
+      socket.destroy();
+    },
+  };
+}
+
+function isControlResponse(value: unknown): value is ControlResponse<unknown> {
+  return !!value && typeof value === "object" && "ok" in value;
 }
 
 function sendLine(endpoint: string, line: string, timeoutMs: number): Promise<string> {

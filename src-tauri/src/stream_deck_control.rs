@@ -85,6 +85,10 @@ pub enum StreamDeckControlRequest {
         #[serde(rename = "projectPath")]
         project_path: String,
     },
+    WatchProject {
+        #[serde(rename = "projectPath")]
+        project_path: String,
+    },
     TriggerButton {
         #[serde(rename = "projectPath")]
         project_path: String,
@@ -113,6 +117,17 @@ pub struct StreamDeckControlResponse {
 pub struct StreamDeckControlError {
     pub code: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamDeckControlEvent {
+    pub protocol_version: u32,
+    pub event: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<StreamDeckControlError>,
 }
 
 #[allow(dead_code)]
@@ -196,7 +211,7 @@ pub fn parse_request_line(line: &str) -> Result<StreamDeckControlRequest, Stream
         message: format!("Invalid Stream Deck control request JSON: {error}"),
     })?;
     match value.get("command").and_then(Value::as_str) {
-        Some("status" | "listButtons" | "triggerButton") => {}
+        Some("status" | "listButtons" | "watchProject" | "triggerButton") => {}
         Some(command) => {
             return Err(StreamDeckControlError {
                 code: "unknownCommand".into(),
@@ -262,6 +277,13 @@ async fn execute_request_inner(
             serde_json::to_value(buttons)
                 .map_err(|error| format!("Failed to encode Stream Deck buttons: {error}"))
         }
+        StreamDeckControlRequest::WatchProject { project_path } => {
+            let buttons = crate::stream_deck::list_stream_deck_buttons(project_path.clone(), None)?;
+            serde_json::to_value(
+                serde_json::json!({ "projectPath": project_path, "buttons": buttons }),
+            )
+            .map_err(|error| format!("Failed to encode Stream Deck project snapshot: {error}"))
+        }
         StreamDeckControlRequest::TriggerButton {
             project_path,
             snippet_id,
@@ -309,6 +331,50 @@ pub fn error_response(
 
 fn accepted_response(status: impl Into<String>) -> StreamDeckControlResponse {
     success_response(serde_json::json!({ "status": status.into() }))
+}
+
+fn event_response(event: impl Into<String>, payload: Value) -> StreamDeckControlEvent {
+    StreamDeckControlEvent {
+        protocol_version: CONTROL_PROTOCOL_VERSION,
+        event: event.into(),
+        payload: Some(payload),
+        error: None,
+    }
+}
+
+fn event_error(
+    event: impl Into<String>,
+    code: impl Into<String>,
+    message: impl Into<String>,
+) -> StreamDeckControlEvent {
+    StreamDeckControlEvent {
+        protocol_version: CONTROL_PROTOCOL_VERSION,
+        event: event.into(),
+        payload: None,
+        error: Some(StreamDeckControlError {
+            code: code.into(),
+            message: message.into(),
+        }),
+    }
+}
+
+fn project_snapshot_event(project_path: &str) -> StreamDeckControlEvent {
+    match crate::stream_deck::list_stream_deck_buttons(project_path.to_string(), None) {
+        Ok(buttons) => event_response(
+            "snipsy.project.snapshot",
+            serde_json::json!({
+                "projectPath": project_path,
+                "buttons": buttons,
+            }),
+        ),
+        Err(error) => event_error("snipsy.project.error", command_error_code(&error), error),
+    }
+}
+
+fn serialize_event_line(event: &StreamDeckControlEvent) -> Result<String, String> {
+    serde_json::to_string(event)
+        .map(|line| line + "\n")
+        .map_err(|error| format!("Failed to serialize Stream Deck event: {error}"))
 }
 
 fn try_start_trigger_request(
@@ -616,12 +682,13 @@ fn run_windows_pipe_server(
             Ok(pipe) => unsafe {
                 if connect_windows_pipe(pipe) {
                     let app = app.clone();
+                    let stop = stop.clone();
                     let pipe_raw = pipe.0 as isize;
                     if let Err(error) = thread::Builder::new()
                         .name("snipsy-streamdeck-client".into())
                         .spawn(move || {
                             let pipe = windows::Win32::Foundation::HANDLE(pipe_raw as *mut c_void);
-                            handle_windows_pipe_client(app, pipe);
+                            handle_windows_pipe_client(app, stop, pipe);
                         })
                     {
                         tracing::warn!(error = %error, "Failed to start Stream Deck pipe client worker");
@@ -664,24 +731,19 @@ fn unblock_transport(endpoint: &str) {
     }
 }
 
-fn handle_control_request(
-    app: AppHandle,
+fn parse_control_request(
     request_line: Result<String, String>,
-) -> StreamDeckControlResponse {
+) -> Result<StreamDeckControlRequest, StreamDeckControlResponse> {
     match request_line {
-        Ok(request_line) => match parse_request_line(&request_line) {
-            Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
-                try_start_trigger_request(app, request)
-            }
-            Ok(request) => tauri::async_runtime::block_on(execute_request(app, request)),
-            Err(error) => StreamDeckControlResponse {
+        Ok(request_line) => {
+            parse_request_line(&request_line).map_err(|error| StreamDeckControlResponse {
                 protocol_version: CONTROL_PROTOCOL_VERSION,
                 ok: false,
                 result: None,
                 error: Some(error),
-            },
-        },
-        Err(error) => error_response("readFailed", error),
+            })
+        }
+        Err(error) => Err(error_response("readFailed", error)),
     }
 }
 
@@ -689,6 +751,29 @@ fn serialize_response_line(response: &StreamDeckControlResponse) -> Result<Strin
     serde_json::to_string(response)
         .map(|line| line + "\n")
         .map_err(|error| format!("Failed to serialize Stream Deck response: {error}"))
+}
+
+fn project_watch_events(
+    project_path: &str,
+    stop: Arc<AtomicBool>,
+) -> impl Iterator<Item = StreamDeckControlEvent> + '_ {
+    std::iter::once(true)
+        .chain(std::iter::repeat(false).take(29))
+        .scan((), move |_, immediate| {
+            if !immediate {
+                for _ in 0..20 {
+                    if stop.load(Ordering::SeqCst) {
+                        return None;
+                    }
+                    thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+            if stop.load(Ordering::SeqCst) {
+                None
+            } else {
+                Some(project_snapshot_event(project_path))
+            }
+        })
 }
 
 #[cfg(unix)]
@@ -705,9 +790,10 @@ fn run_unix_socket_server(
         match listener.accept() {
             Ok(stream) => {
                 let app = app.clone();
+                let stop = stop.clone();
                 if let Err(error) = thread::Builder::new()
                     .name("snipsy-streamdeck-client".into())
-                    .spawn(move || handle_unix_socket_client(app, stream.0))
+                    .spawn(move || handle_unix_socket_client(app, stop, stream.0))
                 {
                     tracing::warn!(error = %error, "Failed to start Stream Deck socket client worker");
                 }
@@ -738,11 +824,15 @@ fn run_unix_socket_server(
 }
 
 #[cfg(unix)]
-fn handle_unix_socket_client(app: AppHandle, mut stream: std::os::unix::net::UnixStream) {
+fn handle_unix_socket_client(
+    app: AppHandle,
+    stop: Arc<AtomicBool>,
+    mut stream: std::os::unix::net::UnixStream,
+) {
     let timeout = Some(std::time::Duration::from_secs(5));
     let _ = stream.set_read_timeout(timeout);
     let _ = stream.set_write_timeout(timeout);
-    if let Err(error) = handle_unix_socket_connection(app, &mut stream) {
+    if let Err(error) = handle_unix_socket_connection(app, stop, &mut stream) {
         tracing::warn!(error = %error, "Stream Deck Unix socket request failed");
     }
 }
@@ -750,17 +840,53 @@ fn handle_unix_socket_client(app: AppHandle, mut stream: std::os::unix::net::Uni
 #[cfg(unix)]
 fn handle_unix_socket_connection(
     app: AppHandle,
+    stop: Arc<AtomicBool>,
     stream: &mut std::os::unix::net::UnixStream,
 ) -> Result<(), String> {
-    let response = handle_control_request(app, read_unix_socket_request(stream));
-    let response_line = serialize_response_line(&response)?;
     use std::io::Write;
-    stream
-        .write_all(response_line.as_bytes())
-        .map_err(|error| format!("Failed to write Stream Deck socket response: {error}"))?;
-    stream
-        .flush()
-        .map_err(|error| format!("Failed to flush Stream Deck socket response: {error}"))
+    match parse_control_request(read_unix_socket_request(stream)) {
+        Ok(StreamDeckControlRequest::WatchProject { project_path }) => {
+            for event in project_watch_events(&project_path, stop) {
+                let event_line = serialize_event_line(&event)?;
+                stream.write_all(event_line.as_bytes()).map_err(|error| {
+                    format!("Failed to write Stream Deck socket event: {error}")
+                })?;
+                stream.flush().map_err(|error| {
+                    format!("Failed to flush Stream Deck socket event: {error}")
+                })?;
+            }
+            Ok(())
+        }
+        Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
+            let response = try_start_trigger_request(app, request);
+            let response_line = serialize_response_line(&response)?;
+            stream
+                .write_all(response_line.as_bytes())
+                .map_err(|error| format!("Failed to write Stream Deck socket response: {error}"))?;
+            stream
+                .flush()
+                .map_err(|error| format!("Failed to flush Stream Deck socket response: {error}"))
+        }
+        Ok(request) => {
+            let response = tauri::async_runtime::block_on(execute_request(app, request));
+            let response_line = serialize_response_line(&response)?;
+            stream
+                .write_all(response_line.as_bytes())
+                .map_err(|error| format!("Failed to write Stream Deck socket response: {error}"))?;
+            stream
+                .flush()
+                .map_err(|error| format!("Failed to flush Stream Deck socket response: {error}"))
+        }
+        Err(response) => {
+            let response_line = serialize_response_line(&response)?;
+            stream
+                .write_all(response_line.as_bytes())
+                .map_err(|error| format!("Failed to write Stream Deck socket response: {error}"))?;
+            stream
+                .flush()
+                .map_err(|error| format!("Failed to flush Stream Deck socket response: {error}"))
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -836,9 +962,13 @@ unsafe fn connect_windows_pipe(pipe: windows::Win32::Foundation::HANDLE) -> bool
 }
 
 #[cfg(target_os = "windows")]
-fn handle_windows_pipe_client(app: AppHandle, pipe: windows::Win32::Foundation::HANDLE) {
+fn handle_windows_pipe_client(
+    app: AppHandle,
+    stop: Arc<AtomicBool>,
+    pipe: windows::Win32::Foundation::HANDLE,
+) {
     unsafe {
-        if let Err(error) = handle_windows_pipe_connection(app, pipe) {
+        if let Err(error) = handle_windows_pipe_connection(app, stop, pipe) {
             tracing::warn!(error = %error, "Stream Deck named pipe request failed");
         }
         let _ = windows::Win32::System::Pipes::DisconnectNamedPipe(pipe);
@@ -849,11 +979,32 @@ fn handle_windows_pipe_client(app: AppHandle, pipe: windows::Win32::Foundation::
 #[cfg(target_os = "windows")]
 fn handle_windows_pipe_connection(
     app: AppHandle,
+    stop: Arc<AtomicBool>,
     pipe: windows::Win32::Foundation::HANDLE,
 ) -> Result<(), String> {
-    let response = handle_control_request(app, read_windows_pipe_request(pipe));
-    let response_line = serialize_response_line(&response)?;
-    write_windows_pipe_response(pipe, response_line.as_bytes())
+    match parse_control_request(read_windows_pipe_request(pipe)) {
+        Ok(StreamDeckControlRequest::WatchProject { project_path }) => {
+            for event in project_watch_events(&project_path, stop) {
+                let event_line = serialize_event_line(&event)?;
+                write_windows_pipe_response(pipe, event_line.as_bytes())?;
+            }
+            Ok(())
+        }
+        Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
+            let response = try_start_trigger_request(app, request);
+            let response_line = serialize_response_line(&response)?;
+            write_windows_pipe_response(pipe, response_line.as_bytes())
+        }
+        Ok(request) => {
+            let response = tauri::async_runtime::block_on(execute_request(app, request));
+            let response_line = serialize_response_line(&response)?;
+            write_windows_pipe_response(pipe, response_line.as_bytes())
+        }
+        Err(response) => {
+            let response_line = serialize_response_line(&response)?;
+            write_windows_pipe_response(pipe, response_line.as_bytes())
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -1000,6 +1151,21 @@ mod tests {
     }
 
     #[test]
+    fn parses_watch_project_request() {
+        let request = parse_request_line(
+            r#"{"command":"watchProject","projectPath":"C:\\Users\\seth\\snipsy-demo"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            request,
+            StreamDeckControlRequest::WatchProject {
+                project_path: r"C:\Users\seth\snipsy-demo".into()
+            }
+        );
+    }
+
+    #[test]
     fn parses_trigger_button_request() {
         let request = parse_request_line(
             r#"{"command":"triggerButton","projectPath":"C:\\demo","snippetId":"ts-1","snippetType":"text"}"#,
@@ -1067,6 +1233,21 @@ mod tests {
         assert_eq!(response.protocol_version, CONTROL_PROTOCOL_VERSION);
         assert!(response.ok);
         assert_eq!(response.result.unwrap()["status"], "accepted");
+    }
+
+    #[test]
+    fn event_line_has_protocol_version_and_event_name() {
+        let event = event_response(
+            "snipsy.project.snapshot",
+            serde_json::json!({ "projectPath": "C:\\demo", "buttons": [] }),
+        );
+        let line = serialize_event_line(&event).unwrap();
+
+        assert!(line.ends_with('\n'));
+        let value: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(value["protocolVersion"], CONTROL_PROTOCOL_VERSION);
+        assert_eq!(value["event"], "snipsy.project.snapshot");
+        assert_eq!(value["payload"]["projectPath"], "C:\\demo");
     }
 
     #[test]

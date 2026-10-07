@@ -17461,6 +17461,7 @@ var SnipsyClient = class {
   #now;
   #readFileText;
   #request;
+  #watch;
   #env;
   #platform;
   #homeDir;
@@ -17472,6 +17473,7 @@ var SnipsyClient = class {
     this.#now = options.now ?? Date.now;
     this.#readFileText = options.readFileText ?? ((path5) => readFile(path5, "utf8"));
     this.#request = options.request;
+    this.#watch = options.watch ?? watchEvents;
     this.#env = options.env ?? process.env;
     this.#platform = options.platform ?? process.platform;
     this.#homeDir = options.homeDir ?? homedir();
@@ -17526,6 +17528,26 @@ var SnipsyClient = class {
       throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
     }
     return this.#send({ command: "triggerButton", projectPath, snippetId, snippetType });
+  }
+  clearListButtonsCache(projectPath) {
+    if (projectPath) {
+      this.#listButtonsCache.delete(projectPath.trim());
+      return;
+    }
+    this.#listButtonsCache.clear();
+  }
+  async watchProject(projectPath, onEvent, onError = () => void 0) {
+    const normalizedProjectPath = projectPath.trim();
+    if (!normalizedProjectPath) {
+      throw new SnipsyControlError("Project path is required before watching a project.", "missingProjectPath");
+    }
+    const descriptor = await this.readDescriptor();
+    return this.#watch(
+      descriptor,
+      { command: "watchProject", projectPath: normalizedProjectPath },
+      onEvent,
+      onError
+    );
   }
   async #send(command) {
     const descriptor = await this.readDescriptor();
@@ -17604,6 +17626,73 @@ async function sendRequest(descriptor, command, timeoutMs = 5e3) {
   }
   return response.result;
 }
+function watchEvents(descriptor, command, onEvent, onError) {
+  const socket = createConnection(descriptor.transport.endpoint);
+  let buffer = "";
+  let closed = false;
+  let errorNotified = false;
+  const notifyError = (error40) => {
+    if (errorNotified) {
+      return;
+    }
+    errorNotified = true;
+    onError(error40);
+  };
+  socket.on("connect", () => {
+    socket.write(`${JSON.stringify(command)}
+`, "utf8");
+  });
+  socket.on("data", (chunk) => {
+    buffer += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line) {
+        try {
+          const frame = JSON.parse(line);
+          if (isControlResponse(frame)) {
+            throw new SnipsyControlError(
+              frame.error?.message ?? "Snipsy does not support project watch events.",
+              frame.error?.code ?? "watchUnavailable"
+            );
+          }
+          const event = frame;
+          if (event.protocolVersion !== CONTROL_PROTOCOL_VERSION) {
+            throw new SnipsyControlError(
+              "Snipsy returned an unsupported event protocol version.",
+              "unsupportedProtocol"
+            );
+          }
+          if (typeof event.event !== "string") {
+            throw new SnipsyControlError("Snipsy returned a malformed watch event.", "invalidEvent");
+          }
+          onEvent(event);
+        } catch (error40) {
+          notifyError(error40);
+          socket.destroy();
+          return;
+        }
+      }
+      newline = buffer.indexOf("\n");
+    }
+  });
+  socket.on("error", notifyError);
+  socket.on("close", () => {
+    if (!closed && !errorNotified) {
+      notifyError(new SnipsyControlError("Snipsy project watch ended.", "watchClosed"));
+    }
+  });
+  return {
+    close: () => {
+      closed = true;
+      socket.destroy();
+    }
+  };
+}
+function isControlResponse(value) {
+  return !!value && typeof value === "object" && "ok" in value;
+}
 function sendLine(endpoint, line, timeoutMs) {
   return new Promise((resolve, reject) => {
     const socket = createConnection(endpoint);
@@ -17649,13 +17738,31 @@ function sendLine(endpoint, line, timeoutMs) {
 // streamdeck-plugin/src/plugin.ts
 var ACTION_UUID = "com.snipsy.streamdeck.trigger-snippet";
 var client = new SnipsyClient();
+var visibleKeys = /* @__PURE__ */ new Map();
+var visibleKeyProjectPaths = /* @__PURE__ */ new Map();
+var projectWatchers = /* @__PURE__ */ new Map();
 var _TriggerSnippetAction_decorators, _init, _a;
 _TriggerSnippetAction_decorators = [action({ UUID: ACTION_UUID })];
 var TriggerSnippetAction = class extends (_a = SingletonAction) {
   async onWillAppear(ev) {
+    if (ev.action.isKey()) {
+      visibleKeys.set(ev.action.id, ev.action);
+      trackKeyProject(ev.action, ev.payload.settings.projectPath);
+      await ensureProjectWatcher(ev.payload.settings.projectPath);
+    }
     await refreshKey(ev.action, ev.payload.settings);
   }
+  async onWillDisappear(ev) {
+    visibleKeys.delete(ev.action.id);
+    visibleKeyProjectPaths.delete(ev.action.id);
+    await closeUnusedProjectWatchers();
+  }
   async onDidReceiveSettings(ev) {
+    if (ev.action.isKey()) {
+      trackKeyProject(ev.action, ev.payload.settings.projectPath);
+      await ensureProjectWatcher(ev.payload.settings.projectPath);
+      await closeUnusedProjectWatchers();
+    }
     await refreshKey(ev.action, ev.payload.settings);
   }
   async onPropertyInspectorDidAppear(ev) {
@@ -17669,6 +17776,11 @@ var TriggerSnippetAction = class extends (_a = SingletonAction) {
     }
     if (payload.type === "saveBinding") {
       await ev.action.setSettings(payload.settings);
+      if (ev.action.isKey()) {
+        trackKeyProject(ev.action, payload.settings.projectPath);
+        await ensureProjectWatcher(payload.settings.projectPath);
+        await closeUnusedProjectWatchers();
+      }
       await refreshKey(ev.action, payload.settings);
       return;
     }
@@ -17703,19 +17815,134 @@ async function refreshKey(actionInstance, settings2) {
     return;
   }
   try {
-    const buttons = await client.listButtons(settings2.projectPath);
-    const button = buttons.find((candidate) => buttonMatchesSettings(candidate, settings2));
-    if (!button) {
-      await actionInstance.setTitle("Stale\nBinding");
-      await actionInstance.setImage(settings2.iconDataUrl);
-      return;
-    }
-    await actionInstance.setTitle(button.title);
-    await actionInstance.setImage(button.iconDataUrl);
+    await refreshKeyFromButtons(actionInstance, settings2, await client.listButtons(settings2.projectPath));
   } catch (error40) {
     await actionInstance.setTitle(labelForError(error40));
     await actionInstance.setImage(settings2.iconDataUrl);
   }
+}
+async function refreshKeyFromButtons(actionInstance, settings2, buttons) {
+  if (!actionInstance.isKey() || !actionInstance.setTitle || !actionInstance.setImage) {
+    return;
+  }
+  const button = buttons.find((candidate) => buttonMatchesSettings(candidate, settings2));
+  if (!button) {
+    await actionInstance.setTitle("Stale\nBinding");
+    await actionInstance.setImage(settings2.iconDataUrl);
+    return;
+  }
+  await actionInstance.setTitle(button.title);
+  await actionInstance.setImage(button.iconDataUrl);
+}
+async function ensureProjectWatcher(projectPath) {
+  const normalizedProjectPath = projectPath?.trim();
+  if (!normalizedProjectPath || projectWatchers.has(normalizedProjectPath)) {
+    return;
+  }
+  projectWatchers.set(normalizedProjectPath, { starting: true });
+  try {
+    const watcher = await client.watchProject(
+      normalizedProjectPath,
+      (event) => {
+        void handleProjectEvent(normalizedProjectPath, event);
+      },
+      (error40) => {
+        handleWatchError(normalizedProjectPath, error40);
+      }
+    );
+    if (!hasVisibleKeyForProject(normalizedProjectPath) || !projectWatchers.has(normalizedProjectPath)) {
+      watcher.close();
+      return;
+    }
+    projectWatchers.set(normalizedProjectPath, { close: watcher.close });
+  } catch (error40) {
+    handleWatchError(normalizedProjectPath, error40);
+  }
+}
+function handleWatchError(projectPath, error40) {
+  const entry = projectWatchers.get(projectPath);
+  if (entry?.reconnectTimer) {
+    clearTimeout(entry.reconnectTimer);
+  }
+  projectWatchers.delete(projectPath);
+  if (isTerminalWatchError(error40)) {
+    plugin_default.logger.debug("Snipsy project watch is unavailable", error40);
+    return;
+  }
+  if (!hasVisibleKeyForProject(projectPath)) {
+    plugin_default.logger.debug("Failed to start Snipsy project watch", error40);
+    return;
+  }
+  const reconnectTimer = setTimeout(() => {
+    const retryEntry = projectWatchers.get(projectPath);
+    if (retryEntry?.reconnectTimer === reconnectTimer) {
+      projectWatchers.delete(projectPath);
+    }
+    if (hasVisibleKeyForProject(projectPath)) {
+      void ensureProjectWatcher(projectPath);
+    }
+  }, 2e3);
+  projectWatchers.set(projectPath, { reconnectTimer });
+  plugin_default.logger.debug("Snipsy project watch ended; retrying", error40);
+}
+async function handleProjectEvent(projectPath, event) {
+  if (event.error) {
+    for (const action2 of visibleKeys.values()) {
+      const settings2 = await action2.getSettings();
+      if (settings2.projectPath?.trim() === projectPath) {
+        await action2.setTitle(labelForError(new SnipsyControlError(event.error.message, event.error.code)));
+        await action2.setImage(settings2.iconDataUrl);
+      }
+    }
+    return;
+  }
+  if (event.event !== "snipsy.project.snapshot" || !isProjectSnapshot(event.payload)) {
+    return;
+  }
+  client.clearListButtonsCache(projectPath);
+  for (const action2 of visibleKeys.values()) {
+    const settings2 = await action2.getSettings();
+    if (settings2.projectPath?.trim() === projectPath) {
+      await refreshKeyFromButtons(action2, settings2, event.payload.buttons);
+    }
+  }
+}
+async function closeUnusedProjectWatchers() {
+  for (const [projectPath, watcher] of projectWatchers) {
+    if (!hasVisibleKeyForProject(projectPath)) {
+      if (watcher.reconnectTimer) {
+        clearTimeout(watcher.reconnectTimer);
+      }
+      watcher.close?.();
+      projectWatchers.delete(projectPath);
+    }
+  }
+}
+function hasVisibleKeyForProject(projectPath) {
+  for (const visibleProjectPath of visibleKeyProjectPaths.values()) {
+    if (visibleProjectPath === projectPath) {
+      return true;
+    }
+  }
+  return false;
+}
+function trackKeyProject(action2, projectPath) {
+  const normalizedProjectPath = projectPath?.trim();
+  if (normalizedProjectPath) {
+    visibleKeyProjectPaths.set(action2.id, normalizedProjectPath);
+    return;
+  }
+  visibleKeyProjectPaths.delete(action2.id);
+}
+function isProjectSnapshot(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  const buttons = payload.buttons;
+  return Array.isArray(buttons);
+}
+function isTerminalWatchError(error40) {
+  return error40 instanceof SnipsyControlError && (error40.code === "unknownCommand" || error40.code === "unsupportedProtocol" || error40.code === "unsupportedTransport" || error40.code === "invalidEvent");
 }
 async function sendButtonsToInspector(actionInstance, projectPath) {
   const settings2 = await actionInstance.getSettings();

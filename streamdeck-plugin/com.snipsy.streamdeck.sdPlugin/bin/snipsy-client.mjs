@@ -19,6 +19,7 @@ var SnipsyClient = class {
   #now;
   #readFileText;
   #request;
+  #watch;
   #env;
   #platform;
   #homeDir;
@@ -30,6 +31,7 @@ var SnipsyClient = class {
     this.#now = options.now ?? Date.now;
     this.#readFileText = options.readFileText ?? ((path) => readFile(path, "utf8"));
     this.#request = options.request;
+    this.#watch = options.watch ?? watchEvents;
     this.#env = options.env ?? process.env;
     this.#platform = options.platform ?? process.platform;
     this.#homeDir = options.homeDir ?? homedir();
@@ -84,6 +86,26 @@ var SnipsyClient = class {
       throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
     }
     return this.#send({ command: "triggerButton", projectPath, snippetId, snippetType });
+  }
+  clearListButtonsCache(projectPath) {
+    if (projectPath) {
+      this.#listButtonsCache.delete(projectPath.trim());
+      return;
+    }
+    this.#listButtonsCache.clear();
+  }
+  async watchProject(projectPath, onEvent, onError = () => void 0) {
+    const normalizedProjectPath = projectPath.trim();
+    if (!normalizedProjectPath) {
+      throw new SnipsyControlError("Project path is required before watching a project.", "missingProjectPath");
+    }
+    const descriptor = await this.readDescriptor();
+    return this.#watch(
+      descriptor,
+      { command: "watchProject", projectPath: normalizedProjectPath },
+      onEvent,
+      onError
+    );
   }
   async #send(command) {
     const descriptor = await this.readDescriptor();
@@ -162,6 +184,73 @@ async function sendRequest(descriptor, command, timeoutMs = 5e3) {
   }
   return response.result;
 }
+function watchEvents(descriptor, command, onEvent, onError) {
+  const socket = createConnection(descriptor.transport.endpoint);
+  let buffer = "";
+  let closed = false;
+  let errorNotified = false;
+  const notifyError = (error) => {
+    if (errorNotified) {
+      return;
+    }
+    errorNotified = true;
+    onError(error);
+  };
+  socket.on("connect", () => {
+    socket.write(`${JSON.stringify(command)}
+`, "utf8");
+  });
+  socket.on("data", (chunk) => {
+    buffer += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line) {
+        try {
+          const frame = JSON.parse(line);
+          if (isControlResponse(frame)) {
+            throw new SnipsyControlError(
+              frame.error?.message ?? "Snipsy does not support project watch events.",
+              frame.error?.code ?? "watchUnavailable"
+            );
+          }
+          const event = frame;
+          if (event.protocolVersion !== CONTROL_PROTOCOL_VERSION) {
+            throw new SnipsyControlError(
+              "Snipsy returned an unsupported event protocol version.",
+              "unsupportedProtocol"
+            );
+          }
+          if (typeof event.event !== "string") {
+            throw new SnipsyControlError("Snipsy returned a malformed watch event.", "invalidEvent");
+          }
+          onEvent(event);
+        } catch (error) {
+          notifyError(error);
+          socket.destroy();
+          return;
+        }
+      }
+      newline = buffer.indexOf("\n");
+    }
+  });
+  socket.on("error", notifyError);
+  socket.on("close", () => {
+    if (!closed && !errorNotified) {
+      notifyError(new SnipsyControlError("Snipsy project watch ended.", "watchClosed"));
+    }
+  });
+  return {
+    close: () => {
+      closed = true;
+      socket.destroy();
+    }
+  };
+}
+function isControlResponse(value) {
+  return !!value && typeof value === "object" && "ok" in value;
+}
 function sendLine(endpoint, line, timeoutMs) {
   return new Promise((resolve, reject) => {
     const socket = createConnection(endpoint);
@@ -210,5 +299,6 @@ export {
   defaultDescriptorPath,
   sendRequest,
   validateDescriptor,
-  validateDescriptorForPlatform
+  validateDescriptorForPlatform,
+  watchEvents
 };

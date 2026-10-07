@@ -12,6 +12,7 @@ import {
   sendRequest,
   validateDescriptor,
   validateDescriptorForPlatform,
+  watchEvents,
 } from "../com.snipsy.streamdeck.sdPlugin/bin/snipsy-client.mjs";
 
 const descriptor = {
@@ -171,6 +172,177 @@ test("sends triggerButton requests with semantic snippet bindings", async () => 
   ]);
 });
 
+test("subscribes to project button updates through watchProject", async () => {
+  const requests = [];
+  const client = new SnipsyClient({
+    platform: "win32",
+    readFileText: async () => JSON.stringify(descriptor),
+    watch: (_descriptor, command, onEvent) => {
+      requests.push(command);
+      onEvent({
+        protocolVersion: 1,
+        event: "snipsy.project.snapshot",
+        payload: { projectPath: "C:\\demo", buttons: [] },
+      });
+      return { close: () => undefined };
+    },
+  });
+  const events = [];
+
+  const watcher = await client.watchProject(" C:\\demo ", (event) => events.push(event));
+  watcher.close();
+
+  assert.deepEqual(requests, [{ command: "watchProject", projectPath: "C:\\demo" }]);
+  assert.equal(events[0].event, "snipsy.project.snapshot");
+});
+
+test("parses newline-delimited project watch events", async () => {
+  const endpoint =
+    process.platform === "win32"
+      ? `\\\\.\\pipe\\snipsy-streamdeck-watch-test-${process.pid}-${Date.now()}`
+      : `/tmp/snipsy-streamdeck-watch-test-${process.pid}-${Date.now()}.sock`;
+  const server = createServer((socket) => {
+    let request = "";
+    socket.on("data", (chunk) => {
+      request += chunk.toString("utf8");
+      if (!request.includes("\n")) return;
+      const command = JSON.parse(request.trim());
+      socket.write(
+        `${JSON.stringify({
+          protocolVersion: 1,
+          event: "snipsy.project.snapshot",
+          payload: { projectPath: command.projectPath, buttons: [] },
+        })}\n`,
+      );
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(endpoint, resolve);
+  });
+  try {
+    const events = [];
+    const errors = [];
+    const watcher = watchEvents(
+      {
+        ...descriptor,
+        transport: {
+          ...descriptor.transport,
+          kind: process.platform === "win32" ? "windowsNamedPipe" : "unixSocket",
+          endpoint,
+        },
+      },
+      { command: "watchProject", projectPath: "C:\\demo" },
+      (event) => events.push(event),
+      (error) => errors.push(error),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    watcher.close();
+
+    assert.equal(errors.length, 0);
+    assert.equal(events[0].event, "snipsy.project.snapshot");
+    assert.deepEqual(events[0].payload, { projectPath: "C:\\demo", buttons: [] });
+  } finally {
+    server.close();
+    if (process.platform !== "win32") {
+      await rm(endpoint, { force: true });
+    }
+  }
+});
+
+test("rejects non-event watch response frames once", async () => {
+  const endpoint =
+    process.platform === "win32"
+      ? `\\\\.\\pipe\\snipsy-streamdeck-watch-response-test-${process.pid}-${Date.now()}`
+      : `/tmp/snipsy-streamdeck-watch-response-test-${process.pid}-${Date.now()}.sock`;
+  const server = createServer((socket) => {
+    socket.on("data", () => {
+      socket.end(
+        `${JSON.stringify({
+          protocolVersion: 1,
+          ok: false,
+          error: { code: "unknownCommand", message: "Unknown command: watchProject" },
+        })}\n`,
+      );
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(endpoint, resolve);
+  });
+  try {
+    const errors = [];
+    const watcher = watchEvents(
+      {
+        ...descriptor,
+        transport: {
+          ...descriptor.transport,
+          kind: process.platform === "win32" ? "windowsNamedPipe" : "unixSocket",
+          endpoint,
+        },
+      },
+      { command: "watchProject", projectPath: "C:\\demo" },
+      () => undefined,
+      (error) => errors.push(error),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    watcher.close();
+
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, "unknownCommand");
+  } finally {
+    server.close();
+    if (process.platform !== "win32") {
+      await rm(endpoint, { force: true });
+    }
+  }
+});
+
+test("reports malformed watch events only once", async () => {
+  const endpoint =
+    process.platform === "win32"
+      ? `\\\\.\\pipe\\snipsy-streamdeck-watch-malformed-test-${process.pid}-${Date.now()}`
+      : `/tmp/snipsy-streamdeck-watch-malformed-test-${process.pid}-${Date.now()}.sock`;
+  const server = createServer((socket) => {
+    socket.on("data", () => {
+      socket.end(`${JSON.stringify({ protocolVersion: 1, payload: {} })}\n`);
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(endpoint, resolve);
+  });
+  try {
+    const errors = [];
+    const watcher = watchEvents(
+      {
+        ...descriptor,
+        transport: {
+          ...descriptor.transport,
+          kind: process.platform === "win32" ? "windowsNamedPipe" : "unixSocket",
+          endpoint,
+        },
+      },
+      { command: "watchProject", projectPath: "C:\\demo" },
+      () => undefined,
+      (error) => errors.push(error),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    watcher.close();
+
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, "invalidEvent");
+  } finally {
+    server.close();
+    if (process.platform !== "win32") {
+      await rm(endpoint, { force: true });
+    }
+  }
+});
+
 test(
   "round-trips requests over an actual Windows named pipe",
   { skip: process.platform !== "win32" },
@@ -268,6 +440,8 @@ test("plugin key refresh surfaces stale and offline states", async () => {
   const source = await readFile(new URL("../src/plugin.ts", import.meta.url), "utf8");
 
   assert.match(source, /client\.listButtons\(settings\.projectPath\)/);
+  assert.match(source, /client\.watchProject\(/);
+  assert.match(source, /snipsy\.project\.snapshot/);
   assert.match(source, /Stale\\nBinding/);
   assert.match(source, /Open\\nSnipsy/);
   assert.match(source, /Snipsy\\nOffline/);
