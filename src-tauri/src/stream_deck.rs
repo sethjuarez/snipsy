@@ -29,6 +29,12 @@ pub struct StreamDeckTriggerResult {
     pub status: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamDeckRunStatus {
+    pub active: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamDeckAction {
     Text(TextSnippet),
@@ -91,7 +97,7 @@ pub async fn trigger_stream_deck_button(
     let automations = crate::commands::load_automations(project_path.clone(), None)?;
     let action = resolve_action(&data, &automations, &snippet_id, &snippet_type)?;
     let key = StreamDeckRunKey {
-        project_path: project_path.trim().into(),
+        project_path: normalize_project_path_key(&project_path),
         snippet_id: snippet_id.clone(),
         snippet_type: snippet_type.clone(),
     };
@@ -236,6 +242,49 @@ pub async fn trigger_stream_deck_button(
             ))
         }
     }
+}
+
+pub fn stream_deck_button_status(
+    project_path: String,
+    snippet_id: String,
+    snippet_type: String,
+) -> Result<StreamDeckRunStatus, String> {
+    let key = StreamDeckRunKey {
+        project_path: normalize_project_path_key(&project_path),
+        snippet_id,
+        snippet_type,
+    };
+    let active = active_run_cell()
+        .lock()
+        .map_err(|_| "Stream Deck run registry is unavailable".to_string())?
+        .as_ref()
+        .map(|run| run.key == key)
+        .unwrap_or(false);
+    Ok(StreamDeckRunStatus { active })
+}
+
+fn normalize_project_path_key(project_path: &str) -> String {
+    let trimmed = project_path.trim();
+    let canonical = trim_trailing_project_separators(trimmed).to_string();
+    #[cfg(target_os = "windows")]
+    {
+        canonical.to_lowercase()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        canonical
+    }
+}
+
+fn trim_trailing_project_separators(path: &str) -> &str {
+    let mut trimmed = path;
+    while trimmed.len() > 1 && (trimmed.ends_with('\\') || trimmed.ends_with('/')) {
+        if trimmed.len() == 3 && trimmed.as_bytes()[1] == b':' {
+            break;
+        }
+        trimmed = &trimmed[..trimmed.len() - 1];
+    }
+    trimmed
 }
 
 fn trigger_result(
@@ -989,5 +1038,49 @@ mod tests {
 
         clear_run(run_id);
         assert!(active_run_cell().lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn project_path_keys_trim_trailing_separators() {
+        #[cfg(target_os = "windows")]
+        assert_eq!(normalize_project_path_key(" C:\\demo\\ "), "c:\\demo");
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(normalize_project_path_key(" /tmp/demo/ "), "/tmp/demo");
+        assert_eq!(
+            normalize_project_path_key(" C:\\demo\\ "),
+            normalize_project_path_key("C:\\demo")
+        );
+    }
+
+    #[test]
+    fn button_status_reports_active_matching_run() {
+        let _guard = RUN_REGISTRY_TEST_LOCK.lock().unwrap();
+        *active_run_cell().lock().unwrap() = None;
+        let key = StreamDeckRunKey {
+            project_path: normalize_project_path_key("C:\\demo\\"),
+            snippet_id: "text-1".into(),
+            snippet_type: "text".into(),
+        };
+        let run_id = begin_run(
+            key,
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            stream_deck_button_status(" C:\\demo ".into(), "text-1".into(), "text".into())
+                .unwrap()
+                .active
+        );
+        assert!(
+            !stream_deck_button_status(" C:\\demo ".into(), "text-2".into(), "text".into())
+                .unwrap()
+                .active
+        );
+
+        clear_run(run_id);
     }
 }

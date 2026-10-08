@@ -30,6 +30,7 @@ type InspectorMessage =
 const client = new SnipsyClient();
 const visibleKeys = new Map<string, KeyAction<SnipsyActionSettings>>();
 const visibleKeyProjectPaths = new Map<string, string>();
+const activePollers = new Map<string, ReturnType<typeof setInterval>>();
 const projectWatchers = new Map<
   string,
   {
@@ -42,27 +43,30 @@ const projectWatchers = new Map<
 @action({ UUID: ACTION_UUID })
 class TriggerSnippetAction extends SingletonAction<SnipsyActionSettings> {
   override async onWillAppear(ev: WillAppearEvent<SnipsyActionSettings>): Promise<void> {
+    await refreshKey(ev.action, ev.payload.settings);
     if (ev.action.isKey()) {
       visibleKeys.set(ev.action.id, ev.action);
       trackKeyProject(ev.action, ev.payload.settings.projectPath);
       await ensureProjectWatcher(ev.payload.settings.projectPath);
+      await refreshRunningState(ev.action, ev.payload.settings);
     }
-    await refreshKey(ev.action, ev.payload.settings);
   }
 
   override async onWillDisappear(ev: WillDisappearEvent<SnipsyActionSettings>): Promise<void> {
+    stopRunningPoll(ev.action.id);
     visibleKeys.delete(ev.action.id);
     visibleKeyProjectPaths.delete(ev.action.id);
     await closeUnusedProjectWatchers();
   }
 
   override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<SnipsyActionSettings>): Promise<void> {
+    await refreshKey(ev.action, ev.payload.settings);
     if (ev.action.isKey()) {
       trackKeyProject(ev.action, ev.payload.settings.projectPath);
       await ensureProjectWatcher(ev.payload.settings.projectPath);
       await closeUnusedProjectWatchers();
+      await refreshRunningState(ev.action, ev.payload.settings);
     }
-    await refreshKey(ev.action, ev.payload.settings);
   }
 
   override async onPropertyInspectorDidAppear(
@@ -100,11 +104,91 @@ class TriggerSnippetAction extends SingletonAction<SnipsyActionSettings> {
     try {
       const result = await client.triggerButton(settings.projectPath, settings.snippetId, settings.snippetType);
       streamDeck.logger.debug(`Snipsy Stream Deck trigger ${result.status}: ${result.snippetType}/${result.id}`);
+      if (result.status === "started") {
+        await setRunningState(ev.action, settings, true, result.title);
+        startRunningPoll(ev.action, settings);
+      } else {
+        stopRunningPoll(ev.action.id);
+        await setRunningState(ev.action, settings, false);
+        await refreshKey(ev.action, settings);
+      }
       await ev.action.showOk();
     } catch (error) {
+      stopRunningPoll(ev.action.id);
+      await setRunningState(ev.action, settings, false);
       await ev.action.setTitle(labelForError(error));
       await ev.action.showAlert();
     }
+  }
+}
+
+async function refreshRunningState(
+  actionInstance: KeyAction<SnipsyActionSettings>,
+  settings: SnipsyActionSettings,
+): Promise<void> {
+  if (!settings.projectPath || !settings.snippetId || !settings.snippetType) {
+    stopRunningPoll(actionInstance.id);
+    await setRunningState(actionInstance, settings, false);
+    return;
+  }
+  try {
+    const status = await client.buttonStatus(settings.projectPath, settings.snippetId, settings.snippetType);
+    await setRunningState(actionInstance, settings, status.active);
+    if (status.active) {
+      startRunningPoll(actionInstance, settings);
+    } else {
+      stopRunningPoll(actionInstance.id);
+    }
+  } catch (error) {
+    stopRunningPoll(actionInstance.id);
+    await setRunningState(actionInstance, settings, false);
+    await refreshKey(actionInstance, settings);
+    streamDeck.logger.debug("Failed to refresh Snipsy running state", error);
+  }
+}
+
+async function setRunningState(
+  actionInstance: KeyAction<SnipsyActionSettings>,
+  settings: SnipsyActionSettings,
+  active: boolean,
+  title = settings.title,
+): Promise<void> {
+  await actionInstance.setState(active ? 1 : 0);
+  if (active) {
+    await actionInstance.setTitle(`Stop\n${title ?? "Snippet"}`);
+  }
+}
+
+function startRunningPoll(actionInstance: KeyAction<SnipsyActionSettings>, settings: SnipsyActionSettings): void {
+  stopRunningPoll(actionInstance.id);
+  if (!settings.projectPath || !settings.snippetId || !settings.snippetType) {
+    return;
+  }
+  const poller = setInterval(() => {
+    void (async () => {
+      try {
+        const status = await client.buttonStatus(settings.projectPath!, settings.snippetId!, settings.snippetType!);
+        if (!status.active) {
+          stopRunningPoll(actionInstance.id);
+          await setRunningState(actionInstance, settings, false);
+          await refreshKey(actionInstance, settings);
+        }
+      } catch (error) {
+        stopRunningPoll(actionInstance.id);
+        await setRunningState(actionInstance, settings, false);
+        await refreshKey(actionInstance, settings);
+        streamDeck.logger.debug("Failed to poll Snipsy running state", error);
+      }
+    })();
+  }, 1000);
+  activePollers.set(actionInstance.id, poller);
+}
+
+function stopRunningPoll(actionId: string): void {
+  const poller = activePollers.get(actionId);
+  if (poller) {
+    clearInterval(poller);
+    activePollers.delete(actionId);
   }
 }
 
@@ -227,6 +311,7 @@ async function handleProjectEvent(projectPath: string, event: StreamDeckControlE
     const settings = await action.getSettings();
     if (settings.projectPath?.trim() === projectPath) {
       await refreshKeyFromButtons(action, settings, event.payload.buttons);
+      await refreshRunningState(action, settings);
     }
   }
 }

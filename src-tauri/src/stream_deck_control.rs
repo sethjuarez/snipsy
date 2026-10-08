@@ -92,6 +92,14 @@ pub enum StreamDeckControlRequest {
         #[serde(rename = "projectPath")]
         project_path: String,
     },
+    ButtonStatus {
+        #[serde(rename = "projectPath")]
+        project_path: String,
+        #[serde(rename = "snippetId")]
+        snippet_id: String,
+        #[serde(rename = "snippetType")]
+        snippet_type: String,
+    },
     TriggerButton {
         #[serde(rename = "projectPath")]
         project_path: String,
@@ -255,7 +263,12 @@ pub fn parse_request_line(line: &str) -> Result<StreamDeckControlRequest, Stream
     })?;
     match value.get("command").and_then(Value::as_str) {
         Some(
-            "status" | "activeProjectButtons" | "listButtons" | "watchProject" | "triggerButton",
+            "status"
+            | "activeProjectButtons"
+            | "listButtons"
+            | "watchProject"
+            | "buttonStatus"
+            | "triggerButton",
         ) => {}
         Some(command) => {
             return Err(StreamDeckControlError {
@@ -344,6 +357,19 @@ async fn execute_request_inner(
                 serde_json::json!({ "projectPath": project_path, "buttons": buttons }),
             )
             .map_err(|error| format!("Failed to encode Stream Deck project snapshot: {error}"))
+        }
+        StreamDeckControlRequest::ButtonStatus {
+            project_path,
+            snippet_id,
+            snippet_type,
+        } => {
+            let result = crate::stream_deck::stream_deck_button_status(
+                project_path,
+                snippet_id,
+                snippet_type,
+            )?;
+            serde_json::to_value(result)
+                .map_err(|error| format!("Failed to encode Stream Deck button status: {error}"))
         }
         StreamDeckControlRequest::TriggerButton {
             project_path,
@@ -1327,6 +1353,23 @@ mod tests {
             request,
             StreamDeckControlRequest::WatchProject {
                 project_path: r"C:\Users\seth\snipsy-demo".into()
+            }
+        );
+    }
+
+    #[test]
+    fn parses_button_status_request() {
+        let request = parse_request_line(
+            r#"{"command":"buttonStatus","projectPath":"C:\\demo","snippetId":"ts-1","snippetType":"text"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            request,
+            StreamDeckControlRequest::ButtonStatus {
+                project_path: r"C:\demo".into(),
+                snippet_id: "ts-1".into(),
+                snippet_type: "text".into(),
             }
         );
     }

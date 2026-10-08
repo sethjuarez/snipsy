@@ -90,6 +90,12 @@ var SnipsyClient = class {
     }
     return this.#send({ command: "triggerButton", projectPath, snippetId, snippetType });
   }
+  async buttonStatus(projectPath, snippetId, snippetType) {
+    if (!projectPath.trim() || !snippetId.trim()) {
+      throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
+    }
+    return this.#send({ command: "buttonStatus", projectPath, snippetId, snippetType });
+  }
   clearListButtonsCache(projectPath) {
     if (projectPath) {
       this.#listButtonsCache.delete(projectPath.trim());

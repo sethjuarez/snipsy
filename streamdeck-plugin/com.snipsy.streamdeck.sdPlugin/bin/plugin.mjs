@@ -17532,6 +17532,12 @@ var SnipsyClient = class {
     }
     return this.#send({ command: "triggerButton", projectPath, snippetId, snippetType });
   }
+  async buttonStatus(projectPath, snippetId, snippetType) {
+    if (!projectPath.trim() || !snippetId.trim()) {
+      throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
+    }
+    return this.#send({ command: "buttonStatus", projectPath, snippetId, snippetType });
+  }
   clearListButtonsCache(projectPath) {
     if (projectPath) {
       this.#listButtonsCache.delete(projectPath.trim());
@@ -17743,30 +17749,34 @@ var ACTION_UUID = "com.snipsy.streamdeck.trigger-snippet";
 var client = new SnipsyClient();
 var visibleKeys = /* @__PURE__ */ new Map();
 var visibleKeyProjectPaths = /* @__PURE__ */ new Map();
+var activePollers = /* @__PURE__ */ new Map();
 var projectWatchers = /* @__PURE__ */ new Map();
 var _TriggerSnippetAction_decorators, _init, _a;
 _TriggerSnippetAction_decorators = [action({ UUID: ACTION_UUID })];
 var TriggerSnippetAction = class extends (_a = SingletonAction) {
   async onWillAppear(ev) {
+    await refreshKey(ev.action, ev.payload.settings);
     if (ev.action.isKey()) {
       visibleKeys.set(ev.action.id, ev.action);
       trackKeyProject(ev.action, ev.payload.settings.projectPath);
       await ensureProjectWatcher(ev.payload.settings.projectPath);
+      await refreshRunningState(ev.action, ev.payload.settings);
     }
-    await refreshKey(ev.action, ev.payload.settings);
   }
   async onWillDisappear(ev) {
+    stopRunningPoll(ev.action.id);
     visibleKeys.delete(ev.action.id);
     visibleKeyProjectPaths.delete(ev.action.id);
     await closeUnusedProjectWatchers();
   }
   async onDidReceiveSettings(ev) {
+    await refreshKey(ev.action, ev.payload.settings);
     if (ev.action.isKey()) {
       trackKeyProject(ev.action, ev.payload.settings.projectPath);
       await ensureProjectWatcher(ev.payload.settings.projectPath);
       await closeUnusedProjectWatchers();
+      await refreshRunningState(ev.action, ev.payload.settings);
     }
-    await refreshKey(ev.action, ev.payload.settings);
   }
   async onPropertyInspectorDidAppear(ev) {
     await sendButtonsToInspector(ev.action);
@@ -17798,8 +17808,18 @@ var TriggerSnippetAction = class extends (_a = SingletonAction) {
     try {
       const result = await client.triggerButton(settings2.projectPath, settings2.snippetId, settings2.snippetType);
       plugin_default.logger.debug(`Snipsy Stream Deck trigger ${result.status}: ${result.snippetType}/${result.id}`);
+      if (result.status === "started") {
+        await setRunningState(ev.action, settings2, true, result.title);
+        startRunningPoll(ev.action, settings2);
+      } else {
+        stopRunningPoll(ev.action.id);
+        await setRunningState(ev.action, settings2, false);
+        await refreshKey(ev.action, settings2);
+      }
       await ev.action.showOk();
     } catch (error40) {
+      stopRunningPoll(ev.action.id);
+      await setRunningState(ev.action, settings2, false);
       await ev.action.setTitle(labelForError(error40));
       await ev.action.showAlert();
     }
@@ -17808,6 +17828,65 @@ var TriggerSnippetAction = class extends (_a = SingletonAction) {
 _init = __decoratorStart(_a);
 TriggerSnippetAction = __decorateElement(_init, 0, "TriggerSnippetAction", _TriggerSnippetAction_decorators, TriggerSnippetAction);
 __runInitializers(_init, 1, TriggerSnippetAction);
+async function refreshRunningState(actionInstance, settings2) {
+  if (!settings2.projectPath || !settings2.snippetId || !settings2.snippetType) {
+    stopRunningPoll(actionInstance.id);
+    await setRunningState(actionInstance, settings2, false);
+    return;
+  }
+  try {
+    const status = await client.buttonStatus(settings2.projectPath, settings2.snippetId, settings2.snippetType);
+    await setRunningState(actionInstance, settings2, status.active);
+    if (status.active) {
+      startRunningPoll(actionInstance, settings2);
+    } else {
+      stopRunningPoll(actionInstance.id);
+    }
+  } catch (error40) {
+    stopRunningPoll(actionInstance.id);
+    await setRunningState(actionInstance, settings2, false);
+    await refreshKey(actionInstance, settings2);
+    plugin_default.logger.debug("Failed to refresh Snipsy running state", error40);
+  }
+}
+async function setRunningState(actionInstance, settings2, active, title = settings2.title) {
+  await actionInstance.setState(active ? 1 : 0);
+  if (active) {
+    await actionInstance.setTitle(`Stop
+${title ?? "Snippet"}`);
+  }
+}
+function startRunningPoll(actionInstance, settings2) {
+  stopRunningPoll(actionInstance.id);
+  if (!settings2.projectPath || !settings2.snippetId || !settings2.snippetType) {
+    return;
+  }
+  const poller = setInterval(() => {
+    void (async () => {
+      try {
+        const status = await client.buttonStatus(settings2.projectPath, settings2.snippetId, settings2.snippetType);
+        if (!status.active) {
+          stopRunningPoll(actionInstance.id);
+          await setRunningState(actionInstance, settings2, false);
+          await refreshKey(actionInstance, settings2);
+        }
+      } catch (error40) {
+        stopRunningPoll(actionInstance.id);
+        await setRunningState(actionInstance, settings2, false);
+        await refreshKey(actionInstance, settings2);
+        plugin_default.logger.debug("Failed to poll Snipsy running state", error40);
+      }
+    })();
+  }, 1e3);
+  activePollers.set(actionInstance.id, poller);
+}
+function stopRunningPoll(actionId) {
+  const poller = activePollers.get(actionId);
+  if (poller) {
+    clearInterval(poller);
+    activePollers.delete(actionId);
+  }
+}
 async function refreshKey(actionInstance, settings2) {
   if (!actionInstance.isKey() || !actionInstance.setTitle || !actionInstance.setImage) {
     return;
@@ -17907,6 +17986,7 @@ async function handleProjectEvent(projectPath, event) {
     const settings2 = await action2.getSettings();
     if (settings2.projectPath?.trim() === projectPath) {
       await refreshKeyFromButtons(action2, settings2, event.payload.buttons);
+      await refreshRunningState(action2, settings2);
     }
   }
 }
