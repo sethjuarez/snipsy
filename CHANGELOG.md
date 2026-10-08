@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/sethjuarez/snipsy/compare/v0.19.0...v0.20.0) (2026-10-08)
+
+
+### Features
+
+* **streamdeck:** add cancellable button actions ([bae7e21](https://github.com/sethjuarez/snipsy/commit/bae7e21b8bbd265ab81d9118f55b65357c21dc93))
+
 ## [0.19.0](https://github.com/sethjuarez/snipsy/compare/v0.18.0...v0.19.0) (2026-10-07)
 
 
