@@ -66,7 +66,19 @@ struct ActiveStreamDeckRun {
     video_window_label: Option<String>,
 }
 
-static ACTIVE_RUN: OnceLock<Mutex<Option<ActiveStreamDeckRun>>> = OnceLock::new();
+#[derive(Debug, Clone)]
+enum StreamDeckRunSlot {
+    Active(ActiveStreamDeckRun),
+    Stopping { run_id: u64, key: StreamDeckRunKey },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum StopRunOutcome {
+    NewlyStopping { video_window_label: Option<String> },
+    AlreadyStopping,
+}
+
+static ACTIVE_RUN: OnceLock<Mutex<Option<StreamDeckRunSlot>>> = OnceLock::new();
 static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
 
 #[tauri::command]
@@ -258,7 +270,7 @@ pub fn stream_deck_button_status(
         .lock()
         .map_err(|_| "Stream Deck run registry is unavailable".to_string())?
         .as_ref()
-        .map(|run| run.key == key)
+        .map(|slot| matches!(slot, StreamDeckRunSlot::Active(run) if run.key == key))
         .unwrap_or(false);
     Ok(StreamDeckRunStatus { active })
 }
@@ -309,7 +321,7 @@ impl Drop for RunClearGuard {
     }
 }
 
-fn active_run_cell() -> &'static Mutex<Option<ActiveStreamDeckRun>> {
+fn active_run_cell() -> &'static Mutex<Option<StreamDeckRunSlot>> {
     ACTIVE_RUN.get_or_init(|| Mutex::new(None))
 }
 
@@ -332,20 +344,27 @@ fn begin_run(
     } else {
         video_window_label
     };
-    *active = Some(ActiveStreamDeckRun {
+    *active = Some(StreamDeckRunSlot::Active(ActiveStreamDeckRun {
         run_id,
         key,
         kind,
         cancel_token,
         video_window_ready,
         video_window_label,
-    });
+    }));
     Ok(run_id)
 }
 
 fn clear_run(run_id: u64) {
     if let Ok(mut active) = active_run_cell().lock() {
-        if active.as_ref().map(|run| run.run_id) == Some(run_id) {
+        let matches_run = active.as_ref().is_some_and(|slot| match slot {
+            StreamDeckRunSlot::Active(run) => run.run_id == run_id,
+            StreamDeckRunSlot::Stopping {
+                run_id: stopping_run_id,
+                ..
+            } => *stopping_run_id == run_id,
+        });
+        if matches_run {
             *active = None;
         }
     }
@@ -356,26 +375,14 @@ fn stop_matching_run(
     key: &StreamDeckRunKey,
     action: &StreamDeckAction,
 ) -> Result<Option<StreamDeckTriggerResult>, String> {
-    let video_window_label = {
-        let active = active_run_cell()
-            .lock()
-            .map_err(|_| "Stream Deck run registry is unavailable".to_string())?;
-        let Some(run) = active.as_ref() else {
-            return Ok(None);
-        };
-        if &run.key != key {
-            return Ok(None);
-        }
-
-        run.cancel_token.store(true, Ordering::SeqCst);
-        if run.kind == ActiveRunKind::Video {
-            run.video_window_label.clone()
-        } else {
-            None
-        }
+    let Some(outcome) = mark_matching_run_stopping(key)? else {
+        return Ok(None);
     };
 
-    if let Some(label) = video_window_label {
+    if let StopRunOutcome::NewlyStopping {
+        video_window_label: Some(label),
+    } = outcome
+    {
         if let Some(window) = app.get_webview_window(&label) {
             if let Err(error) = window.destroy() {
                 tracing::warn!(error = %error, window = %label, "Failed to destroy Stream Deck playback window");
@@ -390,22 +397,53 @@ fn stop_matching_run(
     )))
 }
 
+fn mark_matching_run_stopping(key: &StreamDeckRunKey) -> Result<Option<StopRunOutcome>, String> {
+    let mut active = active_run_cell()
+        .lock()
+        .map_err(|_| "Stream Deck run registry is unavailable".to_string())?;
+    let Some(slot) = active.as_ref() else {
+        return Ok(None);
+    };
+    match slot {
+        StreamDeckRunSlot::Stopping {
+            key: stopping_key, ..
+        } if stopping_key == key => Ok(Some(StopRunOutcome::AlreadyStopping)),
+        StreamDeckRunSlot::Stopping { .. } => Ok(None),
+        StreamDeckRunSlot::Active(run) if &run.key != key => Ok(None),
+        StreamDeckRunSlot::Active(run) => {
+            run.cancel_token.store(true, Ordering::SeqCst);
+            let video_window_label = if run.kind == ActiveRunKind::Video {
+                run.video_window_label.clone()
+            } else {
+                None
+            };
+            let run_id = run.run_id;
+            let key = run.key.clone();
+            *active = Some(StreamDeckRunSlot::Stopping { run_id, key });
+            Ok(Some(StopRunOutcome::NewlyStopping { video_window_label }))
+        }
+    }
+}
+
 fn prune_stale_video_run(app: &tauri::AppHandle) {
     if let Ok(mut active) = active_run_cell().lock() {
         let is_stale_video = active
             .as_ref()
-            .map(|run| {
-                run.kind == ActiveRunKind::Video
-                    && run
-                        .video_window_ready
-                        .as_ref()
-                        .map(|ready| ready.load(Ordering::SeqCst))
-                        .unwrap_or(false)
-                    && run
-                        .video_window_label
-                        .as_deref()
-                        .and_then(|label| app.get_webview_window(label))
-                        .is_none()
+            .map(|slot| match slot {
+                StreamDeckRunSlot::Active(run) => {
+                    run.kind == ActiveRunKind::Video
+                        && run
+                            .video_window_ready
+                            .as_ref()
+                            .map(|ready| ready.load(Ordering::SeqCst))
+                            .unwrap_or(false)
+                        && run
+                            .video_window_label
+                            .as_deref()
+                            .and_then(|label| app.get_webview_window(label))
+                            .is_none()
+                }
+                StreamDeckRunSlot::Stopping { .. } => false,
             })
             .unwrap_or(false);
         if is_stale_video {
@@ -1036,6 +1074,118 @@ mod tests {
         clear_run(run_id + 1);
         assert!(active_run_cell().lock().unwrap().is_some());
 
+        clear_run(run_id);
+        assert!(active_run_cell().lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn stop_transitions_active_run_to_stopping_until_clear() {
+        let _guard = RUN_REGISTRY_TEST_LOCK.lock().unwrap();
+        *active_run_cell().lock().unwrap() = None;
+        let key = StreamDeckRunKey {
+            project_path: normalize_project_path_key("C:\\demo"),
+            snippet_id: "text-1".into(),
+            snippet_type: "text".into(),
+        };
+        let cancel_token = Arc::new(AtomicBool::new(false));
+        let run_id = begin_run(
+            key.clone(),
+            ActiveRunKind::FastType,
+            cancel_token.clone(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let outcome = mark_matching_run_stopping(&key).unwrap();
+
+        assert!(cancel_token.load(Ordering::SeqCst));
+        assert!(matches!(
+            outcome,
+            Some(StopRunOutcome::NewlyStopping {
+                video_window_label: None
+            })
+        ));
+        assert!(matches!(
+            active_run_cell().lock().unwrap().as_ref(),
+            Some(StreamDeckRunSlot::Stopping {
+                run_id: stopping_run_id,
+                key: stopping_key,
+            }) if *stopping_run_id == run_id && stopping_key == &key
+        ));
+        assert!(
+            !stream_deck_button_status("C:\\demo".into(), "text-1".into(), "text".into())
+                .unwrap()
+                .active
+        );
+
+        clear_run(run_id);
+        assert!(active_run_cell().lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn repeated_stop_for_stopping_run_is_idempotent() {
+        let _guard = RUN_REGISTRY_TEST_LOCK.lock().unwrap();
+        *active_run_cell().lock().unwrap() = None;
+        let key = StreamDeckRunKey {
+            project_path: normalize_project_path_key("C:\\demo"),
+            snippet_id: "text-1".into(),
+            snippet_type: "text".into(),
+        };
+        let run_id = begin_run(
+            key.clone(),
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+        )
+        .unwrap();
+        mark_matching_run_stopping(&key).unwrap();
+
+        assert_eq!(
+            mark_matching_run_stopping(&key).unwrap(),
+            Some(StopRunOutcome::AlreadyStopping)
+        );
+
+        clear_run(run_id);
+    }
+
+    #[test]
+    fn stopping_run_blocks_new_runs_until_clear() {
+        let _guard = RUN_REGISTRY_TEST_LOCK.lock().unwrap();
+        *active_run_cell().lock().unwrap() = None;
+        let first_key = StreamDeckRunKey {
+            project_path: normalize_project_path_key("C:\\demo"),
+            snippet_id: "text-1".into(),
+            snippet_type: "text".into(),
+        };
+        let second_key = StreamDeckRunKey {
+            project_path: normalize_project_path_key("C:\\demo"),
+            snippet_id: "text-2".into(),
+            snippet_type: "text".into(),
+        };
+        let run_id = begin_run(
+            first_key.clone(),
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+        )
+        .unwrap();
+        mark_matching_run_stopping(&first_key).unwrap();
+
+        let error = begin_run(
+            second_key,
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Another Stream Deck action is already running"));
+        clear_run(run_id + 1);
+        assert!(active_run_cell().lock().unwrap().is_some());
         clear_run(run_id);
         assert!(active_run_cell().lock().unwrap().is_none());
     }
