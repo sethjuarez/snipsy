@@ -1,4 +1,8 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::thread;
 use std::time::Duration;
 
@@ -74,9 +78,11 @@ fn release_modifiers(enigo: &mut Enigo) {
     thread::sleep(Duration::from_millis(30));
 }
 
-/// Deliver text using fast-type (simulated keystrokes).
-/// Blocks user input during delivery so focus can't be stolen.
-pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
+pub fn deliver_fast_type_with_cancel(
+    text: &str,
+    type_delay_ms: u32,
+    cancel_token: Option<Arc<AtomicBool>>,
+) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
 
@@ -90,6 +96,10 @@ pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
     let _guard = InputBlock::new();
 
     for ch in text.chars() {
+        if is_cancelled(cancel_token.as_ref()) {
+            return Ok(());
+        }
+
         // Fallback: re-focus if somehow stolen (non-Windows platforms)
         if let Some(ref ctx) = focus_ctx {
             focus::ensure_focused(ctx);
@@ -108,11 +118,32 @@ pub fn deliver_fast_type(text: &str, type_delay_ms: u32) -> Result<(), String> {
                 .text(&ch.to_string())
                 .map_err(|e| format!("Failed to type character '{ch}': {e}"))?;
         }
-        thread::sleep(Duration::from_millis(type_delay_ms as u64));
+        if !sleep_with_cancel(type_delay_ms as u64, cancel_token.as_ref()) {
+            return Ok(());
+        }
     }
 
     // _guard drops here → unblocks input
     Ok(())
+}
+
+fn is_cancelled(cancel_token: Option<&Arc<AtomicBool>>) -> bool {
+    cancel_token
+        .map(|token| token.load(Ordering::SeqCst))
+        .unwrap_or(false)
+}
+
+fn sleep_with_cancel(duration_ms: u64, cancel_token: Option<&Arc<AtomicBool>>) -> bool {
+    let mut remaining = duration_ms;
+    while remaining > 0 {
+        if is_cancelled(cancel_token) {
+            return false;
+        }
+        let chunk = remaining.min(10);
+        thread::sleep(Duration::from_millis(chunk));
+        remaining -= chunk;
+    }
+    !is_cancelled(cancel_token)
 }
 
 /// Deliver text using paste (clipboard + Ctrl+V).
@@ -175,8 +206,18 @@ pub fn deliver_text(
     type_delay: Option<u32>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
+    deliver_text_with_cancel(text, method, type_delay, None, auditaur_trace_context)
+}
+
+pub fn deliver_text_with_cancel(
+    text: String,
+    method: String,
+    type_delay: Option<u32>,
+    cancel_token: Option<Arc<AtomicBool>>,
+    _auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
     match method.as_str() {
-        "fast-type" => deliver_fast_type(&text, type_delay.unwrap_or(30)),
+        "fast-type" => deliver_fast_type_with_cancel(&text, type_delay.unwrap_or(30), cancel_token),
         "paste" => deliver_paste(&text),
         _ => Err(format!("Unknown delivery method: {method}")),
     }

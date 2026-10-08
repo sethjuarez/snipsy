@@ -16,6 +16,17 @@ export interface StreamDeckButton {
   iconDataUrl: string;
 }
 
+export interface StreamDeckTriggerResult {
+  id: string;
+  title: string;
+  snippetType: SnipsySnippetType;
+  status: "started" | "stopped" | "completed";
+}
+
+export interface StreamDeckButtonStatus {
+  active: boolean;
+}
+
 export interface StreamDeckControlDescriptor {
   schemaVersion: number;
   app: string;
@@ -62,6 +73,12 @@ type Command =
   | { command: "activeProjectButtons" }
   | { command: "listButtons"; projectPath: string }
   | { command: "watchProject"; projectPath: string }
+  | {
+      command: "buttonStatus";
+      projectPath: string;
+      snippetId: string;
+      snippetType: SnipsySnippetType;
+    }
   | {
       command: "triggerButton";
       projectPath: string;
@@ -184,11 +201,22 @@ export class SnipsyClient {
     projectPath: string,
     snippetId: string,
     snippetType: SnipsySnippetType,
-  ): Promise<unknown> {
+  ): Promise<StreamDeckTriggerResult> {
     if (!projectPath.trim() || !snippetId.trim()) {
       throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
     }
-    return this.#send({ command: "triggerButton", projectPath, snippetId, snippetType });
+    return this.#send<StreamDeckTriggerResult>({ command: "triggerButton", projectPath, snippetId, snippetType });
+  }
+
+  async buttonStatus(
+    projectPath: string,
+    snippetId: string,
+    snippetType: SnipsySnippetType,
+  ): Promise<StreamDeckButtonStatus> {
+    if (!projectPath.trim() || !snippetId.trim()) {
+      throw new SnipsyControlError("Project path and snippet binding are required.", "missingBinding");
+    }
+    return this.#send<StreamDeckButtonStatus>({ command: "buttonStatus", projectPath, snippetId, snippetType });
   }
 
   clearListButtonsCache(projectPath?: string): void {

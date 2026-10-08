@@ -194,12 +194,13 @@ test("sends triggerButton requests with semantic snippet bindings", async () => 
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
-      return { status: "triggered" };
+      return { id: "snippet-1", title: "Snippet 1", snippetType: "text", status: "started" };
     },
   });
 
-  await client.triggerButton("C:\\demo", "snippet-1", "text");
+  const result = await client.triggerButton("C:\\demo", "snippet-1", "text");
 
+  assert.equal(result.status, "started");
   assert.deepEqual(requests, [
     {
       command: "triggerButton",
@@ -217,18 +218,43 @@ test("sends triggerButton requests with automation bindings", async () => {
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
-      return { status: "triggered" };
+      return { id: "automation-1", title: "Automation 1", snippetType: "automation", status: "started" };
     },
   });
 
-  await client.triggerButton("C:\\demo", "automation-1", "automation");
+  const result = await client.triggerButton("C:\\demo", "automation-1", "automation");
 
+  assert.equal(result.status, "started");
   assert.deepEqual(requests, [
     {
       command: "triggerButton",
       projectPath: "C:\\demo",
       snippetId: "automation-1",
       snippetType: "automation",
+    },
+  ]);
+});
+
+test("sends buttonStatus requests with semantic snippet bindings", async () => {
+  const requests = [];
+  const client = new SnipsyClient({
+    ...windowsClientOptions,
+    readFileText: async () => JSON.stringify(descriptor),
+    request: async (_descriptor, command) => {
+      requests.push(command);
+      return { active: true };
+    },
+  });
+
+  const result = await client.buttonStatus("C:\\demo", "snippet-1", "text");
+
+  assert.equal(result.active, true);
+  assert.deepEqual(requests, [
+    {
+      command: "buttonStatus",
+      projectPath: "C:\\demo",
+      snippetId: "snippet-1",
+      snippetType: "text",
     },
   ]);
 });
@@ -511,6 +537,10 @@ test("plugin key refresh surfaces stale and offline states", async () => {
   assert.match(source, /Open\\nSnipsy/);
   assert.match(source, /Snipsy\\nOffline/);
   assert.match(source, /Snipsy\\nBusy/);
+  assert.match(source, /buttonStatus/);
+  assert.match(source, /setState\(active \? 1 : 0\)/);
+  assert.match(source, /Stop\\n/);
+  assert.match(source, /unknownCommand/);
   assert.match(source, /Update\\nSnipsy/);
   assert.match(source, /projectUnavailable/);
   assert.match(source, /snippetNotFound/);

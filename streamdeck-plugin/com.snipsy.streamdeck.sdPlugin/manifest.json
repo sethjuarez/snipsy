@@ -34,10 +34,17 @@
       "Tooltip": "Triggers a bound Snipsy text or video snippet.",
       "PropertyInspectorPath": "ui/property-inspector.html",
       "Controllers": ["Keypad"],
+      "DisableAutomaticStates": true,
       "States": [
         {
           "Image": "static/imgs/actions/trigger/key",
           "Title": "Snipsy",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        },
+        {
+          "Image": "static/imgs/actions/trigger/key",
+          "Title": "Stop",
           "TitleAlignment": "bottom",
           "ShowTitle": true
         }
