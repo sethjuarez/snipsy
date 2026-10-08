@@ -1,5 +1,10 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex, OnceLock,
+};
+use tauri::Manager;
 
 use crate::models::{
     DeliveryMethod, ProjectData, Script, StreamDeckIcon, TextSnippet, VideoSnippet,
@@ -21,6 +26,7 @@ pub struct StreamDeckTriggerResult {
     pub id: String,
     pub title: String,
     pub snippet_type: String,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +35,32 @@ pub enum StreamDeckAction {
     Video(VideoSnippet),
     Automation(Script),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StreamDeckRunKey {
+    project_path: String,
+    snippet_id: String,
+    snippet_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ActiveRunKind {
+    FastType,
+    Video,
+    Automation,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveStreamDeckRun {
+    run_id: u64,
+    key: StreamDeckRunKey,
+    kind: ActiveRunKind,
+    cancel_token: Arc<AtomicBool>,
+    video_window_ready: Option<Arc<AtomicBool>>,
+}
+
+static ACTIVE_RUN: OnceLock<Mutex<Option<ActiveStreamDeckRun>>> = OnceLock::new();
+static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
 
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
@@ -57,54 +89,263 @@ pub async fn trigger_stream_deck_button(
     let data = crate::commands::open_project(project_path.clone(), None)?;
     let automations = crate::commands::load_automations(project_path.clone(), None)?;
     let action = resolve_action(&data, &automations, &snippet_id, &snippet_type)?;
+    let key = StreamDeckRunKey {
+        project_path: project_path.trim().into(),
+        snippet_id: snippet_id.clone(),
+        snippet_type: snippet_type.clone(),
+    };
+
+    prune_stale_video_run(&app);
+    if let Some(result) = stop_matching_run(&app, &key, &action)? {
+        return Ok(result);
+    }
 
     match action {
         StreamDeckAction::Text(snippet) => {
-            crate::delivery::deliver_text(
-                snippet.text.clone(),
-                delivery_method_name(&snippet.delivery).into(),
-                snippet.type_delay,
-                None,
-            )?;
-            Ok(StreamDeckTriggerResult {
-                id: snippet.id,
-                title: snippet.title,
-                snippet_type: "text".into(),
-            })
+            if snippet.delivery == DeliveryMethod::Paste {
+                crate::delivery::deliver_text(
+                    snippet.text.clone(),
+                    delivery_method_name(&snippet.delivery).into(),
+                    snippet.type_delay,
+                    None,
+                )?;
+                return Ok(trigger_result(
+                    snippet.id,
+                    snippet.title,
+                    "text",
+                    "completed",
+                ));
+            }
+
+            let cancel_token = Arc::new(AtomicBool::new(false));
+            let run_id = begin_run(key, ActiveRunKind::FastType, cancel_token.clone(), None)?;
+            let text = snippet.text.clone();
+            let title = snippet.title.clone();
+            let snippet_id = snippet.id.clone();
+            let type_delay = snippet.type_delay;
+            tauri::async_runtime::spawn_blocking(move || {
+                let _guard = RunClearGuard(run_id);
+                if let Err(error) = crate::delivery::deliver_text_with_cancel(
+                    text,
+                    "fast-type".into(),
+                    type_delay,
+                    Some(cancel_token),
+                    None,
+                ) {
+                    tracing::error!(error = %error, snippet = %snippet_id, title = %title, "Stream Deck fast-type delivery failed");
+                }
+            });
+
+            Ok(trigger_result(snippet.id, snippet.title, "text", "started"))
         }
         StreamDeckAction::Video(snippet) => {
-            crate::playback::play_video(
-                app,
-                Some(project_path),
-                snippet.video_file.clone(),
-                snippet.start_time,
-                snippet.end_time,
-                snippet.speed,
-                snippet.transition_actions.clone(),
-                snippet.target_monitor.clone(),
-                snippet.end_behavior.clone(),
-                snippet.hide_cursor,
-                snippet.background_color.clone(),
-                snippet.click_to_play,
-                snippet.muted,
-                snippet.pause_stops.clone(),
-                None,
-            )
-            .await?;
-            Ok(StreamDeckTriggerResult {
-                id: snippet.id,
-                title: snippet.title,
-                snippet_type: "video".into(),
-            })
+            let cancel_token = Arc::new(AtomicBool::new(false));
+            let window_ready = Arc::new(AtomicBool::new(false));
+            let run_id = begin_run(
+                key,
+                ActiveRunKind::Video,
+                cancel_token.clone(),
+                Some(window_ready.clone()),
+            )?;
+            let app_handle = app.clone();
+            let project_path = project_path.clone();
+            let snippet_for_playback = snippet.clone();
+            tauri::async_runtime::spawn(async move {
+                let result = crate::playback::play_video_with_cancel(
+                    app_handle,
+                    Some(project_path),
+                    snippet_for_playback.video_file.clone(),
+                    snippet_for_playback.start_time,
+                    snippet_for_playback.end_time,
+                    snippet_for_playback.speed,
+                    snippet_for_playback.transition_actions.clone(),
+                    snippet_for_playback.target_monitor.clone(),
+                    snippet_for_playback.end_behavior.clone(),
+                    snippet_for_playback.hide_cursor,
+                    snippet_for_playback.background_color.clone(),
+                    snippet_for_playback.click_to_play,
+                    snippet_for_playback.muted,
+                    snippet_for_playback.pause_stops.clone(),
+                    Some(cancel_token),
+                    Some(window_ready),
+                    None,
+                )
+                .await;
+                if let Err(error) = result {
+                    tracing::error!(error = %error, snippet = %snippet_for_playback.id, title = %snippet_for_playback.title, "Stream Deck video playback failed");
+                    clear_run(run_id);
+                }
+            });
+
+            Ok(trigger_result(
+                snippet.id,
+                snippet.title,
+                "video",
+                "started",
+            ))
         }
         StreamDeckAction::Automation(script) => {
-            crate::scripting::run_automation(project_path, script.id.clone(), None).await?;
-            Ok(StreamDeckTriggerResult {
-                id: script.id,
-                title: script.title,
-                snippet_type: "automation".into(),
-            })
+            let cancel_token = Arc::new(AtomicBool::new(false));
+            let run_id = begin_run(key, ActiveRunKind::Automation, cancel_token.clone(), None)?;
+            let script_id = script.id.clone();
+            let title = script.title.clone();
+            tauri::async_runtime::spawn(async move {
+                let _guard = RunClearGuard(run_id);
+                match crate::scripting::run_automation_with_cancel(
+                    project_path,
+                    script_id.clone(),
+                    Some(cancel_token),
+                    None,
+                )
+                .await
+                {
+                    Ok(summary) => {
+                        tracing::info!(snippet = %script_id, title = %title, summary = %summary, "Stream Deck automation finished");
+                    }
+                    Err(error) => {
+                        tracing::error!(error = %error, snippet = %script_id, title = %title, "Stream Deck automation failed");
+                    }
+                }
+            });
+
+            Ok(trigger_result(
+                script.id,
+                script.title,
+                "automation",
+                "started",
+            ))
         }
+    }
+}
+
+fn trigger_result(
+    id: impl Into<String>,
+    title: impl Into<String>,
+    snippet_type: impl Into<String>,
+    status: impl Into<String>,
+) -> StreamDeckTriggerResult {
+    StreamDeckTriggerResult {
+        id: id.into(),
+        title: title.into(),
+        snippet_type: snippet_type.into(),
+        status: status.into(),
+    }
+}
+
+struct RunClearGuard(u64);
+
+impl Drop for RunClearGuard {
+    fn drop(&mut self) {
+        clear_run(self.0);
+    }
+}
+
+fn active_run_cell() -> &'static Mutex<Option<ActiveStreamDeckRun>> {
+    ACTIVE_RUN.get_or_init(|| Mutex::new(None))
+}
+
+fn begin_run(
+    key: StreamDeckRunKey,
+    kind: ActiveRunKind,
+    cancel_token: Arc<AtomicBool>,
+    video_window_ready: Option<Arc<AtomicBool>>,
+) -> Result<u64, String> {
+    let mut active = active_run_cell()
+        .lock()
+        .map_err(|_| "Stream Deck run registry is unavailable".to_string())?;
+    if active.is_some() {
+        return Err("Another Stream Deck action is already running. Click the active button again to stop it.".into());
+    }
+    let run_id = NEXT_RUN_ID.fetch_add(1, Ordering::SeqCst);
+    *active = Some(ActiveStreamDeckRun {
+        run_id,
+        key,
+        kind,
+        cancel_token,
+        video_window_ready,
+    });
+    Ok(run_id)
+}
+
+fn clear_run(run_id: u64) {
+    if let Ok(mut active) = active_run_cell().lock() {
+        if active.as_ref().map(|run| run.run_id) == Some(run_id) {
+            *active = None;
+        }
+    }
+}
+
+fn stop_matching_run(
+    app: &tauri::AppHandle,
+    key: &StreamDeckRunKey,
+    action: &StreamDeckAction,
+) -> Result<Option<StreamDeckTriggerResult>, String> {
+    let mut active = active_run_cell()
+        .lock()
+        .map_err(|_| "Stream Deck run registry is unavailable".to_string())?;
+    let Some(run) = active.as_ref() else {
+        return Ok(None);
+    };
+    if &run.key != key {
+        return Ok(None);
+    }
+
+    run.cancel_token.store(true, Ordering::SeqCst);
+    if run.kind == ActiveRunKind::Video {
+        if let Some(window) = app.get_webview_window("playback") {
+            let _ = window.destroy();
+        }
+    }
+    *active = None;
+    Ok(Some(trigger_result(
+        action_id(action),
+        action_title(action),
+        action_snippet_type(action),
+        "stopped",
+    )))
+}
+
+fn prune_stale_video_run(app: &tauri::AppHandle) {
+    if let Ok(mut active) = active_run_cell().lock() {
+        let is_stale_video = active
+            .as_ref()
+            .map(|run| {
+                run.kind == ActiveRunKind::Video
+                    && run
+                        .video_window_ready
+                        .as_ref()
+                        .map(|ready| ready.load(Ordering::SeqCst))
+                        .unwrap_or(false)
+                    && app.get_webview_window("playback").is_none()
+            })
+            .unwrap_or(false);
+        if is_stale_video {
+            *active = None;
+        }
+    }
+}
+
+fn action_id(action: &StreamDeckAction) -> String {
+    match action {
+        StreamDeckAction::Text(snippet) => snippet.id.clone(),
+        StreamDeckAction::Video(snippet) => snippet.id.clone(),
+        StreamDeckAction::Automation(script) => script.id.clone(),
+    }
+}
+
+fn action_title(action: &StreamDeckAction) -> String {
+    match action {
+        StreamDeckAction::Text(snippet) => snippet.title.clone(),
+        StreamDeckAction::Video(snippet) => snippet.title.clone(),
+        StreamDeckAction::Automation(script) => script.title.clone(),
+    }
+}
+
+fn action_snippet_type(action: &StreamDeckAction) -> &'static str {
+    match action {
+        StreamDeckAction::Text(_) => "text",
+        StreamDeckAction::Video(_) => "video",
+        StreamDeckAction::Automation(_) => "automation",
     }
 }
 
@@ -405,6 +646,9 @@ fn escape_xml(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex as TestMutex;
+
+    static RUN_REGISTRY_TEST_LOCK: TestMutex<()> = TestMutex::new(());
 
     fn decode_icon_data_url(data_url: &str) -> String {
         let encoded = data_url.trim_start_matches("data:image/svg+xml;base64,");
@@ -644,5 +888,63 @@ mod tests {
     fn delivery_method_names_match_command_values() {
         assert_eq!(delivery_method_name(&DeliveryMethod::FastType), "fast-type");
         assert_eq!(delivery_method_name(&DeliveryMethod::Paste), "paste");
+    }
+
+    #[test]
+    fn run_registry_rejects_different_active_run() {
+        let _guard = RUN_REGISTRY_TEST_LOCK.lock().unwrap();
+        *active_run_cell().lock().unwrap() = None;
+        let first_key = StreamDeckRunKey {
+            project_path: "C:\\demo".into(),
+            snippet_id: "text-1".into(),
+            snippet_type: "text".into(),
+        };
+        let second_key = StreamDeckRunKey {
+            project_path: "C:\\demo".into(),
+            snippet_id: "text-2".into(),
+            snippet_type: "text".into(),
+        };
+        let run_id = begin_run(
+            first_key,
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+
+        let error = begin_run(
+            second_key,
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Another Stream Deck action is already running"));
+        clear_run(run_id);
+    }
+
+    #[test]
+    fn clear_run_ignores_stale_run_id() {
+        let _guard = RUN_REGISTRY_TEST_LOCK.lock().unwrap();
+        *active_run_cell().lock().unwrap() = None;
+        let key = StreamDeckRunKey {
+            project_path: "C:\\demo".into(),
+            snippet_id: "text-1".into(),
+            snippet_type: "text".into(),
+        };
+        let run_id = begin_run(
+            key,
+            ActiveRunKind::FastType,
+            Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+
+        clear_run(run_id + 1);
+        assert!(active_run_cell().lock().unwrap().is_some());
+
+        clear_run(run_id);
+        assert!(active_run_cell().lock().unwrap().is_none());
     }
 }

@@ -194,12 +194,13 @@ test("sends triggerButton requests with semantic snippet bindings", async () => 
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
-      return { status: "triggered" };
+      return { id: "snippet-1", title: "Snippet 1", snippetType: "text", status: "started" };
     },
   });
 
-  await client.triggerButton("C:\\demo", "snippet-1", "text");
+  const result = await client.triggerButton("C:\\demo", "snippet-1", "text");
 
+  assert.equal(result.status, "started");
   assert.deepEqual(requests, [
     {
       command: "triggerButton",
@@ -217,12 +218,13 @@ test("sends triggerButton requests with automation bindings", async () => {
     readFileText: async () => JSON.stringify(descriptor),
     request: async (_descriptor, command) => {
       requests.push(command);
-      return { status: "triggered" };
+      return { id: "automation-1", title: "Automation 1", snippetType: "automation", status: "started" };
     },
   });
 
-  await client.triggerButton("C:\\demo", "automation-1", "automation");
+  const result = await client.triggerButton("C:\\demo", "automation-1", "automation");
 
+  assert.equal(result.status, "started");
   assert.deepEqual(requests, [
     {
       command: "triggerButton",

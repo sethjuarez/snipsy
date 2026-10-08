@@ -23,7 +23,6 @@ use tauri_plugin_auditaur::IpcTraceContext;
 
 pub const CONTROL_PROTOCOL_VERSION: u32 = 1;
 const DESCRIPTOR_FILE: &str = "stream-deck-control.json";
-static TRIGGER_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static ACTIVE_PROJECT_PATH: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -294,6 +293,8 @@ fn command_error_code(error: &str) -> &'static str {
         || error.contains("Automation not found")
     {
         "snippetNotFound"
+    } else if error.contains("Another Stream Deck action is already running") {
+        "busy"
     } else if error.contains("Unknown Stream Deck snippet type") {
         "unknownSnippetType"
     } else if error.contains("project.json")
@@ -389,6 +390,7 @@ pub fn error_response(
     }
 }
 
+#[allow(dead_code)]
 fn accepted_response(status: impl Into<String>) -> StreamDeckControlResponse {
     success_response(serde_json::json!({ "status": status.into() }))
 }
@@ -557,29 +559,6 @@ fn serialize_event_line(event: &StreamDeckControlEvent) -> Result<String, String
     serde_json::to_string(event)
         .map(|line| line + "\n")
         .map_err(|error| format!("Failed to serialize Stream Deck event: {error}"))
-}
-
-fn try_start_trigger_request(
-    app: AppHandle,
-    request: StreamDeckControlRequest,
-) -> StreamDeckControlResponse {
-    if TRIGGER_IN_PROGRESS
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        return error_response(
-            "busy",
-            "Another Stream Deck trigger is already running. Try again when it finishes.",
-        );
-    }
-
-    tauri::async_runtime::spawn(async move {
-        if let Err(error) = execute_request_inner(app, request).await {
-            tracing::warn!(error = %error, "Stream Deck trigger request failed after acceptance");
-        }
-        TRIGGER_IN_PROGRESS.store(false, Ordering::SeqCst);
-    });
-    accepted_response("accepted")
 }
 
 #[cfg(target_os = "windows")]
@@ -1042,16 +1021,6 @@ fn handle_unix_socket_connection(
             }
             Ok(())
         }
-        Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
-            let response = try_start_trigger_request(app, request);
-            let response_line = serialize_response_line(&response)?;
-            stream
-                .write_all(response_line.as_bytes())
-                .map_err(|error| format!("Failed to write Stream Deck socket response: {error}"))?;
-            stream
-                .flush()
-                .map_err(|error| format!("Failed to flush Stream Deck socket response: {error}"))
-        }
         Ok(request) => {
             let response = tauri::async_runtime::block_on(execute_request(app, request));
             let response_line = serialize_response_line(&response)?;
@@ -1174,11 +1143,6 @@ fn handle_windows_pipe_connection(
                 write_windows_pipe_response(pipe, event_line.as_bytes())?;
             }
             Ok(())
-        }
-        Ok(request @ StreamDeckControlRequest::TriggerButton { .. }) => {
-            let response = try_start_trigger_request(app, request);
-            let response_line = serialize_response_line(&response)?;
-            write_windows_pipe_response(pipe, response_line.as_bytes())
         }
         Ok(request) => {
             let response = tauri::async_runtime::block_on(execute_request(app, request));
@@ -1568,6 +1532,10 @@ mod tests {
         assert_eq!(
             command_error_code("Automation not found for Stream Deck binding: automation-1"),
             "snippetNotFound"
+        );
+        assert_eq!(
+            command_error_code("Another Stream Deck action is already running."),
+            "busy"
         );
         assert_eq!(
             command_error_code("Failed to read project.json: not found"),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBackend } from "../services";
 import { useProjectStore } from "../stores/projectStore";
-import type { StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { StreamDeckButton, StreamDeckTriggerResult, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const backend = getBackend();
@@ -53,7 +53,7 @@ function StreamDeckEmulator() {
     try {
       if (projectPath) {
         const result = await backend.triggerStreamDeckButton(projectPath, button.id, button.snippetType);
-        setStatus(`Triggered ${result.title}`);
+        setStatus(`${streamDeckStatusLabel(result.status)} ${result.title}`);
         return;
       }
 
@@ -122,6 +122,12 @@ function StreamDeckEmulator() {
       </section>
     </div>
   );
+}
+
+function streamDeckStatusLabel(status: StreamDeckTriggerResult["status"]) {
+  if (status === "stopped") return "Stopped";
+  if (status === "completed") return "Triggered";
+  return "Started";
 }
 
 function toButton(snippet: TextSnippet | VideoSnippet, snippetType: "text" | "video"): StreamDeckButton {

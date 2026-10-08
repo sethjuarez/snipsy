@@ -1,6 +1,11 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Duration;
 
 use crate::models::{AutomationContribution, Script};
 use tauri_plugin_auditaur::IpcTraceContext;
@@ -11,10 +16,26 @@ const OPEN_SITE_SETTLE_MS: u64 = 500;
 struct AutomationRunSummary {
     opened: Vec<String>,
     skipped: Vec<String>,
+    cancelled: bool,
 }
 
 impl AutomationRunSummary {
     fn message(&self) -> String {
+        if self.cancelled {
+            if self.opened.is_empty() {
+                return "Automation cancelled before accepting any contributions.".into();
+            }
+            let mut message = format!(
+                "Automation cancelled after accepting {} contribution{}",
+                self.opened.len(),
+                if self.opened.len() == 1 { "" } else { "s" }
+            );
+            message.push_str(": ");
+            message.push_str(&self.opened.join(", "));
+            message.push('.');
+            return message;
+        }
+
         let opened_count = self.opened.len();
         let skipped_count = self.skipped.len();
         let mut message = format!(
@@ -263,11 +284,18 @@ fn execute_contribution(contribution: &AutomationContribution) -> Result<(), Str
     }
 }
 
-fn execute_contribution_groups(script: &Script) -> Result<AutomationRunSummary, String> {
+fn execute_contribution_groups_with_cancel(
+    script: &Script,
+    cancel_token: Option<Arc<AtomicBool>>,
+) -> Result<AutomationRunSummary, String> {
     let mut executed = HashSet::new();
     let mut summary = AutomationRunSummary::default();
     for group in &script.contribution_groups {
         for contribution in &group.contributions {
+            if is_cancelled(cancel_token.as_ref()) {
+                summary.cancelled = true;
+                return Ok(summary);
+            }
             let key = idempotency_key(contribution);
             let label = contribution_label(contribution);
             if !executed.insert(key.clone()) {
@@ -294,10 +322,32 @@ fn execute_contribution_groups(script: &Script) -> Result<AutomationRunSummary, 
                 "Automation contribution accepted"
             );
             summary.opened.push(label);
-            std::thread::sleep(std::time::Duration::from_millis(OPEN_SITE_SETTLE_MS));
+            if !sleep_with_cancel(OPEN_SITE_SETTLE_MS, cancel_token.as_ref()) {
+                summary.cancelled = true;
+                return Ok(summary);
+            }
         }
     }
     Ok(summary)
+}
+
+fn is_cancelled(cancel_token: Option<&Arc<AtomicBool>>) -> bool {
+    cancel_token
+        .map(|token| token.load(Ordering::SeqCst))
+        .unwrap_or(false)
+}
+
+fn sleep_with_cancel(duration_ms: u64, cancel_token: Option<&Arc<AtomicBool>>) -> bool {
+    let mut remaining = duration_ms;
+    while remaining > 0 {
+        if is_cancelled(cancel_token) {
+            return false;
+        }
+        let chunk = remaining.min(25);
+        std::thread::sleep(Duration::from_millis(chunk));
+        remaining -= chunk;
+    }
+    !is_cancelled(cancel_token)
 }
 
 #[tauri::command]
@@ -307,12 +357,22 @@ pub async fn run_automation(
     script_id: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<String, String> {
+    run_automation_with_cancel(project_path, script_id, None, auditaur_trace_context).await
+}
+
+pub async fn run_automation_with_cancel(
+    project_path: String,
+    script_id: String,
+    cancel_token: Option<Arc<AtomicBool>>,
+    _auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<String, String> {
     let script = load_automation(&project_path, &script_id)?;
 
-    let summary =
-        tauri::async_runtime::spawn_blocking(move || execute_contribution_groups(&script))
-            .await
-            .map_err(|error| format!("Automation task failed: {error}"))??;
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        execute_contribution_groups_with_cancel(&script, cancel_token)
+    })
+    .await
+    .map_err(|error| format!("Automation task failed: {error}"))??;
 
     Ok(summary.message())
 }
@@ -387,11 +447,26 @@ mod tests {
         let summary = AutomationRunSummary {
             opened: vec!["Caldova".into(), "Teams".into()],
             skipped: vec!["Teams duplicate".into()],
+            cancelled: false,
         };
 
         assert_eq!(
             summary.message(),
             "Opened 2 sites: Caldova, Teams. Skipped 1 duplicate."
+        );
+    }
+
+    #[test]
+    fn automation_run_summary_reports_cancellation() {
+        let summary = AutomationRunSummary {
+            opened: vec!["Caldova".into()],
+            skipped: vec![],
+            cancelled: true,
+        };
+
+        assert_eq!(
+            summary.message(),
+            "Automation cancelled after accepting 1 contribution: Caldova."
         );
     }
 

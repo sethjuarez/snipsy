@@ -319,6 +319,7 @@ export class MockBackendService implements BackendService {
         id: script.id,
         title: script.title,
         snippetType,
+        status: "completed" as const,
       };
     }
     const snippets = snippetType === "text" ? this.data.textSnippets : this.data.videoSnippets;
@@ -348,6 +349,7 @@ export class MockBackendService implements BackendService {
       id: snippet.id,
       title: snippet.title,
       snippetType,
+      status: "completed" as const,
     };
   }
 

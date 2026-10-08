@@ -98,7 +98,8 @@ class TriggerSnippetAction extends SingletonAction<SnipsyActionSettings> {
     }
 
     try {
-      await client.triggerButton(settings.projectPath, settings.snippetId, settings.snippetType);
+      const result = await client.triggerButton(settings.projectPath, settings.snippetId, settings.snippetType);
+      streamDeck.logger.debug(`Snipsy Stream Deck trigger ${result.status}: ${result.snippetType}/${result.id}`);
       await ev.action.showOk();
     } catch (error) {
       await ev.action.setTitle(labelForError(error));

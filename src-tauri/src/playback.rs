@@ -1,3 +1,7 @@
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_auditaur::IpcTraceContext;
 
@@ -22,6 +26,51 @@ pub async fn play_video(
     pause_stops: Option<Vec<PauseStop>>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
+    play_video_with_cancel(
+        app,
+        project_path,
+        video_file,
+        start_time,
+        end_time,
+        speed,
+        transition_actions,
+        target_monitor,
+        end_behavior,
+        hide_cursor,
+        background_color,
+        click_to_play,
+        muted,
+        pause_stops,
+        None,
+        None,
+        auditaur_trace_context,
+    )
+    .await
+}
+
+pub async fn play_video_with_cancel(
+    app: AppHandle,
+    project_path: Option<String>,
+    video_file: String,
+    start_time: f64,
+    end_time: f64,
+    speed: f64,
+    transition_actions: Option<Vec<TransitionAction>>,
+    target_monitor: Option<String>,
+    end_behavior: Option<String>,
+    hide_cursor: Option<bool>,
+    background_color: Option<String>,
+    click_to_play: Option<bool>,
+    muted: Option<bool>,
+    pause_stops: Option<Vec<PauseStop>>,
+    cancel_token: Option<Arc<AtomicBool>>,
+    window_ready_token: Option<Arc<AtomicBool>>,
+    _auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<(), String> {
+    if is_cancelled(cancel_token.as_ref()) {
+        return Ok(());
+    }
+
     // Close existing playback window if any
     if let Some(existing) = app.get_webview_window("playback") {
         let _ = existing.destroy();
@@ -70,8 +119,16 @@ pub async fn play_video(
         hide_cursor.unwrap_or(true),
         transition_actions,
         (end_time - start_time) / speed,
+        cancel_token,
+        window_ready_token,
     )
     .await
+}
+
+fn is_cancelled(cancel_token: Option<&Arc<AtomicBool>>) -> bool {
+    cancel_token
+        .map(|token| token.load(Ordering::SeqCst))
+        .unwrap_or(false)
 }
 
 fn resolve_target_monitor(target_monitor: Option<&str>) -> Option<String> {
@@ -104,7 +161,13 @@ async fn create_playback_window(
     hide_cursor: bool,
     transition_actions: Option<Vec<TransitionAction>>,
     video_duration: f64,
+    cancel_token: Option<Arc<AtomicBool>>,
+    window_ready_token: Option<Arc<AtomicBool>>,
 ) -> Result<(), String> {
+    if is_cancelled(cancel_token.as_ref()) {
+        return Ok(());
+    }
+
     let init_script = format!(
         "window.__IS_PLAYBACK = true;\
          document.documentElement.style.background = '{background_color}';\
@@ -158,6 +221,11 @@ async fn create_playback_window(
         .build()
         .map_err(|e| format!("Failed to create playback window: {}", e))?;
 
+    if is_cancelled(cancel_token.as_ref()) {
+        let _ = window.destroy();
+        return Ok(());
+    }
+
     apply_playback_fullscreen(&window)?;
     tracing::info!(
         target_monitor = target_monitor.as_deref().unwrap_or("primary"),
@@ -167,10 +235,13 @@ async fn create_playback_window(
 
     // Use native cursor visibility so the OS hides/shows the cursor reliably
     let _ = window.set_cursor_visible(!hide_cursor);
+    if let Some(token) = window_ready_token {
+        token.store(true, Ordering::SeqCst);
+    }
 
     // Schedule transition actions if any
     if let Some(actions) = transition_actions {
-        schedule_transition_actions(actions, video_duration);
+        schedule_transition_actions(actions, video_duration, cancel_token);
     }
 
     Ok(())
@@ -280,7 +351,11 @@ pub fn execute_action(action: &TransitionAction) -> Result<(), String> {
 }
 
 /// Schedules transition actions on a background thread with sleep-based timing.
-fn schedule_transition_actions(actions: Vec<TransitionAction>, video_duration_secs: f64) {
+fn schedule_transition_actions(
+    actions: Vec<TransitionAction>,
+    video_duration_secs: f64,
+    cancel_token: Option<Arc<AtomicBool>>,
+) {
     if actions.is_empty() {
         return;
     }
@@ -299,9 +374,15 @@ fn schedule_transition_actions(actions: Vec<TransitionAction>, video_duration_se
     std::thread::spawn(move || {
         let mut elapsed = 0.0_f64;
         for (trigger_time, action) in timed {
+            if is_cancelled(cancel_token.as_ref()) {
+                return;
+            }
             let wait = (trigger_time - elapsed).max(0.0);
             if wait > 0.0 {
                 std::thread::sleep(std::time::Duration::from_secs_f64(wait));
+            }
+            if is_cancelled(cancel_token.as_ref()) {
+                return;
             }
             elapsed = trigger_time;
 

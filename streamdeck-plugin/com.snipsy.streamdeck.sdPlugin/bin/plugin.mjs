@@ -17796,7 +17796,8 @@ var TriggerSnippetAction = class extends (_a = SingletonAction) {
       return;
     }
     try {
-      await client.triggerButton(settings2.projectPath, settings2.snippetId, settings2.snippetType);
+      const result = await client.triggerButton(settings2.projectPath, settings2.snippetId, settings2.snippetType);
+      plugin_default.logger.debug(`Snipsy Stream Deck trigger ${result.status}: ${result.snippetType}/${result.id}`);
       await ev.action.showOk();
     } catch (error40) {
       await ev.action.setTitle(labelForError(error40));
