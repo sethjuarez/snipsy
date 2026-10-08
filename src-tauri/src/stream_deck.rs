@@ -57,6 +57,7 @@ struct ActiveStreamDeckRun {
     kind: ActiveRunKind,
     cancel_token: Arc<AtomicBool>,
     video_window_ready: Option<Arc<AtomicBool>>,
+    video_window_label: Option<String>,
 }
 
 static ACTIVE_RUN: OnceLock<Mutex<Option<ActiveStreamDeckRun>>> = OnceLock::new();
@@ -118,7 +119,13 @@ pub async fn trigger_stream_deck_button(
             }
 
             let cancel_token = Arc::new(AtomicBool::new(false));
-            let run_id = begin_run(key, ActiveRunKind::FastType, cancel_token.clone(), None)?;
+            let run_id = begin_run(
+                key,
+                ActiveRunKind::FastType,
+                cancel_token.clone(),
+                None,
+                None,
+            )?;
             let text = snippet.text.clone();
             let title = snippet.title.clone();
             let snippet_id = snippet.id.clone();
@@ -146,11 +153,14 @@ pub async fn trigger_stream_deck_button(
                 ActiveRunKind::Video,
                 cancel_token.clone(),
                 Some(window_ready.clone()),
+                None,
             )?;
             let app_handle = app.clone();
             let project_path = project_path.clone();
             let snippet_for_playback = snippet.clone();
+            let window_label = format!("streamdeck-playback-{run_id}");
             tauri::async_runtime::spawn(async move {
+                let clear_on_destroy = Box::new(move || clear_run(run_id));
                 let result = crate::playback::play_video_with_cancel(
                     app_handle,
                     Some(project_path),
@@ -166,13 +176,17 @@ pub async fn trigger_stream_deck_button(
                     snippet_for_playback.click_to_play,
                     snippet_for_playback.muted,
                     snippet_for_playback.pause_stops.clone(),
+                    Some(window_label),
                     Some(cancel_token),
-                    Some(window_ready),
+                    Some(window_ready.clone()),
+                    Some(clear_on_destroy),
                     None,
                 )
                 .await;
                 if let Err(error) = result {
                     tracing::error!(error = %error, snippet = %snippet_for_playback.id, title = %snippet_for_playback.title, "Stream Deck video playback failed");
+                    clear_run(run_id);
+                } else if !window_ready.load(Ordering::SeqCst) {
                     clear_run(run_id);
                 }
             });
@@ -186,7 +200,13 @@ pub async fn trigger_stream_deck_button(
         }
         StreamDeckAction::Automation(script) => {
             let cancel_token = Arc::new(AtomicBool::new(false));
-            let run_id = begin_run(key, ActiveRunKind::Automation, cancel_token.clone(), None)?;
+            let run_id = begin_run(
+                key,
+                ActiveRunKind::Automation,
+                cancel_token.clone(),
+                None,
+                None,
+            )?;
             let script_id = script.id.clone();
             let title = script.title.clone();
             tauri::async_runtime::spawn(async move {
@@ -249,6 +269,7 @@ fn begin_run(
     kind: ActiveRunKind,
     cancel_token: Arc<AtomicBool>,
     video_window_ready: Option<Arc<AtomicBool>>,
+    video_window_label: Option<String>,
 ) -> Result<u64, String> {
     let mut active = active_run_cell()
         .lock()
@@ -257,12 +278,18 @@ fn begin_run(
         return Err("Another Stream Deck action is already running. Click the active button again to stop it.".into());
     }
     let run_id = NEXT_RUN_ID.fetch_add(1, Ordering::SeqCst);
+    let video_window_label = if kind == ActiveRunKind::Video && video_window_label.is_none() {
+        Some(format!("streamdeck-playback-{run_id}"))
+    } else {
+        video_window_label
+    };
     *active = Some(ActiveStreamDeckRun {
         run_id,
         key,
         kind,
         cancel_token,
         video_window_ready,
+        video_window_label,
     });
     Ok(run_id)
 }
@@ -280,23 +307,32 @@ fn stop_matching_run(
     key: &StreamDeckRunKey,
     action: &StreamDeckAction,
 ) -> Result<Option<StreamDeckTriggerResult>, String> {
-    let mut active = active_run_cell()
-        .lock()
-        .map_err(|_| "Stream Deck run registry is unavailable".to_string())?;
-    let Some(run) = active.as_ref() else {
-        return Ok(None);
-    };
-    if &run.key != key {
-        return Ok(None);
-    }
+    let video_window_label = {
+        let active = active_run_cell()
+            .lock()
+            .map_err(|_| "Stream Deck run registry is unavailable".to_string())?;
+        let Some(run) = active.as_ref() else {
+            return Ok(None);
+        };
+        if &run.key != key {
+            return Ok(None);
+        }
 
-    run.cancel_token.store(true, Ordering::SeqCst);
-    if run.kind == ActiveRunKind::Video {
-        if let Some(window) = app.get_webview_window("playback") {
-            let _ = window.destroy();
+        run.cancel_token.store(true, Ordering::SeqCst);
+        if run.kind == ActiveRunKind::Video {
+            run.video_window_label.clone()
+        } else {
+            None
+        }
+    };
+
+    if let Some(label) = video_window_label {
+        if let Some(window) = app.get_webview_window(&label) {
+            if let Err(error) = window.destroy() {
+                tracing::warn!(error = %error, window = %label, "Failed to destroy Stream Deck playback window");
+            }
         }
     }
-    *active = None;
     Ok(Some(trigger_result(
         action_id(action),
         action_title(action),
@@ -316,7 +352,11 @@ fn prune_stale_video_run(app: &tauri::AppHandle) {
                         .as_ref()
                         .map(|ready| ready.load(Ordering::SeqCst))
                         .unwrap_or(false)
-                    && app.get_webview_window("playback").is_none()
+                    && run
+                        .video_window_label
+                        .as_deref()
+                        .and_then(|label| app.get_webview_window(label))
+                        .is_none()
             })
             .unwrap_or(false);
         if is_stale_video {
@@ -909,6 +949,7 @@ mod tests {
             ActiveRunKind::FastType,
             Arc::new(AtomicBool::new(false)),
             None,
+            None,
         )
         .unwrap();
 
@@ -916,6 +957,7 @@ mod tests {
             second_key,
             ActiveRunKind::FastType,
             Arc::new(AtomicBool::new(false)),
+            None,
             None,
         )
         .unwrap_err();
@@ -937,6 +979,7 @@ mod tests {
             key,
             ActiveRunKind::FastType,
             Arc::new(AtomicBool::new(false)),
+            None,
             None,
         )
         .unwrap();

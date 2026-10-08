@@ -2,7 +2,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_auditaur::IpcTraceContext;
 
 use crate::models::{PauseStop, TransitionAction};
@@ -43,6 +43,8 @@ pub async fn play_video(
         pause_stops,
         None,
         None,
+        None,
+        None,
         auditaur_trace_context,
     )
     .await
@@ -63,8 +65,10 @@ pub async fn play_video_with_cancel(
     click_to_play: Option<bool>,
     muted: Option<bool>,
     pause_stops: Option<Vec<PauseStop>>,
+    window_label: Option<String>,
     cancel_token: Option<Arc<AtomicBool>>,
     window_ready_token: Option<Arc<AtomicBool>>,
+    on_window_destroyed: Option<Box<dyn Fn() + Send + Sync + 'static>>,
     _auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     if is_cancelled(cancel_token.as_ref()) {
@@ -72,7 +76,8 @@ pub async fn play_video_with_cancel(
     }
 
     // Close existing playback window if any
-    if let Some(existing) = app.get_webview_window("playback") {
+    let window_label = window_label.unwrap_or_else(|| "playback".into());
+    if let Some(existing) = app.get_webview_window(&window_label) {
         let _ = existing.destroy();
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
@@ -119,8 +124,10 @@ pub async fn play_video_with_cancel(
         hide_cursor.unwrap_or(true),
         transition_actions,
         (end_time - start_time) / speed,
+        window_label,
         cancel_token,
         window_ready_token,
+        on_window_destroyed,
     )
     .await
 }
@@ -161,8 +168,10 @@ async fn create_playback_window(
     hide_cursor: bool,
     transition_actions: Option<Vec<TransitionAction>>,
     video_duration: f64,
+    window_label: String,
     cancel_token: Option<Arc<AtomicBool>>,
     window_ready_token: Option<Arc<AtomicBool>>,
+    on_window_destroyed: Option<Box<dyn Fn() + Send + Sync + 'static>>,
 ) -> Result<(), String> {
     if is_cancelled(cancel_token.as_ref()) {
         return Ok(());
@@ -174,7 +183,7 @@ async fn create_playback_window(
          document.body.style.background = '{background_color}';",
     );
 
-    let mut builder = WebviewWindowBuilder::new(&app, "playback", WebviewUrl::App(url.into()))
+    let mut builder = WebviewWindowBuilder::new(&app, &window_label, WebviewUrl::App(url.into()))
         .initialization_script(&init_script)
         .title("Snipsy Playback")
         .decorations(false)
@@ -224,6 +233,14 @@ async fn create_playback_window(
     if is_cancelled(cancel_token.as_ref()) {
         let _ = window.destroy();
         return Ok(());
+    }
+
+    if let Some(on_window_destroyed) = on_window_destroyed {
+        window.on_window_event(move |event| {
+            if matches!(event, WindowEvent::Destroyed) {
+                on_window_destroyed();
+            }
+        });
     }
 
     apply_playback_fullscreen(&window)?;
