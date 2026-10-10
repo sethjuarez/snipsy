@@ -3,20 +3,26 @@ import { Play, Pause, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw
 import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import SpotlightOverlay from "./SpotlightOverlay";
+import ConfirmDialog from "./ConfirmDialog";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
-import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseSpotlight, PauseSpotlightStyle, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import IconEditor from "./IconEditor";
+import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import {
   DEFAULT_SPOTLIGHT_STYLE,
   STOP_EPSILON,
   createRectangleRegion,
   getVideoContentBox,
+  isSpotlightBlurEnabled,
+  isSpotlightHaloEnabled,
   normalizeHexColor,
   normalizePauseStops,
   normalizeSpotlight,
   pointerToVideoPoint,
   regionToBox,
+  spotlightsEqual,
+  spotlightSignature,
   type Point,
   type Rect,
 } from "../utils/spotlight";
@@ -176,11 +182,7 @@ export interface ClipEditorHandle {
   save: () => void;
 }
 
-export interface ClipEditorSaveState {
-  canSave: boolean;
-  readinessText: string;
-  saveStatus: "idle" | "unsaved" | "saved";
-}
+export type ClipEditorSaveState = EditorSaveState;
 
 function formatTime(seconds: number, precise = false): string {
   const m = Math.floor(seconds / 60);
@@ -313,13 +315,15 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(existingClip?.streamDeckIcon ?? defaultStreamDeckIcon("video"));
   const [activePreviewStop, setActivePreviewStop] = useState<PreviewNavigationStop | null>(null);
   const [editingSpotlightIndex, setEditingSpotlightIndex] = useState<number | null>(null);
+  const spotlightEditOriginalRef = useRef<{ index: number; spotlight: PauseSpotlight | undefined } | null>(null);
+  const spotlightEditDirtyRef = useRef(false);
+  const [pendingSpotlightExit, setPendingSpotlightExit] = useState<(() => void) | null>(null);
   const [selectedSpotlightRegion, setSelectedSpotlightRegion] = useState<number | null>(null);
   const [drawingStart, setDrawingStart] = useState<Point | null>(null);
   const [draftRegion, setDraftRegion] = useState<RectanglePauseSpotlightRegion | null>(null);
   const [spotlightManipulation, setSpotlightManipulation] = useState<SpotlightManipulation | null>(null);
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
   const [inspectorTab, setInspectorTab] = useState<ClipInspectorTab>("clip");
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({ type: "clip" });
   const [showAllMoments, setShowAllMoments] = useState(false);
@@ -534,6 +538,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   }, []);
 
   const handleTimelineClick = useCallback((e: React.MouseEvent) => {
+    if (spotlightEditDirtyRef.current) return;
     const t = getTimeFromPointerPosition(e.clientX);
     if (t === null) return;
     seekToTime(t);
@@ -545,6 +550,13 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     event.preventDefault();
     const t = getTimeFromPointerPosition(event.clientX);
     if (t === null) return;
+    if (spotlightEditDirtyRef.current) {
+      setPendingSpotlightExit(() => () => {
+        selectClip();
+        seekToTime(t);
+      });
+      return;
+    }
     selectClip();
     scrubVideoToTime(t);
 
@@ -605,6 +617,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     if (!e.isPrimary || e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
+    if (spotlightEditDirtyRef.current) {
+      setPendingSpotlightExit(() => () => selectBoundary(boundary));
+      return;
+    }
     selectBoundary(boundary);
     setDragging(boundary);
 
@@ -655,6 +671,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   }, [endTime, frameDuration, seekToTime, startTime]);
 
   const handleTimelineDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (spotlightEditDirtyRef.current) return;
     if ((e.target as HTMLElement | null)?.closest("[data-timeline-interactive='true']")) return;
     const t = getTimeFromPointerPosition(e.clientX);
     if (t === null) return;
@@ -702,12 +719,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const handleTimelineKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowLeft") {
       e.preventDefault();
-      if (e.shiftKey) nudgePlayhead(-1);
-      else nudgeHandle(activeHandle, -1);
+      requestSpotlightExit(() => (e.shiftKey ? nudgePlayhead(-1) : nudgeHandle(activeHandle, -1)));
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
-      if (e.shiftKey) nudgePlayhead(1);
-      else nudgeHandle(activeHandle, 1);
+      requestSpotlightExit(() => (e.shiftKey ? nudgePlayhead(1) : nudgeHandle(activeHandle, 1)));
     } else if (e.key === "[" || e.key === ",") {
       e.preventDefault();
       navigateTimelinePoint(-1);
@@ -718,12 +733,18 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   };
 
   // Hold-to-repeat bindings for each frame-step button
-  const holdStartBack = useHoldRepeat(() => { setTimelineSelection({ type: "start" }); setActiveHandle("start"); nudgeHandle("start", -1); });
-  const holdStartFwd  = useHoldRepeat(() => { setTimelineSelection({ type: "start" }); setActiveHandle("start"); nudgeHandle("start", 1); });
-  const holdEndBack   = useHoldRepeat(() => { setTimelineSelection({ type: "end" }); setActiveHandle("end"); nudgeHandle("end", -1); });
-  const holdEndFwd    = useHoldRepeat(() => { setTimelineSelection({ type: "end" }); setActiveHandle("end"); nudgeHandle("end", 1); });
-  const holdPlayheadBack = useHoldRepeat(() => nudgePlayhead(-1));
-  const holdPlayheadFwd = useHoldRepeat(() => nudgePlayhead(1));
+  const nudgeBoundary = (handle: "start" | "end", direction: 1 | -1) =>
+    requestSpotlightExit(() => {
+      setTimelineSelection({ type: handle });
+      setActiveHandle(handle);
+      nudgeHandle(handle, direction);
+    });
+  const holdStartBack = useHoldRepeat(() => nudgeBoundary("start", -1));
+  const holdStartFwd  = useHoldRepeat(() => nudgeBoundary("start", 1));
+  const holdEndBack   = useHoldRepeat(() => nudgeBoundary("end", -1));
+  const holdEndFwd    = useHoldRepeat(() => nudgeBoundary("end", 1));
+  const holdPlayheadBack = useHoldRepeat(() => requestSpotlightExit(() => nudgePlayhead(-1)));
+  const holdPlayheadFwd = useHoldRepeat(() => requestSpotlightExit(() => nudgePlayhead(1)));
   const previewNavigationStops = useMemo(
     () => buildPreviewNavigationStops(pauseStops, startTime, endTime),
     [pauseStops, startTime, endTime],
@@ -786,6 +807,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       if (field === "time") {
         const nextIndex = normalized.findIndex((stop) => Math.abs(stop.time - Number(value)) <= STOP_EPSILON);
         setTimelineSelection({ type: "moment", index: Math.max(0, nextIndex) });
+        if (nextIndex >= 0 && editingSpotlightIndex === index) setEditingSpotlightIndex(nextIndex);
+        if (nextIndex >= 0 && spotlightEditOriginalRef.current?.index === index) {
+          spotlightEditOriginalRef.current = { ...spotlightEditOriginalRef.current, index: nextIndex };
+        }
         seekToTime(Number(value));
       }
       return normalized;
@@ -796,8 +821,15 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     setPauseStops((stops) => stops.filter((_, i) => i !== index));
     setTimelineSelection({ type: "start" });
     if (editingSpotlightIndex === index) {
+      spotlightEditOriginalRef.current = null;
       setEditingSpotlightIndex(null);
       setSelectedSpotlightRegion(null);
+    } else if (editingSpotlightIndex !== null && editingSpotlightIndex > index) {
+      setEditingSpotlightIndex(editingSpotlightIndex - 1);
+      const original = spotlightEditOriginalRef.current;
+      if (original && original.index > index) {
+        spotlightEditOriginalRef.current = { ...original, index: original.index - 1 };
+      }
     }
   };
 
@@ -812,6 +844,9 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       setPlaying(false);
     }
     setTimelineSelection({ type: "moment", index });
+    if (editingSpotlightIndex !== index || spotlightEditOriginalRef.current?.index !== index) {
+      spotlightEditOriginalRef.current = { index, spotlight: stop.spotlight };
+    }
     setEditingSpotlightIndex(index);
     setInspectorTab("moments");
     setSelectedSpotlightRegion(stop.spotlight?.regions.length ? 0 : null);
@@ -820,12 +855,71 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   };
 
   const finishSpotlightEdit = () => {
+    spotlightEditOriginalRef.current = null;
     setEditingSpotlightIndex(null);
     setSelectedSpotlightRegion(null);
     setDrawingStart(null);
     setDraftRegion(null);
     setSpotlightManipulation(null);
     setInspectorTab("moments");
+  };
+
+  const spotlightEditOriginal = spotlightEditOriginalRef.current;
+  const spotlightEditDirty =
+    editingSpotlightIndex !== null &&
+    spotlightEditOriginal !== null &&
+    spotlightEditOriginal.index === editingSpotlightIndex &&
+    !spotlightsEqual(pauseStops[editingSpotlightIndex]?.spotlight, spotlightEditOriginal.spotlight);
+  spotlightEditDirtyRef.current = spotlightEditDirty;
+
+  const requestSpotlightExit = (next: () => void) => {
+    if (editingSpotlightIndex === null) {
+      next();
+      return;
+    }
+    if (!spotlightEditDirty) {
+      finishSpotlightEdit();
+      next();
+      return;
+    }
+    setPendingSpotlightExit(() => next);
+  };
+
+  const saveSpotlightAndExit = () => {
+    const next = pendingSpotlightExit;
+    setPendingSpotlightExit(null);
+    finishSpotlightEdit();
+    next?.();
+  };
+
+  const discardSpotlightAndExit = () => {
+    const next = pendingSpotlightExit;
+    const original = spotlightEditOriginalRef.current;
+    setPendingSpotlightExit(null);
+    if (original) {
+      setPauseStops((stops) => {
+        const stop = stops[original.index];
+        if (!stop) return stops;
+        const updated = [...stops];
+        updated[original.index] = { ...stop, spotlight: original.spotlight };
+        return updated;
+      });
+    }
+    finishSpotlightEdit();
+    next?.();
+  };
+
+  // Spotlight moments open straight into edit mode; switching between spotlights keeps edits.
+  const openTimelineMoment = (index: number) => {
+    const stop = pauseStops[index];
+    if (!stop) return;
+    if (!stop.spotlight) {
+      requestSpotlightExit(() => selectMoment(index));
+      return;
+    }
+    if (editingSpotlightIndex === index) return;
+    selectMoment(index);
+    startSpotlightEdit(index);
   };
 
   const removeSpotlight = (index: number) => {
@@ -878,8 +972,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   };
 
   const selectTimelinePoint = (point: TimelineNavigationPoint) => {
-    if (point.type === "moment") selectMoment(point.index);
-    else selectBoundary(point.type);
+    if (point.type === "moment") openTimelineMoment(point.index);
+    else requestSpotlightExit(() => selectBoundary(point.type as "start" | "end"));
   };
 
   const navigateTimelinePoint = (direction: -1 | 1) => {
@@ -904,9 +998,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     });
   };
 
-  const setSpotlightColor = (index: number, color: string) => {
-    const borderColor = normalizeHexColor(color);
-    if (!borderColor) return;
+  const updateSpotlightStyle = (index: number, patch: Partial<PauseSpotlightStyle>) => {
     setPauseStops((stops) => {
       const updated = [...stops];
       const stop = updated[index];
@@ -917,12 +1009,26 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           ...stop.spotlight,
           style: {
             ...stop.spotlight.style,
-            borderColor,
+            ...patch,
           },
         }),
       };
       return updated;
     });
+  };
+
+  const setSpotlightColor = (index: number, color: string) => {
+    const borderColor = normalizeHexColor(color);
+    if (!borderColor) return;
+    updateSpotlightStyle(index, { borderColor });
+  };
+
+  const setSpotlightBlurEnabled = (index: number, enabled: boolean) => {
+    updateSpotlightStyle(index, { blur: enabled ? undefined : 0 });
+  };
+
+  const setSpotlightHaloEnabled = (index: number, enabled: boolean) => {
+    updateSpotlightStyle(index, { glow: enabled ? undefined : false });
   };
 
   const deleteSelectedSpotlightRegion = () => {
@@ -1104,6 +1210,28 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     }
   };
 
+  // Baseline is taken once video metadata has loaded so default end times and speed don't count as edits.
+  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+    title: title.trim(),
+    description: description.trim(),
+    startTime,
+    endTime,
+    targetDuration: targetDuration.trim(),
+    hotkey,
+    targetMonitor,
+    endBehavior,
+    hideCursor,
+    backgroundColor,
+    clickToPlay,
+    muted,
+    streamDeckIcon,
+    pauseStops: normalizePauseStops(pauseStops, startTime, endTime).map((stop) => [
+      stop.time,
+      stop.label ?? "",
+      spotlightSignature(stop.spotlight),
+    ]),
+  }, duration > 0);
+
   const buildClipDraft = (): Omit<VideoSnippet, "id"> | null => {
     if (!title.trim() || hotkeyStatus.state !== "available" || endTime <= startTime) return null;
     const normalizedPauseStops = normalizePauseStops(pauseStops, startTime, endTime);
@@ -1130,29 +1258,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     const clip = buildClipDraft();
     if (!clip) return;
     onSave(clip);
-    setSaveStatus("saved");
+    markSaved();
   };
 
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available" && endTime > startTime;
-
-  useEffect(() => {
-    if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [
-    title,
-    description,
-    startTime,
-    endTime,
-    effectiveSpeed,
-    hotkey,
-    targetMonitor,
-    endBehavior,
-    hideCursor,
-    backgroundColor,
-    clickToPlay,
-    muted,
-    streamDeckIcon,
-    pauseStops,
-  ]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1225,8 +1334,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   useImperativeHandle(ref, () => ({ save: handleSave }), [handleSave]);
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText, saveStatus });
-  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+    onSaveStateChange?.({ canSave, readinessText, saveStatus, hasUnsavedChanges });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   return (
     <div
@@ -1234,6 +1343,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       data-testid="clip-editor"
       data-preview-pause-active={activePreviewStop ? "true" : "false"}
       data-preview-stop-kind={activePreviewStop?.kind ?? "none"}
+      data-unsaved={hasUnsavedChanges ? "true" : "false"}
     >
       <div className="flex flex-1 min-h-0 gap-3">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -1247,6 +1357,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
               boxShadow: "0 12px 28px rgba(0, 0, 0, 0.35)",
             }}
             data-testid="spotlight-editor-toolbar"
+            data-editing-index={editingSpotlightIndex ?? undefined}
           >
             <span className="mr-1 font-medium">
               {editingSpotlightStop?.label
@@ -1331,6 +1442,34 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                     data-testid="spotlight-show-label"
                   />
                   Show label
+                </label>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Blur and dim the video outside the spotlight regions during playback"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSpotlightBlurEnabled(editingSpotlight)}
+                    onChange={(e) => setSpotlightBlurEnabled(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-blur"
+                  />
+                  Blur
+                </label>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Glow around the spotlight regions"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSpotlightHaloEnabled(editingSpotlight)}
+                    onChange={(e) => setSpotlightHaloEnabled(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-halo"
+                  />
+                  Halo
                 </label>
               </>
             )}
@@ -1947,7 +2086,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             }}
             onClick={(e) => {
               e.stopPropagation();
-              selectBoundary("start");
+              requestSpotlightExit(() => selectBoundary("start"));
             }}
             onPointerDown={(e) => beginBoundaryDrag("start", e)}
             title={`Drag Start at ${formatTime(startTime, true)}`}
@@ -1981,7 +2120,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             }}
             onClick={(e) => {
               e.stopPropagation();
-              selectBoundary("end");
+              requestSpotlightExit(() => selectBoundary("end"));
             }}
             onPointerDown={(e) => beginBoundaryDrag("end", e)}
             title={`Drag End at ${formatTime(endTime, true)}`}
@@ -2065,12 +2204,13 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  selectMoment(index);
+                  openTimelineMoment(index);
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
-                title={`Moment at ${formatTime(stop.time, true)}`}
-                aria-label={`Select moment ${index + 1} at ${formatTime(stop.time, true)}`}
+                title={`${stop.spotlight ? "Spotlight moment" : "Moment"} at ${formatTime(stop.time, true)}`}
+                aria-label={`${stop.spotlight ? "Edit spotlight moment" : "Select moment"} ${index + 1} at ${formatTime(stop.time, true)}`}
                 data-timeline-interactive="true"
+                data-spotlight={stop.spotlight ? "true" : undefined}
                 data-testid={`pause-stop-marker-${index}`}
               >
                 <span
@@ -2283,6 +2423,20 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
         </div>
 
       </div>
+      {pendingSpotlightExit && (
+        <ConfirmDialog
+          title="Save spotlight changes?"
+          message="You changed this spotlight. Save the changes, or discard them and restore the spotlight as it was?"
+          confirmLabel="Save"
+          secondaryLabel="Discard"
+          cancelLabel="Keep editing"
+          danger={false}
+          onConfirm={saveSpotlightAndExit}
+          onSecondary={discardSpotlightAndExit}
+          onCancel={() => setPendingSpotlightExit(null)}
+          data-testid="spotlight-exit-dialog"
+        />
+      )}
     </div>
   );
 });

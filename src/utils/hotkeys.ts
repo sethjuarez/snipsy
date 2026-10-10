@@ -1,3 +1,4 @@
+import type { HotkeyIssue } from "../services/backendService";
 import { isMacPlatform } from "./platform";
 
 export type HotkeyKind = "text" | "video" | "automation";
@@ -50,8 +51,73 @@ export function formatKeyCombo(event: KeyboardEvent): string {
   return parts.join("+");
 }
 
+const MODIFIER_ORDER = ["ctrl", "cmd", "alt", "shift"];
+
+function canonicalPart(part: string, macPlatform: boolean): string {
+  switch (part) {
+    case "cmdorcontrol":
+    case "commandorcontrol":
+    case "cmdorctrl":
+    case "commandorctrl":
+      return macPlatform ? "cmd" : "ctrl";
+    case "control":
+      return "ctrl";
+    case "command":
+    case "meta":
+    case "super":
+      return "cmd";
+    case "option":
+      return "alt";
+    default:
+      return canonicalKey(part);
+  }
+}
+
+// Mirrors the key aliases accepted by the backend's global-hotkey parser.
+const KEY_ALIASES: Record<string, string> = {
+  "`": "backquote",
+  "\\": "backslash",
+  "[": "bracketleft",
+  "]": "bracketright",
+  ",": "comma",
+  "=": "equal",
+  "-": "minus",
+  ".": "period",
+  "'": "quote",
+  ";": "semicolon",
+  "/": "slash",
+  pausebreak: "pause",
+  esc: "escape",
+  down: "arrowdown",
+  left: "arrowleft",
+  right: "arrowright",
+  up: "arrowup",
+  numplus: "numadd",
+  numpadplus: "numadd",
+  volumedown: "audiovolumedown",
+  volumeup: "audiovolumeup",
+  volumemute: "audiovolumemute",
+  mediatrackprev: "mediatrackprevious",
+};
+
+function canonicalKey(key: string): string {
+  if (/^digit\d$/.test(key)) return key.slice(5);
+  if (/^key[a-z]$/.test(key)) return key.slice(3);
+  const aliased = KEY_ALIASES[key] ?? key;
+  if (aliased.startsWith("numpad")) return KEY_ALIASES[`num${aliased.slice(6)}`] ?? `num${aliased.slice(6)}`;
+  return aliased;
+}
+
+/** Canonical form so aliases (Ctrl vs CmdOrControl) and modifier order compare equal. */
 export function normalizeHotkey(hotkey: string): string {
-  return hotkey.trim().toLowerCase();
+  const macPlatform = isMacPlatform();
+  const parts = hotkey
+    .split("+")
+    .map((part) => canonicalPart(part.trim().toLowerCase(), macPlatform))
+    .filter(Boolean);
+  const modifiers = MODIFIER_ORDER.filter((modifier) => parts.includes(modifier));
+  const keys = parts.filter((part) => !MODIFIER_ORDER.includes(part));
+  return [...modifiers, ...keys].join("+");
 }
 
 export function displayHotkey(hotkey: string): string {
@@ -130,4 +196,16 @@ export function collectHotkeyOwners(
         kind: "automation" as const,
       })),
   ];
+}
+
+/** One line per hotkey demo mode could not arm, using snippet titles where known. */
+export function describeHotkeyIssues(issues: HotkeyIssue[], owners: HotkeyOwner[]): string {
+  const title = (id: string) => owners.find((owner) => owner.id === id)?.title ?? "Unknown snippet";
+  return issues
+    .map((issue) =>
+      issue.kind === "duplicate"
+        ? `${displayHotkey(issue.hotkey)}: ${title(issue.snippetId)} skipped (also used by ${title(issue.detail)})`
+        : `${displayHotkey(issue.hotkey)}: ${title(issue.snippetId)} could not be registered (${issue.detail})`,
+    )
+    .join("\n");
 }

@@ -440,9 +440,12 @@ function runClipEditorDrills() {
       momentFilter,
     );
 
-    const spotlightButtonExists = selectorExists('[data-testid="selected-moment-spotlight"]');
+    const autoOpenedSpotlight = selectorExists('[data-testid="spotlight-editor-toolbar"]');
+    const spotlightButtonExists = autoOpenedSpotlight || selectorExists('[data-testid="selected-moment-spotlight"]');
     if (spotlightButtonExists) {
-      click('[data-testid="selected-moment-spotlight"]');
+      if (!autoOpenedSpotlight) {
+        click('[data-testid="selected-moment-spotlight"]');
+      }
       waitForSelector('[data-testid="spotlight-editor-toolbar"]');
       const spotlightLayout = evaluate(`(() => {
         const toolbar = document.querySelector('[data-testid="spotlight-editor-toolbar"]');
@@ -478,19 +481,79 @@ function runClipEditorDrills() {
         "spotlight toolbar does not cover video and regions align",
         spotlightLayout,
       );
+
+      const readSpotlightEffects = (label) => evaluate(`(() => {
+        const blur = document.querySelector('[data-testid="spotlight-blur"]');
+        const halo = document.querySelector('[data-testid="spotlight-halo"]');
+        const region = document.querySelector('[data-testid="editor-spotlight-region-0"]');
+        return {
+          hasToggles: Boolean(blur && halo),
+          blurChecked: blur?.checked ?? null,
+          haloChecked: halo?.checked ?? null,
+          regionHalo: region?.getAttribute("data-halo") ?? null,
+          regionShadow: region ? region.style.boxShadow : null,
+        };
+      })()`, { label });
+
+      const defaultEffects = readSpotlightEffects("spotlight effect toggles default on");
+      assertCondition(
+        defaultEffects?.hasToggles === true &&
+          defaultEffects.blurChecked === true &&
+          defaultEffects.haloChecked === true &&
+          (defaultEffects.regionHalo === null || defaultEffects.regionHalo === "on"),
+        "spotlight blur and halo default on",
+        defaultEffects,
+      );
+
+      click('[data-testid="spotlight-blur"]');
+      click('[data-testid="spotlight-halo"]');
+      const disabledEffects = readSpotlightEffects("spotlight effect toggles off");
+      assertCondition(
+        disabledEffects?.blurChecked === false &&
+          disabledEffects.haloChecked === false &&
+          (disabledEffects.regionHalo === null ||
+            (disabledEffects.regionHalo === "off" && !disabledEffects.regionShadow)),
+        "spotlight blur and halo can be disabled",
+        disabledEffects,
+      );
+
+      click('[data-testid="spotlight-blur"]');
+      click('[data-testid="spotlight-halo"]');
+      const restoredEffects = readSpotlightEffects("spotlight effect toggles restored");
+      assertCondition(
+        restoredEffects?.blurChecked === true &&
+          restoredEffects.haloChecked === true &&
+          (restoredEffects.regionHalo === null || restoredEffects.regionHalo === "on"),
+        "spotlight blur and halo can be re-enabled",
+        restoredEffects,
+      );
+
+      runSpotlightEditFlowDrills();
     }
   } else {
     recordSkip("moment and spotlight drills", "The open clip has no timeline moments.");
   }
 
-  const titleChanged = evaluate(`(() => {
+  const readUnsaved = (label) =>
+    evaluate(`document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved") ?? null`, { label });
+  const cleanAfterRevert = readUnsaved("clip editor clean after reverted edits");
+  assertCondition(
+    cleanAfterRevert === "false",
+    "reverted spotlight edits leave the clip unchanged",
+    { cleanAfterRevert },
+  );
+
+  optionalClick('[data-testid="clip-inspector-tab-clip"]');
+  const setTitle = (append, label) => evaluate(`(() => {
     const input = document.querySelector('[data-testid="clip-title"]');
     if (!input) return false;
     const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
-    descriptor?.set?.call(input, \`\${input.value} drill\`);
+    const next = ${append ? "input.value + ' drill'" : "input.value.replace(/ drill$/, '')"};
+    descriptor?.set?.call(input, next);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
-  })()`, { label: "mark clip editor dirty" });
+  })()`, { label });
+  const titleChanged = setTitle(true, "mark clip editor dirty");
 
   if (titleChanged) {
     click('[data-testid="clip-cancel"]');
@@ -504,6 +567,180 @@ function runClipEditorDrills() {
       { discardDialog },
     );
     click('[data-testid="confirm-dialog-cancel"]');
+    setTitle(false, "revert clip title");
+    const cleanAfterTitleRevert = readUnsaved("clip editor clean after title revert");
+    assertCondition(
+      cleanAfterTitleRevert === "false",
+      "reverting edits clears unsaved state",
+      { cleanAfterTitleRevert },
+    );
+  }
+}
+
+function runTextSnippetSaveTrackingDrill() {
+  if (!optionalClick('[data-testid="edit-drill-text-1"]')) {
+    recordSkip("text snippet save tracking", "Seeded text snippet is not listed.");
+    return;
+  }
+  waitForSelector('[data-testid="snippet-form"]');
+  const readUnsaved = (label) =>
+    evaluate(`document.querySelector('[data-testid="snippet-form"]')?.getAttribute("data-unsaved") ?? null`, { label });
+  const setTitle = (append, label) => evaluate(`(() => {
+    const input = document.querySelector('[data-testid="snippet-title"]');
+    if (!input) return false;
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    const next = ${append ? "input.value + ' drill'" : "input.value.replace(/ drill$/, '')"};
+    descriptor?.set?.call(input, next);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`, { label });
+
+  const initial = readUnsaved("text snippet initially clean");
+  assertCondition(initial === "false", "opening a text snippet does not mark it unsaved", { initial });
+
+  setTitle(true, "edit text snippet title");
+  const dirty = readUnsaved("text snippet dirty after edit");
+  assertCondition(dirty === "true", "editing a text snippet marks it unsaved", { dirty });
+
+  setTitle(false, "revert text snippet title");
+  const reverted = readUnsaved("text snippet clean after revert");
+  assertCondition(reverted === "false", "reverting a text snippet edit clears unsaved state", { reverted });
+
+  click('[data-testid="snippet-cancel"]');
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 500)"]);
+  const closeState = evaluate(`({
+    dialog: Boolean(document.querySelector('[data-testid="discard-changes-dialog"]')),
+    form: Boolean(document.querySelector('[data-testid="snippet-form"]')),
+  })`, { label: "text snippet close state" });
+  assertCondition(
+    closeState && !closeState.dialog && !closeState.form,
+    "closing an unchanged text snippet does not prompt",
+    { closeState },
+  );
+  if (closeState?.dialog) click('[data-testid="confirm-dialog-confirm"]');
+}
+
+function readSpotlightEditState(label) {
+  return evaluate(`(() => {
+    const toolbar = document.querySelector('[data-testid="spotlight-editor-toolbar"]');
+    const halo = document.querySelector('[data-testid="spotlight-halo"]');
+    return {
+      editing: Boolean(toolbar),
+      editingIndex: toolbar?.getAttribute("data-editing-index") ?? null,
+      haloChecked: halo?.checked ?? null,
+      dialog: document.querySelector('[data-testid="spotlight-exit-dialog"]') !== null,
+    };
+  })()`, { label });
+}
+
+function runSpotlightEditFlowDrills() {
+  const startMarker = '[data-testid="timeline-start-marker"]';
+  const marker0 = '[data-testid="pause-stop-marker-0"]';
+  const marker1 = '[data-testid="pause-stop-marker-1"]';
+
+  click(startMarker);
+  const cleanExit = readSpotlightEditState("clean spotlight exit");
+  assertCondition(
+    cleanExit?.editing === false && cleanExit.dialog === false,
+    "unchanged spotlight exits without prompting",
+    cleanExit,
+  );
+
+  click(marker0);
+  waitForSelector('[data-testid="spotlight-editor-toolbar"]');
+  const reopened = readSpotlightEditState("spotlight reopened from timeline");
+  assertCondition(
+    reopened?.editing === true && reopened.editingIndex === "0",
+    "clicking a spotlight marker opens spotlight edit mode",
+    reopened,
+  );
+
+  const hasSecondSpotlight = evaluate(
+    `document.querySelector('[data-testid="pause-stop-marker-1"][data-spotlight="true"]') !== null`,
+    { label: "second spotlight marker probe" },
+  );
+  if (hasSecondSpotlight) {
+    click('[data-testid="spotlight-halo"]');
+    click(marker1);
+    const switched = readSpotlightEditState("switch spotlight while dirty");
+    assertCondition(
+      switched?.editing === true && switched.editingIndex === "1" && switched.dialog === false,
+      "clicking another spotlight switches edit mode without prompting",
+      switched,
+    );
+    click(marker0);
+    const kept = readSpotlightEditState("switched-away edits kept");
+    assertCondition(
+      kept?.editingIndex === "0" && kept.haloChecked === false,
+      "switching spotlights keeps prior edits",
+      kept,
+    );
+    const unsavedAfterSwitch = evaluate(
+      `document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved") ?? null`,
+      { label: "clip unsaved after spotlight edit" },
+    );
+    assertCondition(
+      unsavedAfterSwitch === "true",
+      "spotlight edits mark the clip unsaved",
+      { unsavedAfterSwitch },
+    );
+  } else {
+    recordSkip("spotlight switch drill", "The open clip has only one spotlight moment.");
+  }
+
+  const baselineHalo = readSpotlightEditState("dirty baseline")?.haloChecked;
+  click('[data-testid="spotlight-halo"]');
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-cancel"]');
+  const keptEditing = readSpotlightEditState("keep editing spotlight");
+  assertCondition(
+    keptEditing?.editing === true && keptEditing.dialog === false && keptEditing.haloChecked === !baselineHalo,
+    "keep editing leaves spotlight changes in place",
+    keptEditing,
+  );
+
+  const keyPrompt = evaluate(`(() => {
+    const timeline = document.querySelector('[data-testid="clip-timeline"]');
+    timeline?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    return true;
+  })()`, { label: "timeline arrow key while spotlight dirty" });
+  if (keyPrompt) {
+    waitForSelector('[data-testid="spotlight-exit-dialog"]');
+    click('[data-testid="confirm-dialog-cancel"]');
+    const afterKey = readSpotlightEditState("arrow key prompt kept editing");
+    assertCondition(
+      afterKey?.editing === true && afterKey.dialog === false,
+      "timeline arrow keys prompt before leaving a changed spotlight",
+      afterKey,
+    );
+  }
+
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-secondary"]');
+  const discarded = readSpotlightEditState("discard spotlight changes");
+  assertCondition(discarded?.editing === false && discarded.dialog === false, "discard exits spotlight edit mode", discarded);
+  click(marker0);
+  waitForSelector('[data-testid="spotlight-editor-toolbar"]');
+  const afterDiscard = readSpotlightEditState("spotlight after discard");
+  assertCondition(afterDiscard?.haloChecked === baselineHalo, "discard restores the spotlight", afterDiscard);
+
+  click('[data-testid="spotlight-halo"]');
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-confirm"]');
+  const saved = readSpotlightEditState("save spotlight changes");
+  assertCondition(saved?.editing === false && saved.dialog === false, "save exits spotlight edit mode", saved);
+  click(marker0);
+  waitForSelector('[data-testid="spotlight-editor-toolbar"]');
+  const afterSave = readSpotlightEditState("spotlight after save");
+  assertCondition(afterSave?.haloChecked === !baselineHalo, "save keeps the spotlight changes", afterSave);
+
+  if (afterSave?.haloChecked === false) {
+    click('[data-testid="spotlight-halo"]');
+    click(startMarker);
+    optionalClick('[data-testid="confirm-dialog-confirm"]');
   }
 }
 
@@ -672,6 +909,7 @@ waitForSelector('[data-testid="sidebar"]');
 waitForSelector('[data-testid="nav-text-snippets"]');
 click('[data-testid="nav-text-snippets"]');
 waitForAnySelector(['[data-testid="empty-state"]', '[data-testid="text-snippet-list"]']);
+runTextSnippetSaveTrackingDrill();
 
 click('[data-testid="nav-videos"]');
 waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);

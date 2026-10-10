@@ -11,7 +11,8 @@
     "build:streamdeck": "node scripts/build-streamdeck-plugin.mjs",
     "check:streamdeck-bundles": "node scripts/check-streamdeck-bundles.mjs",
     "package:streamdeck": "npm run check:streamdeck-version && npm run build:streamdeck && node scripts/package-streamdeck-plugin.mjs",
-    "test": "npm run build && npm run test:streamdeck && cd src-tauri && cargo test",
+    "test": "npm run build && npm run test:unit && npm run test:streamdeck && cd src-tauri && cargo test",
+    "test:unit": "vitest run",
     "test:streamdeck": "npm run check:streamdeck-version && npm run check:streamdeck-bundles && node --test streamdeck-plugin/test/snipsy-client.test.mjs",
     "tauri": "tauri",
     "test:e2e": "node scripts/auditaur-drills.mjs"
@@ -37,13 +38,16 @@
     "@elgato/utils": "^0.6.0",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2.11.4",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "esbuild": "^0.28.2",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^5.0.3"
   }
 }

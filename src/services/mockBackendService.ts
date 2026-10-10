@@ -1,4 +1,5 @@
-import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
+import type { BackendService, FfmpegStatus, HotkeyIssue, SnippetHotkey } from "./backendService";
+import { normalizeHotkey } from "../utils/hotkeys";
 import type { ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
@@ -119,8 +120,19 @@ export class MockBackendService implements BackendService {
     this.data.videoSnippets = structuredClone(snippets);
   }
 
-  async enterDemoMode(_hotkeys: SnippetHotkey[]): Promise<void> {
+  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]> {
     this._demoMode = true;
+    // Mirror the backend: the first snippet keeps a combo, later ones are skipped.
+    const owners = new Map<string, string>();
+    const issues: HotkeyIssue[] = [];
+    for (const { id, hotkey } of hotkeys) {
+      const key = normalizeHotkey(hotkey);
+      if (!key) continue;
+      const kept = owners.get(key);
+      if (kept) issues.push({ snippetId: id, hotkey, kind: "duplicate", detail: kept });
+      else owners.set(key, id);
+    }
+    return issues;
   }
 
   async exitDemoMode(): Promise<void> {

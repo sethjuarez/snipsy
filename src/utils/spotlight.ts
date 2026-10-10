@@ -98,6 +98,32 @@ export function normalizeSpotlight(spotlight: PauseSpotlight | undefined): Pause
   };
 }
 
+export function isSpotlightBlurEnabled(spotlight: PauseSpotlight | undefined): boolean {
+  return (spotlight?.style?.blur ?? DEFAULT_SPOTLIGHT_STYLE.blur) > 0;
+}
+
+export function isSpotlightHaloEnabled(spotlight: PauseSpotlight | undefined): boolean {
+  return spotlight?.style?.glow ?? DEFAULT_SPOTLIGHT_STYLE.glow;
+}
+
+export function spotlightSignature(spotlight: PauseSpotlight | undefined): string {
+  const normalized = normalizeSpotlight(spotlight);
+  if (!normalized) return "none";
+  const definedStyle = Object.fromEntries(
+    Object.entries(normalized.style ?? {}).filter(([, value]) => value !== undefined),
+  );
+  const style = { ...DEFAULT_SPOTLIGHT_STYLE, ...definedStyle };
+  return JSON.stringify({
+    regions: normalized.regions.map((region) => [region.x, region.y, region.width, region.height]),
+    showLabel: normalized.showLabel !== false,
+    style: [style.blur, style.dimOpacity, style.borderColor, style.borderWidth, style.glow],
+  });
+}
+
+export function spotlightsEqual(a: PauseSpotlight | undefined, b: PauseSpotlight | undefined): boolean {
+  return spotlightSignature(a) === spotlightSignature(b);
+}
+
 export function normalizePauseStops(
   stops: PauseStop[],
   startTime: number,

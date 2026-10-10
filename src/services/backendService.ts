@@ -36,6 +36,14 @@ export interface SnippetHotkey {
   scriptId?: string;
 }
 
+/** A hotkey demo mode could not arm. For duplicates, `detail` is the snippet id that kept the combo. */
+export interface HotkeyIssue {
+  snippetId: string;
+  hotkey: string;
+  kind: "duplicate" | "failed";
+  detail: string;
+}
+
 export interface FfmpegToolStatus {
   available: boolean;
   path: string | null;
@@ -58,7 +66,7 @@ export interface BackendService {
   openProject(path: string): Promise<ProjectData>;
   saveTextSnippets(path: string, snippets: TextSnippet[]): Promise<void>;
   saveVideoSnippets(path: string, snippets: VideoSnippet[]): Promise<void>;
-  enterDemoMode(hotkeys: SnippetHotkey[]): Promise<void>;
+  enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]>;
   exitDemoMode(): Promise<void>;
   isDemoMode(): Promise<boolean>;
   deliverText(
