@@ -32,6 +32,17 @@ pub struct SnippetHotkey {
     pub script_id: Option<String>,
 }
 
+/// A hotkey that demo mode could not arm, reported back so the UI can warn.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HotkeyIssue {
+    pub snippet_id: String,
+    pub hotkey: String,
+    /// `duplicate` (another snippet kept the combo) or `failed` (could not register).
+    pub kind: String,
+    pub detail: String,
+}
+
 /// State tracking for demo mode
 pub struct DemoState {
     pub active: bool,
@@ -67,7 +78,7 @@ pub fn enter_demo_mode(
     state: tauri::State<AppState>,
     hotkeys: Vec<SnippetHotkey>,
     auditaur_trace_context: Option<IpcTraceContext>,
-) -> Result<(), String> {
+) -> Result<Vec<HotkeyIssue>, String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
 
     // Clean up any stale registrations from a previous session
@@ -81,6 +92,7 @@ pub fn enter_demo_mode(
     demo.registered_hotkeys = hotkeys.clone();
 
     let (unique, duplicates) = partition_duplicate_hotkeys(&hotkeys);
+    let mut issues = Vec::new();
     for (dup, kept) in &duplicates {
         // Registering our own combo twice fails as "already registered", which
         // would wrongly route the duplicate to the low-level hook and hijack the
@@ -91,31 +103,41 @@ pub fn enter_demo_mode(
             kept_snippet_id = %kept.id,
             "Duplicate hotkey in project; skipping"
         );
+        issues.push(HotkeyIssue {
+            snippet_id: dup.id.clone(),
+            hotkey: dup.hotkey.clone(),
+            kind: "duplicate".into(),
+            detail: kept.id.clone(),
+        });
     }
 
     let mut registered = 0usize;
-    let mut failed = Vec::new();
     for hk in unique {
-        let Some(action) = hotkey_action(&app, hk) else {
-            tracing::warn!(hotkey = %hk.hotkey, snippet_type = %hk.snippet_type, "Unknown hotkey snippet type");
-            continue;
+        let result = match hotkey_action(&app, hk) {
+            Some(action) => register_hotkey(&app, hk, action),
+            None => Err(format!("Unknown snippet type '{}'", hk.snippet_type)),
         };
-        match register_hotkey(&app, hk, action) {
+        match result {
             Ok(()) => registered += 1,
             Err(e) => {
                 tracing::error!(hotkey = %hk.hotkey, snippet_id = %hk.id, error = %e, "Hotkey registration failed");
-                failed.push(hk.hotkey.clone());
+                issues.push(HotkeyIssue {
+                    snippet_id: hk.id.clone(),
+                    hotkey: hk.hotkey.clone(),
+                    kind: "failed".into(),
+                    detail: e,
+                });
             }
         }
     }
     tracing::info!(
         registered,
-        failed = failed.len(),
+        failed = issues.len() - duplicates.len(),
         duplicates = duplicates.len(),
         "Demo hotkeys registered"
     );
 
-    Ok(())
+    Ok(issues)
 }
 
 /// Identity of the physical key combo, so `Ctrl+Shift+1` and
@@ -326,6 +348,20 @@ mod tests {
             pause_stops: None,
             script_id: None,
         }
+    }
+
+    #[test]
+    fn hotkey_issue_serializes_for_frontend() {
+        let issue = HotkeyIssue {
+            snippet_id: "b".into(),
+            hotkey: "Ctrl+1".into(),
+            kind: "duplicate".into(),
+            detail: "a".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&issue).unwrap(),
+            serde_json::json!({"snippetId": "b", "hotkey": "Ctrl+1", "kind": "duplicate", "detail": "a"})
+        );
     }
 
     #[test]

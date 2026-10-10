@@ -6,7 +6,7 @@ import type {
   VideoSnippet,
 } from "../types";
 import { getBackend, type BackendService } from "../services";
-import type { SnippetHotkey } from "../services/backendService";
+import type { HotkeyIssue, SnippetHotkey } from "../services/backendService";
 
 const backend: BackendService = getBackend();
 
@@ -73,6 +73,8 @@ interface ProjectState {
   deleteAutomation: (id: string) => Promise<void>;
   checkFfmpeg: () => Promise<void>;
 
+  /** Hotkeys the last demo registration could not arm (duplicates, OS failures). */
+  demoHotkeyIssues: HotkeyIssue[];
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
   /** Re-register hotkeys from current state while demo mode is live. */
@@ -162,6 +164,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   videoSnippets: [],
   automations: [],
   demoMode: false,
+  demoHotkeyIssues: [],
   ffmpegAvailable: null,
   recentProjects: loadRecentProjects(),
 
@@ -296,7 +299,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await queueDemoHotkeySync(async () => {
       if (!get().demoMode) return;
       try {
-        await backend.enterDemoMode(buildDemoHotkeys(get()));
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [] });
       } catch (e) {
         console.error("enterDemoMode failed:", e);
       }
@@ -320,7 +323,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Read state inside the queued task so the latest snapshot wins.
       if (!get().demoMode) return;
       try {
-        await backend.enterDemoMode(buildDemoHotkeys(get()));
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [] });
       } catch (e) {
         console.error("Failed to sync demo hotkeys:", e);
       }
@@ -339,7 +342,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }),
 
   exitDemoMode: async () => {
-    set({ demoMode: false });
+    set({ demoMode: false, demoHotkeyIssues: [] });
     await queueDemoHotkeySync(async () => {
       if (get().demoMode) return;
       try {

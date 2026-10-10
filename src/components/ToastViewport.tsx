@@ -7,6 +7,8 @@ export interface ToastMessage {
   title: string;
   detail?: string;
   tone: ToastTone;
+  /** Sticky toasts stay until dismissed and don't count toward the visible limit. */
+  sticky?: boolean;
 }
 
 interface ToastViewportProps {

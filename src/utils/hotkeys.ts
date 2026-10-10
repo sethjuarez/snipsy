@@ -1,3 +1,4 @@
+import type { HotkeyIssue } from "../services/backendService";
 import { isMacPlatform } from "./platform";
 
 export type HotkeyKind = "text" | "video" | "automation";
@@ -197,21 +198,14 @@ export function collectHotkeyOwners(
   ];
 }
 
-export interface HotkeyDuplicate {
-  hotkey: string;
-  kept: HotkeyOwner;
-  skipped: HotkeyOwner[];
-}
-
-/** Groups owners sharing a hotkey; the first owner keeps it in demo mode. */
-export function findDuplicateHotkeys(owners: HotkeyOwner[]): HotkeyDuplicate[] {
-  const groups = new Map<string, HotkeyDuplicate>();
-  for (const owner of owners) {
-    const key = normalizeHotkey(owner.hotkey);
-    if (!key) continue;
-    const group = groups.get(key);
-    if (group) group.skipped.push(owner);
-    else groups.set(key, { hotkey: owner.hotkey, kept: owner, skipped: [] });
-  }
-  return [...groups.values()].filter((group) => group.skipped.length > 0);
+/** One line per hotkey demo mode could not arm, using snippet titles where known. */
+export function describeHotkeyIssues(issues: HotkeyIssue[], owners: HotkeyOwner[]): string {
+  const title = (id: string) => owners.find((owner) => owner.id === id)?.title ?? "Unknown snippet";
+  return issues
+    .map((issue) =>
+      issue.kind === "duplicate"
+        ? `${displayHotkey(issue.hotkey)}: ${title(issue.snippetId)} skipped (also used by ${title(issue.detail)})`
+        : `${displayHotkey(issue.hotkey)}: ${title(issue.snippetId)} could not be registered (${issue.detail})`,
+    )
+    .join("\n");
 }

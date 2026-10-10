@@ -23,10 +23,13 @@ import ToastViewport, { type ToastMessage, type ToastTone } from "./components/T
 import ErrorBoundary from "./components/ErrorBoundary";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
-import { collectHotkeyOwners, displayHotkey, findDuplicateHotkeys } from "./utils/hotkeys";
+import { collectHotkeyOwners, describeHotkeyIssues } from "./utils/hotkeys";
+import { upsertToast } from "./utils/toasts";
 import { traySurfaceName } from "./utils/platform";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
+
+const DEMO_HOTKEY_TOAST_ID = "demo-hotkey-issues";
 
 const backend = getBackend();
 
@@ -90,11 +93,35 @@ function App() {
 
   const showToast = useCallback((title: string, detail?: string, tone: ToastTone = "info") => {
     const id = crypto.randomUUID();
-    setToasts((current) => [...current, { id, title, detail, tone }].slice(-4));
+    setToasts((current) => upsertToast(current, { id, title, detail, tone }));
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 6000);
   }, []);
+
+  // Demo mode hides the window, so hotkey problems stay until dismissed and
+  // update in place as snippets are edited.
+  const demoHotkeyIssues = useProjectStore((s) => s.demoHotkeyIssues);
+  const lastHotkeyIssuesRef = useRef("[]");
+  useEffect(() => {
+    const signature = JSON.stringify(demoHotkeyIssues);
+    if (signature === lastHotkeyIssuesRef.current) return;
+    lastHotkeyIssuesRef.current = signature;
+    if (demoHotkeyIssues.length === 0) {
+      setToasts((current) => current.filter((toast) => toast.id !== DEMO_HOTKEY_TOAST_ID));
+      return;
+    }
+    const { textSnippets: text, videoSnippets: video, automations: scripts } = useProjectStore.getState();
+    setToasts((current) =>
+      upsertToast(current, {
+        id: DEMO_HOTKEY_TOAST_ID,
+        title: demoHotkeyIssues.length === 1 ? "1 hotkey is not active" : `${demoHotkeyIssues.length} hotkeys are not active`,
+        detail: describeHotkeyIssues(demoHotkeyIssues, collectHotkeyOwners(text, video, scripts)),
+        tone: "warning",
+        sticky: true,
+      }),
+    );
+  }, [demoHotkeyIssues]);
 
   // Auto-open last project on startup
   useEffect(() => {
@@ -305,18 +332,8 @@ function App() {
   }, [projectPath, automations, showToast]);
 
   const handleToggleDemo = () => {
-    if (demoMode) {
-      exitDemoMode();
-      return;
-    }
-    const duplicates = findDuplicateHotkeys(hotkeyOwners);
-    if (duplicates.length > 0) {
-      const detail = duplicates
-        .map((dup) => `${displayHotkey(dup.hotkey)}: ${dup.kept.title} keeps it; skipped ${dup.skipped.map((owner) => owner.title).join(", ")}`)
-        .join("\n");
-      showToast("Duplicate hotkeys", detail, "warning");
-    }
-    enterDemoMode();
+    if (demoMode) exitDemoMode();
+    else enterDemoMode();
   };
 
   // ── Welcome screen (no project loaded) ──

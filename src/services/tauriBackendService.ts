@@ -1,5 +1,5 @@
 import { auditaurInvoke as invoke } from "./auditaur";
-import type { BackendService, FfmpegStatus, SnippetHotkey } from "./backendService";
+import type { BackendService, FfmpegStatus, HotkeyIssue, SnippetHotkey } from "./backendService";
 import type { ProjectData, MonitorInfo, StreamDeckButton, StreamDeckTriggerResult, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
@@ -29,7 +29,7 @@ export class TauriBackendService implements BackendService {
     return invoke("save_video_snippets", { path, snippets });
   }
 
-  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<void> {
+  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]> {
     return invoke("enter_demo_mode", { hotkeys });
   }
 
