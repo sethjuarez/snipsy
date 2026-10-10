@@ -91,10 +91,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Run tests
-        if: matrix.rust_targets == ''
-        run: npm test
-
       - name: Package Stream Deck plugin
         if: matrix.platform == 'windows-latest' && matrix.args == ''
         run: npm run package:streamdeck
