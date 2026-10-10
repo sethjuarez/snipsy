@@ -15,6 +15,7 @@ import {
   createRectangleRegion,
   getVideoContentBox,
   isSpotlightBlurEnabled,
+  isSpotlightDimEnabled,
   isSpotlightHaloEnabled,
   normalizeHexColor,
   normalizePauseStops,
@@ -1027,6 +1028,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     updateSpotlightStyle(index, { blur: enabled ? undefined : 0 });
   };
 
+  const setSpotlightDimEnabled = (index: number, enabled: boolean) => {
+    updateSpotlightStyle(index, { dimOpacity: enabled ? undefined : 0 });
+  };
+
   const setSpotlightHaloEnabled = (index: number, enabled: boolean) => {
     updateSpotlightStyle(index, { glow: enabled ? undefined : false });
   };
@@ -1446,7 +1451,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 <label
                   className="flex items-center gap-1 px-2 py-0.5 rounded"
                   style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-                  title="Blur and dim the video outside the spotlight regions during playback"
+                  title="Blur the video outside the spotlight regions during playback"
                 >
                   <input
                     type="checkbox"
@@ -1456,6 +1461,20 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                     data-testid="spotlight-blur"
                   />
                   Blur
+                </label>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Darken the video outside the spotlight regions during playback"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSpotlightDimEnabled(editingSpotlight)}
+                    onChange={(e) => setSpotlightDimEnabled(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-dim"
+                  />
+                  Dim
                 </label>
                 <label
                   className="flex items-center gap-1 px-2 py-0.5 rounded"
