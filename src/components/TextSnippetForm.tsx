@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback } from "react";
 import type { TextSnippet, DeliveryMethod, StreamDeckIcon } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
+import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import IconEditor from "./IconEditor";
 
 interface TextSnippetFormProps {
   snippet?: TextSnippet;
   onSave: (snippet: TextSnippet) => void;
   hotkeyOwners?: HotkeyOwner[];
-  onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
+  onSaveStateChange?: (state: EditorSaveState) => void;
 }
 
 function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange }: TextSnippetFormProps) {
@@ -24,7 +25,15 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   );
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+    title: title.trim(),
+    description: description.trim(),
+    text,
+    hotkey,
+    delivery,
+    typeDelay,
+    streamDeckIcon,
+  });
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available";
   const readinessText = canSave
@@ -60,7 +69,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       typeDelay: delivery === "fast-type" ? typeDelay : undefined,
       streamDeckIcon,
     });
-    setSaveStatus("saved");
+    markSaved();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -69,12 +78,8 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   };
 
   useEffect(() => {
-    if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [title, description, text, hotkey, delivery, typeDelay, streamDeckIcon]);
-
-  useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
-  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -87,7 +92,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   });
 
   return (
-    <form id="text-snippet-editor-form" onSubmit={handleSubmit} className="space-y-4" data-testid="snippet-form">
+    <form id="text-snippet-editor-form" onSubmit={handleSubmit} className="space-y-4" data-testid="snippet-form" data-unsaved={hasUnsavedChanges ? "true" : "false"}>
       <div>
         <label htmlFor="snippet-title" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
           Title

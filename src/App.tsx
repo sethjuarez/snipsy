@@ -34,6 +34,7 @@ const DEFAULT_SAVE_STATE: ClipEditorSaveState = {
   canSave: false,
   readinessText: "Needs required fields",
   saveStatus: "idle",
+  hasUnsavedChanges: false,
 };
 type ConfirmDialogState = {
   title: string;
@@ -235,7 +236,7 @@ function App() {
             ? scriptSaveState
             : null;
 
-    if (!activeSaveState || !(activeSaveState.hasUnsavedChanges ?? activeSaveState.saveStatus !== "saved")) {
+    if (!activeSaveState?.hasUnsavedChanges) {
       closeActiveEditor();
       return;
     }

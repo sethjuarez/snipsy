@@ -8,6 +8,7 @@ import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotke
 import type { EndBehavior, ImportedVideo, MonitorInfo, PauseSpotlight, PauseSpotlightStyle, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import IconEditor from "./IconEditor";
+import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import {
   DEFAULT_SPOTLIGHT_STYLE,
   STOP_EPSILON,
@@ -181,13 +182,7 @@ export interface ClipEditorHandle {
   save: () => void;
 }
 
-export interface ClipEditorSaveState {
-  canSave: boolean;
-  readinessText: string;
-  saveStatus: "idle" | "unsaved" | "saved";
-  /** When provided, close prompts only if this is true. */
-  hasUnsavedChanges?: boolean;
-}
+export type ClipEditorSaveState = EditorSaveState;
 
 function formatTime(seconds: number, precise = false): string {
   const m = Math.floor(seconds / 60);
@@ -329,8 +324,6 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [spotlightManipulation, setSpotlightManipulation] = useState<SpotlightManipulation | null>(null);
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
-  const savedSignatureRef = useRef<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<ClipInspectorTab>("clip");
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({ type: "clip" });
   const [showAllMoments, setShowAllMoments] = useState(false);
@@ -1217,7 +1210,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     }
   };
 
-  const editorSignature = JSON.stringify({
+  // Baseline is taken once video metadata has loaded so default end times and speed don't count as edits.
+  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     startTime,
@@ -1236,7 +1230,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       stop.label ?? "",
       spotlightSignature(stop.spotlight),
     ]),
-  });
+  }, duration > 0);
 
   const buildClipDraft = (): Omit<VideoSnippet, "id"> | null => {
     if (!title.trim() || hotkeyStatus.state !== "available" || endTime <= startTime) return null;
@@ -1264,22 +1258,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     const clip = buildClipDraft();
     if (!clip) return;
     onSave(clip);
-    savedSignatureRef.current = editorSignature;
-    setSaveStatus("saved");
+    markSaved();
   };
 
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available" && endTime > startTime;
-
-  // Baseline is taken once video metadata has loaded so default end times and speed don't count as edits.
-  if (savedSignatureRef.current === null && duration > 0) {
-    savedSignatureRef.current = editorSignature;
-  }
-  const hasUnsavedChanges = savedSignatureRef.current !== null && editorSignature !== savedSignatureRef.current;
-
-  useEffect(() => {
-    if (saveStatus === "saved" && hasUnsavedChanges) setSaveStatus("unsaved");
-    else if (saveStatus === "unsaved" && !hasUnsavedChanges) setSaveStatus("saved");
-  }, [hasUnsavedChanges, saveStatus]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

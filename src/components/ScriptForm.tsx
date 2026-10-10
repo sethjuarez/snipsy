@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import type { AutomationContributionGroup, Script } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
+import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 
 interface ScriptFormProps {
   script?: Script;
   onSave: (script: Script) => void;
   hotkeyOwners?: HotkeyOwner[];
-  onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
+  onSaveStateChange?: (state: EditorSaveState) => void;
 }
 
 function defaultContributionGroups(script?: Script): AutomationContributionGroup[] {
@@ -19,7 +20,12 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const [hotkey, setHotkey] = useState(script?.hotkey ?? "");
   const [contributionGroups, setContributionGroups] = useState<AutomationContributionGroup[]>(() => defaultContributionGroups(script));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+    title: title.trim(),
+    description: description.trim(),
+    hotkey: hotkey.trim(),
+    contributionGroups,
+  });
   const hotkeyStatus = hotkey.trim() ? validateHotkey(hotkey, hotkeyOwners, script?.id) : { state: "available" as const, message: "Optional. Capture a hotkey to run this automation in demo mode." };
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available";
   const readinessText = canSave
@@ -85,12 +91,8 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
       contributionGroups,
       streamDeckIcon: script?.streamDeckIcon,
     });
-    setSaveStatus("saved");
+    markSaved();
   };
-
-  useEffect(() => {
-    if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [title, description, hotkey, contributionGroups]);
 
   const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -103,8 +105,8 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   };
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
-  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   return (
     <form

@@ -577,6 +577,49 @@ function runClipEditorDrills() {
   }
 }
 
+function runTextSnippetSaveTrackingDrill() {
+  if (!optionalClick('[data-testid="edit-drill-text-1"]')) {
+    recordSkip("text snippet save tracking", "Seeded text snippet is not listed.");
+    return;
+  }
+  waitForSelector('[data-testid="snippet-form"]');
+  const readUnsaved = (label) =>
+    evaluate(`document.querySelector('[data-testid="snippet-form"]')?.getAttribute("data-unsaved") ?? null`, { label });
+  const setTitle = (append, label) => evaluate(`(() => {
+    const input = document.querySelector('[data-testid="snippet-title"]');
+    if (!input) return false;
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    const next = ${append ? "input.value + ' drill'" : "input.value.replace(/ drill$/, '')"};
+    descriptor?.set?.call(input, next);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`, { label });
+
+  const initial = readUnsaved("text snippet initially clean");
+  assertCondition(initial === "false", "opening a text snippet does not mark it unsaved", { initial });
+
+  setTitle(true, "edit text snippet title");
+  const dirty = readUnsaved("text snippet dirty after edit");
+  assertCondition(dirty === "true", "editing a text snippet marks it unsaved", { dirty });
+
+  setTitle(false, "revert text snippet title");
+  const reverted = readUnsaved("text snippet clean after revert");
+  assertCondition(reverted === "false", "reverting a text snippet edit clears unsaved state", { reverted });
+
+  click('[data-testid="snippet-cancel"]');
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 500)"]);
+  const closeState = evaluate(`({
+    dialog: Boolean(document.querySelector('[data-testid="discard-changes-dialog"]')),
+    form: Boolean(document.querySelector('[data-testid="snippet-form"]')),
+  })`, { label: "text snippet close state" });
+  assertCondition(
+    closeState && !closeState.dialog && !closeState.form,
+    "closing an unchanged text snippet does not prompt",
+    { closeState },
+  );
+  if (closeState?.dialog) click('[data-testid="confirm-dialog-confirm"]');
+}
+
 function readSpotlightEditState(label) {
   return evaluate(`(() => {
     const toolbar = document.querySelector('[data-testid="spotlight-editor-toolbar"]');
@@ -866,6 +909,7 @@ waitForSelector('[data-testid="sidebar"]');
 waitForSelector('[data-testid="nav-text-snippets"]');
 click('[data-testid="nav-text-snippets"]');
 waitForAnySelector(['[data-testid="empty-state"]', '[data-testid="text-snippet-list"]']);
+runTextSnippetSaveTrackingDrill();
 
 click('[data-testid="nav-videos"]');
 waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);

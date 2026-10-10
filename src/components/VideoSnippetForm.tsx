@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback } from "react";
 import type { VideoSnippet, TransitionAction, StreamDeckIcon } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
+import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import IconEditor from "./IconEditor";
 
 interface VideoSnippetFormProps {
   snippet?: VideoSnippet;
   onSave: (snippet: VideoSnippet) => void;
   hotkeyOwners?: HotkeyOwner[];
-  onSaveStateChange?: (state: { canSave: boolean; readinessText: string; saveStatus: "idle" | "unsaved" | "saved" }) => void;
+  onSaveStateChange?: (state: EditorSaveState) => void;
 }
 
 function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange }: VideoSnippetFormProps) {
@@ -26,7 +27,18 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   const [muted, setMuted] = useState(snippet?.muted !== false);
   const [pauseStops] = useState(snippet?.pauseStops);
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("video"));
-  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+    title: title.trim(),
+    description: description.trim(),
+    videoFile,
+    startTime,
+    endTime,
+    hotkey,
+    speed,
+    muted,
+    transitionActions,
+    streamDeckIcon,
+  });
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
   const canSave = Boolean(title.trim()) && Boolean(videoFile.trim()) && hotkeyStatus.state === "available";
   const readinessText = canSave
@@ -88,7 +100,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
     });
-    setSaveStatus("saved");
+    markSaved();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -97,12 +109,8 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   };
 
   useEffect(() => {
-    if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [title, description, videoFile, startTime, endTime, hotkey, speed, muted, transitionActions, streamDeckIcon]);
-
-  useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus });
-  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
