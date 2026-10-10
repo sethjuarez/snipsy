@@ -440,9 +440,12 @@ function runClipEditorDrills() {
       momentFilter,
     );
 
-    const spotlightButtonExists = selectorExists('[data-testid="selected-moment-spotlight"]');
+    const autoOpenedSpotlight = selectorExists('[data-testid="spotlight-editor-toolbar"]');
+    const spotlightButtonExists = autoOpenedSpotlight || selectorExists('[data-testid="selected-moment-spotlight"]');
     if (spotlightButtonExists) {
-      click('[data-testid="selected-moment-spotlight"]');
+      if (!autoOpenedSpotlight) {
+        click('[data-testid="selected-moment-spotlight"]');
+      }
       waitForSelector('[data-testid="spotlight-editor-toolbar"]');
       const spotlightLayout = evaluate(`(() => {
         const toolbar = document.querySelector('[data-testid="spotlight-editor-toolbar"]');
@@ -524,6 +527,8 @@ function runClipEditorDrills() {
         "spotlight blur and halo can be re-enabled",
         restoredEffects,
       );
+
+      runSpotlightEditFlowDrills();
     }
   } else {
     recordSkip("moment and spotlight drills", "The open clip has no timeline moments.");
@@ -550,6 +555,121 @@ function runClipEditorDrills() {
       { discardDialog },
     );
     click('[data-testid="confirm-dialog-cancel"]');
+  }
+}
+
+function readSpotlightEditState(label) {
+  return evaluate(`(() => {
+    const toolbar = document.querySelector('[data-testid="spotlight-editor-toolbar"]');
+    const halo = document.querySelector('[data-testid="spotlight-halo"]');
+    return {
+      editing: Boolean(toolbar),
+      editingIndex: toolbar?.getAttribute("data-editing-index") ?? null,
+      haloChecked: halo?.checked ?? null,
+      dialog: document.querySelector('[data-testid="spotlight-exit-dialog"]') !== null,
+    };
+  })()`, { label });
+}
+
+function runSpotlightEditFlowDrills() {
+  const startMarker = '[data-testid="timeline-start-marker"]';
+  const marker0 = '[data-testid="pause-stop-marker-0"]';
+  const marker1 = '[data-testid="pause-stop-marker-1"]';
+
+  click(startMarker);
+  const cleanExit = readSpotlightEditState("clean spotlight exit");
+  assertCondition(
+    cleanExit?.editing === false && cleanExit.dialog === false,
+    "unchanged spotlight exits without prompting",
+    cleanExit,
+  );
+
+  click(marker0);
+  waitForSelector('[data-testid="spotlight-editor-toolbar"]');
+  const reopened = readSpotlightEditState("spotlight reopened from timeline");
+  assertCondition(
+    reopened?.editing === true && reopened.editingIndex === "0",
+    "clicking a spotlight marker opens spotlight edit mode",
+    reopened,
+  );
+
+  const hasSecondSpotlight = evaluate(
+    `document.querySelector('[data-testid="pause-stop-marker-1"][data-spotlight="true"]') !== null`,
+    { label: "second spotlight marker probe" },
+  );
+  if (hasSecondSpotlight) {
+    click('[data-testid="spotlight-halo"]');
+    click(marker1);
+    const switched = readSpotlightEditState("switch spotlight while dirty");
+    assertCondition(
+      switched?.editing === true && switched.editingIndex === "1" && switched.dialog === false,
+      "clicking another spotlight switches edit mode without prompting",
+      switched,
+    );
+    click(marker0);
+    const kept = readSpotlightEditState("switched-away edits kept");
+    assertCondition(
+      kept?.editingIndex === "0" && kept.haloChecked === false,
+      "switching spotlights keeps prior edits",
+      kept,
+    );
+  } else {
+    recordSkip("spotlight switch drill", "The open clip has only one spotlight moment.");
+  }
+
+  const baselineHalo = readSpotlightEditState("dirty baseline")?.haloChecked;
+  click('[data-testid="spotlight-halo"]');
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-cancel"]');
+  const keptEditing = readSpotlightEditState("keep editing spotlight");
+  assertCondition(
+    keptEditing?.editing === true && keptEditing.dialog === false && keptEditing.haloChecked === !baselineHalo,
+    "keep editing leaves spotlight changes in place",
+    keptEditing,
+  );
+
+  const keyPrompt = evaluate(`(() => {
+    const timeline = document.querySelector('[data-testid="clip-timeline"]');
+    timeline?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    return true;
+  })()`, { label: "timeline arrow key while spotlight dirty" });
+  if (keyPrompt) {
+    waitForSelector('[data-testid="spotlight-exit-dialog"]');
+    click('[data-testid="confirm-dialog-cancel"]');
+    const afterKey = readSpotlightEditState("arrow key prompt kept editing");
+    assertCondition(
+      afterKey?.editing === true && afterKey.dialog === false,
+      "timeline arrow keys prompt before leaving a changed spotlight",
+      afterKey,
+    );
+  }
+
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-secondary"]');
+  const discarded = readSpotlightEditState("discard spotlight changes");
+  assertCondition(discarded?.editing === false && discarded.dialog === false, "discard exits spotlight edit mode", discarded);
+  click(marker0);
+  waitForSelector('[data-testid="spotlight-editor-toolbar"]');
+  const afterDiscard = readSpotlightEditState("spotlight after discard");
+  assertCondition(afterDiscard?.haloChecked === baselineHalo, "discard restores the spotlight", afterDiscard);
+
+  click('[data-testid="spotlight-halo"]');
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-confirm"]');
+  const saved = readSpotlightEditState("save spotlight changes");
+  assertCondition(saved?.editing === false && saved.dialog === false, "save exits spotlight edit mode", saved);
+  click(marker0);
+  waitForSelector('[data-testid="spotlight-editor-toolbar"]');
+  const afterSave = readSpotlightEditState("spotlight after save");
+  assertCondition(afterSave?.haloChecked === !baselineHalo, "save keeps the spotlight changes", afterSave);
+
+  if (afterSave?.haloChecked === false) {
+    click('[data-testid="spotlight-halo"]');
+    click(startMarker);
+    optionalClick('[data-testid="confirm-dialog-confirm"]');
   }
 }
 

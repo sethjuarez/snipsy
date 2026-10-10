@@ -6,6 +6,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
   onConfirm: () => void;
   onCancel: () => void;
   "data-testid"?: string;
@@ -17,6 +19,8 @@ function ConfirmDialog({
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
   danger = true,
+  secondaryLabel,
+  onSecondary,
   onConfirm,
   onCancel,
   "data-testid": testId,
@@ -54,6 +58,16 @@ function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {secondaryLabel && onSecondary && (
+            <button
+              onClick={onSecondary}
+              className="px-3 py-1.5 rounded text-base font-medium"
+              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-danger)" }}
+              data-testid="confirm-dialog-secondary"
+            >
+              {secondaryLabel}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className="px-3 py-1.5 rounded text-base font-medium"
