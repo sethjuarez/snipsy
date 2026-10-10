@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/sethjuarez/snipsy/compare/v0.20.0...v0.21.0) (2026-10-10)
+
+
+### Features
+
+* spotlight blur/halo toggles, reliable demo hotkeys, unit tests ([#32](https://github.com/sethjuarez/snipsy/issues/32)) ([b15f7f8](https://github.com/sethjuarez/snipsy/commit/b15f7f83e01cc5afed6b3b5adaa8ed6ed8287151))
+
 ## [0.20.0](https://github.com/sethjuarez/snipsy/compare/v0.19.0...v0.20.0) (2026-10-08)
 
 
