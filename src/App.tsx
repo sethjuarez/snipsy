@@ -98,6 +98,9 @@ function App() {
 
   // Auto-open last project on startup
   useEffect(() => {
+    // A webview reload resets demoMode to false while the backend may still
+    // hold hotkeys; reset the backend so the two sides agree.
+    void useProjectStore.getState().reconcileDemoMode();
     void autoOpenLastProject();
     void checkFfmpeg();
     // Silent update check on startup
