@@ -80,210 +80,134 @@ pub fn enter_demo_mode(
     demo.active = true;
     demo.registered_hotkeys = hotkeys.clone();
 
+    let mut registered = 0usize;
+    let mut failed = Vec::new();
     for hk in &hotkeys {
         if hk.hotkey.is_empty() {
             continue;
         }
-
-        if hk.snippet_type == "text" {
-            let text = hk.text.clone().unwrap_or_default();
-            let delivery = hk
-                .delivery
-                .clone()
-                .unwrap_or_else(|| "fast-type".to_string());
-            let type_delay = hk.type_delay;
-
-            let result = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    let _ = crate::delivery::deliver_text(
-                        text.clone(),
-                        delivery.clone(),
-                        type_delay,
-                        None,
-                    );
-                }
-            });
-
-            if let Err(e) = result {
-                tracing::warn!(
-                    hotkey = %hk.hotkey,
-                    error = %e,
-                    "RegisterHotKey failed; falling back to low-level hook"
-                );
-                let text = hk.text.clone().unwrap_or_default();
-                let delivery = hk
-                    .delivery
-                    .clone()
-                    .unwrap_or_else(|| "fast-type".to_string());
-                let type_delay = hk.type_delay;
-
-                let _ = crate::keyboard_hook::register_hook_fallback(
-                    &hk.hotkey,
-                    Box::new(move || {
-                        let _ = crate::delivery::deliver_text(
-                            text.clone(),
-                            delivery.clone(),
-                            type_delay,
-                            None,
-                        );
-                    }),
-                );
-            }
-        } else if hk.snippet_type == "video" {
-            let project_path = hk.project_path.clone();
-            let video_file = hk.video_file.clone().unwrap_or_default();
-            let start_time = hk.start_time.unwrap_or(0.0);
-            let end_time = hk.end_time.unwrap_or(0.0);
-            let speed = hk.speed.unwrap_or(1.0);
-            let transition_actions = hk.transition_actions.clone();
-            let target_monitor = hk.target_monitor.clone();
-            let end_behavior = hk.end_behavior.clone();
-            let hide_cursor = hk.hide_cursor;
-            let background_color = hk.background_color.clone();
-            let click_to_play = hk.click_to_play;
-            let muted = hk.muted;
-            let pause_stops = hk.pause_stops.clone();
-
-            let result = gs.on_shortcut(hk.hotkey.as_str(), move |app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    let app = app.clone();
-                    let project_path = project_path.clone();
-                    let video_file = video_file.clone();
-                    let transition_actions = transition_actions.clone();
-                    let target_monitor = target_monitor.clone();
-                    let end_behavior = end_behavior.clone();
-                    let background_color = background_color.clone();
-                    let pause_stops = pause_stops.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = crate::playback::play_video(
-                            app,
-                            project_path,
-                            video_file,
-                            start_time,
-                            end_time,
-                            speed,
-                            transition_actions,
-                            target_monitor,
-                            end_behavior,
-                            hide_cursor,
-                            background_color,
-                            click_to_play,
-                            muted,
-                            pause_stops,
-                            None,
-                        )
-                        .await
-                        {
-                            tracing::error!(error = %e, "Video playback hotkey action failed");
-                        }
-                    });
-                }
-            });
-
-            if let Err(e) = result {
-                tracing::warn!(
-                    hotkey = %hk.hotkey,
-                    error = %e,
-                    "RegisterHotKey failed; falling back to low-level hook"
-                );
-                let app2 = app.clone();
-                let project_path = hk.project_path.clone();
-                let video_file = hk.video_file.clone().unwrap_or_default();
-                let start_time = hk.start_time.unwrap_or(0.0);
-                let end_time = hk.end_time.unwrap_or(0.0);
-                let speed = hk.speed.unwrap_or(1.0);
-                let transition_actions = hk.transition_actions.clone();
-                let target_monitor = hk.target_monitor.clone();
-                let end_behavior = hk.end_behavior.clone();
-                let hide_cursor = hk.hide_cursor;
-                let background_color = hk.background_color.clone();
-                let click_to_play = hk.click_to_play;
-                let muted = hk.muted;
-                let pause_stops = hk.pause_stops.clone();
-
-                let _ = crate::keyboard_hook::register_hook_fallback(
-                    &hk.hotkey,
-                    Box::new(move || {
-                        let app = app2.clone();
-                        let project_path = project_path.clone();
-                        let video_file = video_file.clone();
-                        let transition_actions = transition_actions.clone();
-                        let target_monitor = target_monitor.clone();
-                        let end_behavior = end_behavior.clone();
-                        let background_color = background_color.clone();
-                        let pause_stops = pause_stops.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Err(e) = crate::playback::play_video(
-                                app,
-                                project_path,
-                                video_file,
-                                start_time,
-                                end_time,
-                                speed,
-                                transition_actions,
-                                target_monitor,
-                                end_behavior,
-                                hide_cursor,
-                                background_color,
-                                click_to_play,
-                                muted,
-                                pause_stops,
-                                None,
-                            )
-                            .await
-                            {
-                                tracing::error!(
-                                    error = %e,
-                                    "Video playback low-level hook fallback action failed"
-                                );
-                            }
-                        });
-                    }),
-                );
-            }
-        } else if hk.snippet_type == "automation" {
-            let project_path = hk.project_path.clone().unwrap_or_default();
-            let script_id = hk.script_id.clone().unwrap_or_else(|| hk.id.clone());
-            let result = gs.on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    let project_path = project_path.clone();
-                    let script_id = script_id.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = crate::scripting::run_automation(project_path, script_id, None).await {
-                            tracing::error!(error = %e, "Automation hotkey action failed");
-                        }
-                    });
-                }
-            });
-
-            if let Err(e) = result {
-                tracing::warn!(
-                    hotkey = %hk.hotkey,
-                    error = %e,
-                    "RegisterHotKey failed; falling back to low-level hook"
-                );
-                let project_path = hk.project_path.clone().unwrap_or_default();
-                let script_id = hk.script_id.clone().unwrap_or_else(|| hk.id.clone());
-                let _ = crate::keyboard_hook::register_hook_fallback(
-                    &hk.hotkey,
-                    Box::new(move || {
-                        let project_path = project_path.clone();
-                        let script_id = script_id.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Err(e) = crate::scripting::run_automation(project_path, script_id, None).await {
-                                tracing::error!(
-                                    error = %e,
-                                    "Automation low-level hook fallback action failed"
-                                );
-                            }
-                        });
-                    }),
-                );
+        let Some(action) = hotkey_action(&app, hk) else {
+            tracing::warn!(hotkey = %hk.hotkey, snippet_type = %hk.snippet_type, "Unknown hotkey snippet type");
+            continue;
+        };
+        match register_hotkey(&app, hk, action) {
+            Ok(()) => registered += 1,
+            Err(e) => {
+                tracing::error!(hotkey = %hk.hotkey, snippet_id = %hk.id, error = %e, "Hotkey registration failed");
+                failed.push(hk.hotkey.clone());
             }
         }
     }
+    tracing::info!(registered, failed = failed.len(), "Demo hotkeys registered");
 
     Ok(())
+}
+
+type HotkeyAction = crate::keyboard_hook::HookCallback;
+
+static TEXT_DELIVERY_LOCK: Mutex<()> = Mutex::new(());
+
+/// Build the work a hotkey performs. Actions may block (fast-type), so callers
+/// must run them off the main and hook threads.
+fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAction> {
+    match hk.snippet_type.as_str() {
+        "text" => {
+            let text = hk.text.clone().unwrap_or_default();
+            let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+            let type_delay = hk.type_delay;
+            Some(std::sync::Arc::new(move || {
+                // Serialize deliveries so rapid presses can't interleave keystrokes
+                // or release another delivery's input block early.
+                let _guard = TEXT_DELIVERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+                if let Err(e) =
+                    crate::delivery::deliver_text(text.clone(), delivery.clone(), type_delay, None)
+                {
+                    tracing::error!(error = %e, "Text hotkey delivery failed");
+                }
+            }))
+        }
+        "video" => {
+            let app = app.clone();
+            let hk = hk.clone();
+            Some(std::sync::Arc::new(move || {
+                let app = app.clone();
+                let hk = hk.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = crate::playback::play_video(
+                        app,
+                        hk.project_path,
+                        hk.video_file.unwrap_or_default(),
+                        hk.start_time.unwrap_or(0.0),
+                        hk.end_time.unwrap_or(0.0),
+                        hk.speed.unwrap_or(1.0),
+                        hk.transition_actions,
+                        hk.target_monitor,
+                        hk.end_behavior,
+                        hk.hide_cursor,
+                        hk.background_color,
+                        hk.click_to_play,
+                        hk.muted,
+                        hk.pause_stops,
+                        None,
+                    )
+                    .await
+                    {
+                        tracing::error!(error = %e, "Video playback hotkey action failed");
+                    }
+                });
+            }))
+        }
+        "automation" => {
+            let project_path = hk.project_path.clone().unwrap_or_default();
+            let script_id = hk.script_id.clone().unwrap_or_else(|| hk.id.clone());
+            Some(std::sync::Arc::new(move || {
+                let project_path = project_path.clone();
+                let script_id = script_id.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = crate::scripting::run_automation(project_path, script_id, None).await {
+                        tracing::error!(error = %e, "Automation hotkey action failed");
+                    }
+                });
+            }))
+        }
+        _ => None,
+    }
+}
+
+/// Register via RegisterHotKey, falling back to the low-level hook when the
+/// combo is already owned by another app.
+fn register_hotkey(
+    app: &tauri::AppHandle,
+    hk: &SnippetHotkey,
+    action: HotkeyAction,
+) -> Result<(), String> {
+    let plugin_action = action.clone();
+    let hotkey = hk.hotkey.clone();
+    let result = app.global_shortcut().on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            tracing::info!(hotkey = %hotkey, "Hotkey fired");
+            // The plugin calls us on the main thread while holding its own lock;
+            // never block it with delivery work.
+            let action = plugin_action.clone();
+            std::thread::spawn(move || action());
+        }
+    });
+
+    match result {
+        Ok(()) => {
+            tracing::info!(hotkey = %hk.hotkey, snippet_type = %hk.snippet_type, "Registered hotkey");
+            Ok(())
+        }
+        Err(e) => {
+            tracing::warn!(
+                hotkey = %hk.hotkey,
+                error = %e,
+                "RegisterHotKey failed; falling back to low-level hook"
+            );
+            crate::keyboard_hook::register_hook_fallback(&hk.hotkey, action)
+                .map_err(|fallback| format!("{e}; fallback: {fallback}"))
+        }
+    }
 }
 
 #[tauri::command]
