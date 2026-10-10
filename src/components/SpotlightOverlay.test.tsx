@@ -40,6 +40,13 @@ describe("SpotlightOverlay effects", () => {
     expect(outside.dataset.dim).toBe("on");
   });
 
+  it("restores default effects when toggles are re-enabled in memory", () => {
+    renderOverlay({ blur: undefined, dimOpacity: undefined, glow: undefined });
+    const outside = screen.getByTestId("spotlight-outside-blur");
+    expect(outside.style.backgroundColor).toBe("rgba(0, 0, 0, 0.12)");
+    expect(outside.style.backdropFilter).toBe("blur(6px)");
+  });
+
   it("draws only the outline when every effect is off", () => {
     renderOverlay({ blur: 0, dimOpacity: 0, glow: false });
     expect(screen.queryByTestId("spotlight-outside-blur")).toBeNull();

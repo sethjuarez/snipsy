@@ -1,11 +1,11 @@
 import type { PauseSpotlight } from "../types";
 import {
-  DEFAULT_SPOTLIGHT_STYLE,
   type Rect,
   isSpotlightBlurEnabled,
   isSpotlightDimEnabled,
   isSpotlightHaloEnabled,
   regionToBox,
+  resolveSpotlightStyle,
 } from "../utils/spotlight";
 
 interface SpotlightOverlayProps {
@@ -44,7 +44,7 @@ function SpotlightOverlay({
   onRegionClick,
   onRegionMouseDown,
 }: SpotlightOverlayProps) {
-  const style = { ...DEFAULT_SPOTLIGHT_STYLE, ...spotlight.style };
+  const style = resolveSpotlightStyle(spotlight);
   const blurEnabled = isSpotlightBlurEnabled(spotlight);
   const dimEnabled = isSpotlightDimEnabled(spotlight);
   const haloEnabled = isSpotlightHaloEnabled(spotlight);
