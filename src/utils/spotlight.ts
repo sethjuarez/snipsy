@@ -98,6 +98,14 @@ export function normalizeSpotlight(spotlight: PauseSpotlight | undefined): Pause
   };
 }
 
+export function isSpotlightBlurEnabled(spotlight: PauseSpotlight | undefined): boolean {
+  return (spotlight?.style?.blur ?? DEFAULT_SPOTLIGHT_STYLE.blur) > 0;
+}
+
+export function isSpotlightHaloEnabled(spotlight: PauseSpotlight | undefined): boolean {
+  return spotlight?.style?.glow ?? DEFAULT_SPOTLIGHT_STYLE.glow;
+}
+
 export function normalizePauseStops(
   stops: PauseStop[],
   startTime: number,

@@ -478,6 +478,52 @@ function runClipEditorDrills() {
         "spotlight toolbar does not cover video and regions align",
         spotlightLayout,
       );
+
+      const readSpotlightEffects = (label) => evaluate(`(() => {
+        const blur = document.querySelector('[data-testid="spotlight-blur"]');
+        const halo = document.querySelector('[data-testid="spotlight-halo"]');
+        const region = document.querySelector('[data-testid="editor-spotlight-region-0"]');
+        return {
+          hasToggles: Boolean(blur && halo),
+          blurChecked: blur?.checked ?? null,
+          haloChecked: halo?.checked ?? null,
+          regionHalo: region?.getAttribute("data-halo") ?? null,
+          regionShadow: region ? region.style.boxShadow : null,
+        };
+      })()`, { label });
+
+      const defaultEffects = readSpotlightEffects("spotlight effect toggles default on");
+      assertCondition(
+        defaultEffects?.hasToggles === true &&
+          defaultEffects.blurChecked === true &&
+          defaultEffects.haloChecked === true &&
+          (defaultEffects.regionHalo === null || defaultEffects.regionHalo === "on"),
+        "spotlight blur and halo default on",
+        defaultEffects,
+      );
+
+      click('[data-testid="spotlight-blur"]');
+      click('[data-testid="spotlight-halo"]');
+      const disabledEffects = readSpotlightEffects("spotlight effect toggles off");
+      assertCondition(
+        disabledEffects?.blurChecked === false &&
+          disabledEffects.haloChecked === false &&
+          (disabledEffects.regionHalo === null ||
+            (disabledEffects.regionHalo === "off" && !disabledEffects.regionShadow)),
+        "spotlight blur and halo can be disabled",
+        disabledEffects,
+      );
+
+      click('[data-testid="spotlight-blur"]');
+      click('[data-testid="spotlight-halo"]');
+      const restoredEffects = readSpotlightEffects("spotlight effect toggles restored");
+      assertCondition(
+        restoredEffects?.blurChecked === true &&
+          restoredEffects.haloChecked === true &&
+          (restoredEffects.regionHalo === null || restoredEffects.regionHalo === "on"),
+        "spotlight blur and halo can be re-enabled",
+        restoredEffects,
+      );
     }
   } else {
     recordSkip("moment and spotlight drills", "The open clip has no timeline moments.");

@@ -1,5 +1,5 @@
 import type { PauseSpotlight } from "../types";
-import { DEFAULT_SPOTLIGHT_STYLE, type Rect, regionToBox } from "../utils/spotlight";
+import { DEFAULT_SPOTLIGHT_STYLE, type Rect, isSpotlightBlurEnabled, isSpotlightHaloEnabled, regionToBox } from "../utils/spotlight";
 
 interface SpotlightOverlayProps {
   spotlight: PauseSpotlight;
@@ -38,6 +38,9 @@ function SpotlightOverlay({
   onRegionMouseDown,
 }: SpotlightOverlayProps) {
   const style = { ...DEFAULT_SPOTLIGHT_STYLE, ...spotlight.style };
+  const blurEnabled = isSpotlightBlurEnabled(spotlight);
+  const haloEnabled = isSpotlightHaloEnabled(spotlight);
+  const backdropFilter = blurEnabled ? `blur(${style.blur}px)` : undefined;
   const regions = spotlight.regions
     .filter((region) => region.type === "rectangle")
     .map((region) => regionToBox(region, contentBox));
@@ -61,8 +64,8 @@ function SpotlightOverlay({
             width: contentBox.width,
             height: contentBox.height,
             backgroundColor: `rgba(0, 0, 0, ${style.dimOpacity})`,
-            backdropFilter: `blur(${style.blur}px)`,
-            WebkitBackdropFilter: `blur(${style.blur}px)`,
+            backdropFilter,
+            WebkitBackdropFilter: backdropFilter,
             maskImage: outsideMask,
             WebkitMaskImage: outsideMask,
             maskRepeat: "no-repeat",
@@ -72,6 +75,7 @@ function SpotlightOverlay({
             pointerEvents: "none",
           }}
           data-testid={`${testIdPrefix}-outside-blur`}
+          data-blur={blurEnabled ? "on" : "off"}
         />
       )}
 
@@ -83,6 +87,7 @@ function SpotlightOverlay({
             type="button"
             aria-label={`Spotlight region ${index + 1}`}
             data-testid={`${testIdPrefix}-region-${index}`}
+            data-halo={haloEnabled ? "on" : "off"}
             onMouseDown={(event) => {
               event.stopPropagation();
               onRegionMouseDown?.(index, event);
@@ -101,7 +106,7 @@ function SpotlightOverlay({
               minHeight: 0,
               padding: 0,
               border: `${selected ? style.borderWidth + 1 : style.borderWidth}px solid ${style.borderColor}`,
-              boxShadow: style.glow
+              boxShadow: haloEnabled
                 ? `0 0 0 1px rgba(255,255,255,0.45), 0 0 22px ${style.borderColor}, inset 0 0 18px rgba(250,204,21,0.18)`
                 : undefined,
               background: "transparent",
@@ -119,7 +124,7 @@ function SpotlightOverlay({
             top: Math.max(8, regions[0].top - 34),
             color: "#111827",
             backgroundColor: style.borderColor,
-            boxShadow: style.glow ? `0 0 18px ${style.borderColor}` : undefined,
+            boxShadow: haloEnabled ? `0 0 18px ${style.borderColor}` : undefined,
             pointerEvents: "none",
           }}
           data-testid={`${testIdPrefix}-label`}

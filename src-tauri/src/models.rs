@@ -341,6 +341,26 @@ mod tests {
     }
 
     #[test]
+    fn spotlight_effects_disabled_round_trip() {
+        let json = r##"{
+            "regions": [
+                { "type": "rectangle", "x": 10.0, "y": 10.0, "width": 20.0, "height": 20.0 }
+            ],
+            "style": { "blur": 0.0, "glow": false }
+        }"##;
+        let spotlight: PauseSpotlight = serde_json::from_str(json).unwrap();
+        let style = spotlight.style.as_ref().unwrap();
+        assert_eq!(style.blur, Some(0.0));
+        assert_eq!(style.glow, Some(false));
+
+        let re_json = serde_json::to_string(&spotlight).unwrap();
+        assert!(re_json.contains("\"blur\":0.0"));
+        assert!(re_json.contains("\"glow\":false"));
+        let re_spotlight: PauseSpotlight = serde_json::from_str(&re_json).unwrap();
+        assert_eq!(spotlight, re_spotlight);
+    }
+
+    #[test]
     fn video_snippet_no_transitions() {
         let json = r#"{
             "id": "simple-id",

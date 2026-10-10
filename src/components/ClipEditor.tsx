@@ -4,7 +4,7 @@ import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import SpotlightOverlay from "./SpotlightOverlay";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
-import type { EndBehavior, ImportedVideo, MonitorInfo, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseSpotlightStyle, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import IconEditor from "./IconEditor";
 import {
@@ -12,6 +12,8 @@ import {
   STOP_EPSILON,
   createRectangleRegion,
   getVideoContentBox,
+  isSpotlightBlurEnabled,
+  isSpotlightHaloEnabled,
   normalizeHexColor,
   normalizePauseStops,
   normalizeSpotlight,
@@ -904,9 +906,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     });
   };
 
-  const setSpotlightColor = (index: number, color: string) => {
-    const borderColor = normalizeHexColor(color);
-    if (!borderColor) return;
+  const updateSpotlightStyle = (index: number, patch: Partial<PauseSpotlightStyle>) => {
     setPauseStops((stops) => {
       const updated = [...stops];
       const stop = updated[index];
@@ -917,12 +917,26 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           ...stop.spotlight,
           style: {
             ...stop.spotlight.style,
-            borderColor,
+            ...patch,
           },
         }),
       };
       return updated;
     });
+  };
+
+  const setSpotlightColor = (index: number, color: string) => {
+    const borderColor = normalizeHexColor(color);
+    if (!borderColor) return;
+    updateSpotlightStyle(index, { borderColor });
+  };
+
+  const setSpotlightBlurEnabled = (index: number, enabled: boolean) => {
+    updateSpotlightStyle(index, { blur: enabled ? undefined : 0 });
+  };
+
+  const setSpotlightHaloEnabled = (index: number, enabled: boolean) => {
+    updateSpotlightStyle(index, { glow: enabled ? undefined : false });
   };
 
   const deleteSelectedSpotlightRegion = () => {
@@ -1331,6 +1345,34 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                     data-testid="spotlight-show-label"
                   />
                   Show label
+                </label>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Blur and dim the video outside the spotlight regions during playback"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSpotlightBlurEnabled(editingSpotlight)}
+                    onChange={(e) => setSpotlightBlurEnabled(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-blur"
+                  />
+                  Blur
+                </label>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Glow around the spotlight regions"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSpotlightHaloEnabled(editingSpotlight)}
+                    onChange={(e) => setSpotlightHaloEnabled(editingSpotlightIndex, e.target.checked)}
+                    className="accent-[var(--color-accent)]"
+                    data-testid="spotlight-halo"
+                  />
+                  Halo
                 </label>
               </>
             )}
