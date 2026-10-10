@@ -50,8 +50,73 @@ export function formatKeyCombo(event: KeyboardEvent): string {
   return parts.join("+");
 }
 
+const MODIFIER_ORDER = ["ctrl", "cmd", "alt", "shift"];
+
+function canonicalPart(part: string, macPlatform: boolean): string {
+  switch (part) {
+    case "cmdorcontrol":
+    case "commandorcontrol":
+    case "cmdorctrl":
+    case "commandorctrl":
+      return macPlatform ? "cmd" : "ctrl";
+    case "control":
+      return "ctrl";
+    case "command":
+    case "meta":
+    case "super":
+      return "cmd";
+    case "option":
+      return "alt";
+    default:
+      return canonicalKey(part);
+  }
+}
+
+// Mirrors the key aliases accepted by the backend's global-hotkey parser.
+const KEY_ALIASES: Record<string, string> = {
+  "`": "backquote",
+  "\\": "backslash",
+  "[": "bracketleft",
+  "]": "bracketright",
+  ",": "comma",
+  "=": "equal",
+  "-": "minus",
+  ".": "period",
+  "'": "quote",
+  ";": "semicolon",
+  "/": "slash",
+  pausebreak: "pause",
+  esc: "escape",
+  down: "arrowdown",
+  left: "arrowleft",
+  right: "arrowright",
+  up: "arrowup",
+  numplus: "numadd",
+  numpadplus: "numadd",
+  volumedown: "audiovolumedown",
+  volumeup: "audiovolumeup",
+  volumemute: "audiovolumemute",
+  mediatrackprev: "mediatrackprevious",
+};
+
+function canonicalKey(key: string): string {
+  if (/^digit\d$/.test(key)) return key.slice(5);
+  if (/^key[a-z]$/.test(key)) return key.slice(3);
+  const aliased = KEY_ALIASES[key] ?? key;
+  if (aliased.startsWith("numpad")) return KEY_ALIASES[`num${aliased.slice(6)}`] ?? `num${aliased.slice(6)}`;
+  return aliased;
+}
+
+/** Canonical form so aliases (Ctrl vs CmdOrControl) and modifier order compare equal. */
 export function normalizeHotkey(hotkey: string): string {
-  return hotkey.trim().toLowerCase();
+  const macPlatform = isMacPlatform();
+  const parts = hotkey
+    .split("+")
+    .map((part) => canonicalPart(part.trim().toLowerCase(), macPlatform))
+    .filter(Boolean);
+  const modifiers = MODIFIER_ORDER.filter((modifier) => parts.includes(modifier));
+  const keys = parts.filter((part) => !MODIFIER_ORDER.includes(part));
+  return [...modifiers, ...keys].join("+");
 }
 
 export function displayHotkey(hotkey: string): string {
@@ -130,4 +195,23 @@ export function collectHotkeyOwners(
         kind: "automation" as const,
       })),
   ];
+}
+
+export interface HotkeyDuplicate {
+  hotkey: string;
+  kept: HotkeyOwner;
+  skipped: HotkeyOwner[];
+}
+
+/** Groups owners sharing a hotkey; the first owner keeps it in demo mode. */
+export function findDuplicateHotkeys(owners: HotkeyOwner[]): HotkeyDuplicate[] {
+  const groups = new Map<string, HotkeyDuplicate>();
+  for (const owner of owners) {
+    const key = normalizeHotkey(owner.hotkey);
+    if (!key) continue;
+    const group = groups.get(key);
+    if (group) group.skipped.push(owner);
+    else groups.set(key, { hotkey: owner.hotkey, kept: owner, skipped: [] });
+  }
+  return [...groups.values()].filter((group) => group.skipped.length > 0);
 }

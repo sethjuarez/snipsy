@@ -1,6 +1,6 @@
 import { CheckCircle, AlertTriangle, Info, X } from "lucide-react";
 
-export type ToastTone = "success" | "error" | "info";
+export type ToastTone = "success" | "error" | "warning" | "info";
 
 export interface ToastMessage {
   id: string;
@@ -17,6 +17,7 @@ interface ToastViewportProps {
 const TONE_STYLES: Record<ToastTone, { color: string; Icon: typeof Info }> = {
   success: { color: "var(--color-success)", Icon: CheckCircle },
   error: { color: "var(--color-danger)", Icon: AlertTriangle },
+  warning: { color: "var(--color-warning)", Icon: AlertTriangle },
   info: { color: "var(--color-accent)", Icon: Info },
 };
 
@@ -48,7 +49,7 @@ function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-md">{toast.title}</div>
                 {toast.detail && (
-                  <div className="mt-0.5 text-base" style={{ color: "var(--color-text-secondary)" }}>
+                  <div className="mt-0.5 text-base whitespace-pre-line" style={{ color: "var(--color-text-secondary)" }}>
                     {toast.detail}
                   </div>
                 )}

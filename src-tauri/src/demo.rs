@@ -80,12 +80,22 @@ pub fn enter_demo_mode(
     demo.active = true;
     demo.registered_hotkeys = hotkeys.clone();
 
+    let (unique, duplicates) = partition_duplicate_hotkeys(&hotkeys);
+    for (dup, kept) in &duplicates {
+        // Registering our own combo twice fails as "already registered", which
+        // would wrongly route the duplicate to the low-level hook and hijack the
+        // first snippet. The first snippet keeps the hotkey.
+        tracing::warn!(
+            hotkey = %dup.hotkey,
+            snippet_id = %dup.id,
+            kept_snippet_id = %kept.id,
+            "Duplicate hotkey in project; skipping"
+        );
+    }
+
     let mut registered = 0usize;
     let mut failed = Vec::new();
-    for hk in &hotkeys {
-        if hk.hotkey.is_empty() {
-            continue;
-        }
+    for hk in unique {
         let Some(action) = hotkey_action(&app, hk) else {
             tracing::warn!(hotkey = %hk.hotkey, snippet_type = %hk.snippet_type, "Unknown hotkey snippet type");
             continue;
@@ -98,9 +108,43 @@ pub fn enter_demo_mode(
             }
         }
     }
-    tracing::info!(registered, failed = failed.len(), "Demo hotkeys registered");
+    tracing::info!(
+        registered,
+        failed = failed.len(),
+        duplicates = duplicates.len(),
+        "Demo hotkeys registered"
+    );
 
     Ok(())
+}
+
+/// Identity of the physical key combo, so `Ctrl+Shift+1` and
+/// `CmdOrControl+Shift+1` count as the same hotkey.
+fn hotkey_identity(hotkey: &str) -> String {
+    hotkey
+        .parse::<tauri_plugin_global_shortcut::Shortcut>()
+        .map(|shortcut| shortcut.id().to_string())
+        .unwrap_or_else(|_| hotkey.trim().to_lowercase())
+}
+
+/// Split hotkeys into the first owner of each combo and the later duplicates
+/// (paired with the snippet that kept the combo). Empty hotkeys are dropped.
+fn partition_duplicate_hotkeys(
+    hotkeys: &[SnippetHotkey],
+) -> (Vec<&SnippetHotkey>, Vec<(&SnippetHotkey, &SnippetHotkey)>) {
+    let mut owners: std::collections::HashMap<String, &SnippetHotkey> = std::collections::HashMap::new();
+    let mut unique = Vec::new();
+    let mut duplicates = Vec::new();
+    for hk in hotkeys.iter().filter(|hk| !hk.hotkey.trim().is_empty()) {
+        match owners.entry(hotkey_identity(&hk.hotkey)) {
+            std::collections::hash_map::Entry::Occupied(kept) => duplicates.push((hk, *kept.get())),
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(hk);
+                unique.push(hk);
+            }
+        }
+    }
+    (unique, duplicates)
 }
 
 type HotkeyAction = crate::keyboard_hook::HookCallback;
@@ -181,9 +225,16 @@ fn register_hotkey(
     hk: &SnippetHotkey,
     action: HotkeyAction,
 ) -> Result<(), String> {
+    // Only fall back to the hook when the OS rejects a valid shortcut. The hook's
+    // parser is more permissive, so a malformed value could otherwise hijack a
+    // combo another snippet already owns.
+    let shortcut = hk
+        .hotkey
+        .parse::<tauri_plugin_global_shortcut::Shortcut>()
+        .map_err(|e| format!("Invalid hotkey '{}': {e}", hk.hotkey))?;
     let plugin_action = action.clone();
     let hotkey = hk.hotkey.clone();
-    let result = app.global_shortcut().on_shortcut(hk.hotkey.as_str(), move |_app, _shortcut, event| {
+    let result = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
             tracing::info!(hotkey = %hotkey, "Hotkey fired");
             // The plugin calls us on the main thread while holding its own lock;
@@ -250,6 +301,56 @@ mod tests {
         let state = DemoState::default();
         assert!(!state.active);
         assert!(state.registered_hotkeys.is_empty());
+    }
+
+    fn automation(id: &str, hotkey: &str) -> SnippetHotkey {
+        SnippetHotkey {
+            id: id.into(),
+            hotkey: hotkey.into(),
+            snippet_type: "automation".into(),
+            text: None,
+            delivery: None,
+            type_delay: None,
+            project_path: None,
+            video_file: None,
+            start_time: None,
+            end_time: None,
+            speed: None,
+            transition_actions: None,
+            target_monitor: None,
+            end_behavior: None,
+            hide_cursor: None,
+            background_color: None,
+            click_to_play: None,
+            muted: None,
+            pause_stops: None,
+            script_id: None,
+        }
+    }
+
+    #[test]
+    fn duplicate_hotkeys_keep_first_owner() {
+        let hotkeys = vec![
+            automation("a", "CmdOrControl+Shift+1"),
+            automation("b", "CmdOrControl+Shift+2"),
+            automation("c", "cmdorcontrol+shift+1"),
+            automation("d", ""),
+        ];
+        let (unique, duplicates) = partition_duplicate_hotkeys(&hotkeys);
+        let ids: Vec<_> = unique.iter().map(|hk| hk.id.as_str()).collect();
+        assert_eq!(ids, ["a", "b"]);
+        assert_eq!(duplicates.len(), 1);
+        assert_eq!((duplicates[0].0.id.as_str(), duplicates[0].1.id.as_str()), ("c", "a"));
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn ctrl_alias_is_the_same_hotkey() {
+        assert_eq!(
+            hotkey_identity("Ctrl+Shift+1"),
+            hotkey_identity("CmdOrControl+Shift+1")
+        );
+        assert_ne!(hotkey_identity("Ctrl+Shift+1"), hotkey_identity("Ctrl+Shift+2"));
     }
 
     #[test]

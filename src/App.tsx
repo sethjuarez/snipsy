@@ -23,7 +23,7 @@ import ToastViewport, { type ToastMessage, type ToastTone } from "./components/T
 import ErrorBoundary from "./components/ErrorBoundary";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
-import { collectHotkeyOwners } from "./utils/hotkeys";
+import { collectHotkeyOwners, displayHotkey, findDuplicateHotkeys } from "./utils/hotkeys";
 import { traySurfaceName } from "./utils/platform";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
@@ -305,8 +305,18 @@ function App() {
   }, [projectPath, automations, showToast]);
 
   const handleToggleDemo = () => {
-    if (demoMode) exitDemoMode();
-    else enterDemoMode();
+    if (demoMode) {
+      exitDemoMode();
+      return;
+    }
+    const duplicates = findDuplicateHotkeys(hotkeyOwners);
+    if (duplicates.length > 0) {
+      const detail = duplicates
+        .map((dup) => `${displayHotkey(dup.hotkey)}: ${dup.kept.title} keeps it; skipped ${dup.skipped.map((owner) => owner.title).join(", ")}`)
+        .join("\n");
+      showToast("Duplicate hotkeys", detail, "warning");
+    }
+    enterDemoMode();
   };
 
   // ── Welcome screen (no project loaded) ──
