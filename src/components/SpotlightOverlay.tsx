@@ -1,5 +1,12 @@
 import type { PauseSpotlight } from "../types";
-import { DEFAULT_SPOTLIGHT_STYLE, type Rect, isSpotlightBlurEnabled, isSpotlightHaloEnabled, regionToBox } from "../utils/spotlight";
+import {
+  type Rect,
+  isSpotlightBlurEnabled,
+  isSpotlightDimEnabled,
+  isSpotlightHaloEnabled,
+  regionToBox,
+  resolveSpotlightStyle,
+} from "../utils/spotlight";
 
 interface SpotlightOverlayProps {
   spotlight: PauseSpotlight;
@@ -37,8 +44,9 @@ function SpotlightOverlay({
   onRegionClick,
   onRegionMouseDown,
 }: SpotlightOverlayProps) {
-  const style = { ...DEFAULT_SPOTLIGHT_STYLE, ...spotlight.style };
+  const style = resolveSpotlightStyle(spotlight);
   const blurEnabled = isSpotlightBlurEnabled(spotlight);
+  const dimEnabled = isSpotlightDimEnabled(spotlight);
   const haloEnabled = isSpotlightHaloEnabled(spotlight);
   const backdropFilter = blurEnabled ? `blur(${style.blur}px)` : undefined;
   const regions = spotlight.regions
@@ -55,7 +63,7 @@ function SpotlightOverlay({
       style={{ pointerEvents: onRegionClick ? "auto" : "none", zIndex: 30 }}
       data-testid={`${testIdPrefix}-overlay`}
     >
-      {showOutsideEffect && (
+      {showOutsideEffect && (blurEnabled || dimEnabled) && (
         <div
           className="absolute"
           style={{
@@ -63,7 +71,7 @@ function SpotlightOverlay({
             top: contentBox.top,
             width: contentBox.width,
             height: contentBox.height,
-            backgroundColor: `rgba(0, 0, 0, ${style.dimOpacity})`,
+            backgroundColor: dimEnabled ? `rgba(0, 0, 0, ${style.dimOpacity})` : undefined,
             backdropFilter,
             WebkitBackdropFilter: backdropFilter,
             maskImage: outsideMask,
@@ -76,6 +84,7 @@ function SpotlightOverlay({
           }}
           data-testid={`${testIdPrefix}-outside-blur`}
           data-blur={blurEnabled ? "on" : "off"}
+          data-dim={dimEnabled ? "on" : "off"}
         />
       )}
 
