@@ -21,6 +21,7 @@ import {
   pointerToVideoPoint,
   regionToBox,
   spotlightsEqual,
+  spotlightSignature,
   type Point,
   type Rect,
 } from "../utils/spotlight";
@@ -184,6 +185,8 @@ export interface ClipEditorSaveState {
   canSave: boolean;
   readinessText: string;
   saveStatus: "idle" | "unsaved" | "saved";
+  /** When provided, close prompts only if this is true. */
+  hasUnsavedChanges?: boolean;
 }
 
 function formatTime(seconds: number, precise = false): string {
@@ -327,6 +330,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [monitorPreview, setMonitorPreview] = useState<string | null>(null);
   const [capturingPreview, setCapturingPreview] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saved">("idle");
+  const savedSignatureRef = useRef<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<ClipInspectorTab>("clip");
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({ type: "clip" });
   const [showAllMoments, setShowAllMoments] = useState(false);
@@ -1213,6 +1217,27 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     }
   };
 
+  const editorSignature = JSON.stringify({
+    title: title.trim(),
+    description: description.trim(),
+    startTime,
+    endTime,
+    targetDuration: targetDuration.trim(),
+    hotkey,
+    targetMonitor,
+    endBehavior,
+    hideCursor,
+    backgroundColor,
+    clickToPlay,
+    muted,
+    streamDeckIcon,
+    pauseStops: normalizePauseStops(pauseStops, startTime, endTime).map((stop) => [
+      stop.time,
+      stop.label ?? "",
+      spotlightSignature(stop.spotlight),
+    ]),
+  });
+
   const buildClipDraft = (): Omit<VideoSnippet, "id"> | null => {
     if (!title.trim() || hotkeyStatus.state !== "available" || endTime <= startTime) return null;
     const normalizedPauseStops = normalizePauseStops(pauseStops, startTime, endTime);
@@ -1239,29 +1264,22 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     const clip = buildClipDraft();
     if (!clip) return;
     onSave(clip);
+    savedSignatureRef.current = editorSignature;
     setSaveStatus("saved");
   };
 
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available" && endTime > startTime;
 
+  // Baseline is taken once video metadata has loaded so default end times and speed don't count as edits.
+  if (savedSignatureRef.current === null && duration > 0) {
+    savedSignatureRef.current = editorSignature;
+  }
+  const hasUnsavedChanges = savedSignatureRef.current !== null && editorSignature !== savedSignatureRef.current;
+
   useEffect(() => {
-    if (saveStatus === "saved") setSaveStatus("unsaved");
-  }, [
-    title,
-    description,
-    startTime,
-    endTime,
-    effectiveSpeed,
-    hotkey,
-    targetMonitor,
-    endBehavior,
-    hideCursor,
-    backgroundColor,
-    clickToPlay,
-    muted,
-    streamDeckIcon,
-    pauseStops,
-  ]);
+    if (saveStatus === "saved" && hasUnsavedChanges) setSaveStatus("unsaved");
+    else if (saveStatus === "unsaved" && !hasUnsavedChanges) setSaveStatus("saved");
+  }, [hasUnsavedChanges, saveStatus]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1334,8 +1352,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   useImperativeHandle(ref, () => ({ save: handleSave }), [handleSave]);
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText, saveStatus });
-  }, [canSave, onSaveStateChange, readinessText, saveStatus]);
+    onSaveStateChange?.({ canSave, readinessText, saveStatus, hasUnsavedChanges });
+  }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   return (
     <div
@@ -1343,6 +1361,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       data-testid="clip-editor"
       data-preview-pause-active={activePreviewStop ? "true" : "false"}
       data-preview-stop-kind={activePreviewStop?.kind ?? "none"}
+      data-unsaved={hasUnsavedChanges ? "true" : "false"}
     >
       <div className="flex flex-1 min-h-0 gap-3">
       <div className="flex min-w-0 flex-1 flex-col gap-2">

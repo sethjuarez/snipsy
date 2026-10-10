@@ -534,14 +534,26 @@ function runClipEditorDrills() {
     recordSkip("moment and spotlight drills", "The open clip has no timeline moments.");
   }
 
-  const titleChanged = evaluate(`(() => {
+  const readUnsaved = (label) =>
+    evaluate(`document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved") ?? null`, { label });
+  const cleanAfterRevert = readUnsaved("clip editor clean after reverted edits");
+  assertCondition(
+    cleanAfterRevert === "false",
+    "reverted spotlight edits leave the clip unchanged",
+    { cleanAfterRevert },
+  );
+
+  optionalClick('[data-testid="clip-inspector-tab-clip"]');
+  const setTitle = (append, label) => evaluate(`(() => {
     const input = document.querySelector('[data-testid="clip-title"]');
     if (!input) return false;
     const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
-    descriptor?.set?.call(input, \`\${input.value} drill\`);
+    const next = ${append ? "input.value + ' drill'" : "input.value.replace(/ drill$/, '')"};
+    descriptor?.set?.call(input, next);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
-  })()`, { label: "mark clip editor dirty" });
+  })()`, { label });
+  const titleChanged = setTitle(true, "mark clip editor dirty");
 
   if (titleChanged) {
     click('[data-testid="clip-cancel"]');
@@ -555,6 +567,13 @@ function runClipEditorDrills() {
       { discardDialog },
     );
     click('[data-testid="confirm-dialog-cancel"]');
+    setTitle(false, "revert clip title");
+    const cleanAfterTitleRevert = readUnsaved("clip editor clean after title revert");
+    assertCondition(
+      cleanAfterTitleRevert === "false",
+      "reverting edits clears unsaved state",
+      { cleanAfterTitleRevert },
+    );
   }
 }
 
@@ -612,6 +631,15 @@ function runSpotlightEditFlowDrills() {
       kept?.editingIndex === "0" && kept.haloChecked === false,
       "switching spotlights keeps prior edits",
       kept,
+    );
+    const unsavedAfterSwitch = evaluate(
+      `document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved") ?? null`,
+      { label: "clip unsaved after spotlight edit" },
+    );
+    assertCondition(
+      unsavedAfterSwitch === "true",
+      "spotlight edits mark the clip unsaved",
+      { unsavedAfterSwitch },
     );
   } else {
     recordSkip("spotlight switch drill", "The open clip has only one spotlight moment.");

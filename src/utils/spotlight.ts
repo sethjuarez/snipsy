@@ -106,7 +106,7 @@ export function isSpotlightHaloEnabled(spotlight: PauseSpotlight | undefined): b
   return spotlight?.style?.glow ?? DEFAULT_SPOTLIGHT_STYLE.glow;
 }
 
-function spotlightSignature(spotlight: PauseSpotlight | undefined): string {
+export function spotlightSignature(spotlight: PauseSpotlight | undefined): string {
   const normalized = normalizeSpotlight(spotlight);
   if (!normalized) return "none";
   const definedStyle = Object.fromEntries(

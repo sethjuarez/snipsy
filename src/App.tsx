@@ -235,7 +235,7 @@ function App() {
             ? scriptSaveState
             : null;
 
-    if (!activeSaveState || activeSaveState.saveStatus === "saved") {
+    if (!activeSaveState || !(activeSaveState.hasUnsavedChanges ?? activeSaveState.saveStatus !== "saved")) {
       closeActiveEditor();
       return;
     }
