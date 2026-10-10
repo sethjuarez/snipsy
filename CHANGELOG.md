@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.22.0](https://github.com/sethjuarez/snipsy/compare/v0.21.0...v0.22.0) (2026-10-10)
+
+
+### Features
+
+* **spotlight:** add optional Dim toggle for pause-stop spotlights ([#36](https://github.com/sethjuarez/snipsy/issues/36)) ([c8c2975](https://github.com/sethjuarez/snipsy/commit/c8c297570fba8702a34027971f1920627b7d0331))
+
+
+### CI/CD
+
+* test once per change instead of on every stage ([#34](https://github.com/sethjuarez/snipsy/issues/34)) ([926e601](https://github.com/sethjuarez/snipsy/commit/926e6011763592a43a57ca73212227a5ca1773db))
+
 ## [0.21.0](https://github.com/sethjuarez/snipsy/compare/v0.20.0...v0.21.0) (2026-10-10)
 
 
