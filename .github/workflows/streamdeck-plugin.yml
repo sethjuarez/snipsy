@@ -14,21 +14,6 @@ on:
       - 'src/components/IconEditor.tsx'
       - 'package.json'
       - 'package-lock.json'
-  push:
-    branches:
-      - main
-    paths:
-      - 'streamdeck-plugin/**'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/streamdeck-plugin.yml'
-      - 'scripts/*streamdeck*'
-      - 'src-tauri/src/stream_deck*.rs'
-      - 'src-tauri/src/models.rs'
-      - 'src/types/index.ts'
-      - 'src/utils/streamDeckIcons.ts'
-      - 'src/components/IconEditor.tsx'
-      - 'package.json'
-      - 'package-lock.json'
   workflow_dispatch:
 
 jobs:

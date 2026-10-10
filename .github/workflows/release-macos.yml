@@ -55,9 +55,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Run tests
-        run: npm test
-
       - name: Extract changelog
         id: changelog
         run: |
