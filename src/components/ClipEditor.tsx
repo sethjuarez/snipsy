@@ -5,7 +5,7 @@ import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import SpotlightOverlay from "./SpotlightOverlay";
 import ConfirmDialog from "./ConfirmDialog";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
-import type { EndBehavior, ImportedVideo, MonitorInfo, PauseSpotlight, PauseSpotlightStyle, PauseStop, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
+import type { EndBehavior, ImportedVideo, MonitorInfo, PauseSpotlight, PauseSpotlightStyle, PauseStop, PauseZoom, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import IconEditor from "./IconEditor";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
@@ -13,7 +13,6 @@ import {
   DEFAULT_SPOTLIGHT_STYLE,
   STOP_EPSILON,
   createRectangleRegion,
-  getVideoContentBox,
   isSpotlightBlurEnabled,
   isSpotlightDimEnabled,
   isSpotlightHaloEnabled,
@@ -27,6 +26,31 @@ import {
   type Point,
   type Rect,
 } from "../utils/spotlight";
+import {
+  IDENTITY_ZOOM_TRANSFORM,
+  ZOOM_MAX_DURATION_MS,
+  ZOOM_MAX_SCALE,
+  ZOOM_MIN_SCALE,
+  ZOOM_SCALE_STEP,
+  applyZoomTransform,
+  clampZoomScale,
+  computeZoomTransform,
+  createZoom,
+  getUntransformedVideoContentBox,
+  getZoomVisibleFrame,
+  normalizeZoom,
+  prefersReducedMotion,
+  zoomDurationMs,
+  zoomSignature,
+  zoomsEqual,
+  zoomTransformCss,
+} from "../utils/zoom";
+
+type MomentEditorMode = "spotlight" | "zoom";
+
+function formatZoomScale(scale: number) {
+  return `${Number(scale.toFixed(2))}×`;
+}
 
 const backend = getBackend();
 const MIN_SPOTLIGHT_REGION_SIZE = 2;
@@ -316,7 +340,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(existingClip?.streamDeckIcon ?? defaultStreamDeckIcon("video"));
   const [activePreviewStop, setActivePreviewStop] = useState<PreviewNavigationStop | null>(null);
   const [editingSpotlightIndex, setEditingSpotlightIndex] = useState<number | null>(null);
-  const spotlightEditOriginalRef = useRef<{ index: number; spotlight: PauseSpotlight | undefined } | null>(null);
+  const spotlightEditOriginalRef = useRef<{ index: number; spotlight: PauseSpotlight | undefined; zoom: PauseZoom | undefined } | null>(null);
+  const [momentEditorMode, setMomentEditorMode] = useState<MomentEditorMode>("spotlight");
+  const [draggingZoomPoint, setDraggingZoomPoint] = useState(false);
+  const [previewViewport, setPreviewViewport] = useState<{ width: number; height: number } | null>(null);
   const spotlightEditDirtyRef = useRef(false);
   const [pendingSpotlightExit, setPendingSpotlightExit] = useState<(() => void) | null>(null);
   const [selectedSpotlightRegion, setSelectedSpotlightRegion] = useState<number | null>(null);
@@ -426,8 +453,20 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
 
   const updateVideoContentBox = useCallback(() => {
     const vid = videoRef.current;
-    const nextBox = vid && vid.clientWidth > 0 && vid.clientHeight > 0 ? getVideoContentBox(vid) : null;
+    // Layout-based (transform-independent) so the preview zoom stage doesn't skew it.
+    let nextBox: Rect | null = null;
+    if (vid && vid.clientWidth > 0 && vid.clientHeight > 0) {
+      const content = getUntransformedVideoContentBox(vid);
+      nextBox = { ...content, left: content.left + vid.offsetLeft, top: content.top + vid.offsetTop };
+    }
     setVideoContentBox((currentBox) => areRectsEqual(currentBox, nextBox) ? currentBox : nextBox);
+    const stage = vid?.parentElement;
+    const nextViewport = stage && stage.clientWidth > 0 && stage.clientHeight > 0
+      ? { width: stage.clientWidth, height: stage.clientHeight }
+      : null;
+    setPreviewViewport((current) =>
+      current?.width === nextViewport?.width && current?.height === nextViewport?.height ? current : nextViewport,
+    );
   }, []);
 
   useLayoutEffect(() => {
@@ -834,7 +873,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     }
   };
 
-  const startSpotlightEdit = (index: number) => {
+  const startSpotlightEdit = (index: number, mode: MomentEditorMode = "spotlight") => {
     const stop = pauseStops[index];
     if (!stop) return;
     const vid = videoRef.current;
@@ -846,13 +885,58 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     }
     setTimelineSelection({ type: "moment", index });
     if (editingSpotlightIndex !== index || spotlightEditOriginalRef.current?.index !== index) {
-      spotlightEditOriginalRef.current = { index, spotlight: stop.spotlight };
+      spotlightEditOriginalRef.current = { index, spotlight: stop.spotlight, zoom: stop.zoom };
     }
     setEditingSpotlightIndex(index);
+    setMomentEditorMode(mode);
     setInspectorTab("moments");
     setSelectedSpotlightRegion(stop.spotlight?.regions.length ? 0 : null);
     setDrawingStart(null);
     setDraftRegion(null);
+  };
+
+  // ZoomIt-style: a zoom is a point plus magnification. New zooms start centered
+  // on the first spotlight region (if any) so highlight and zoom line up.
+  const startZoomEdit = (index: number) => {
+    const stop = pauseStops[index];
+    if (!stop) return;
+    if (!stop.zoom) {
+      const region = stop.spotlight?.regions[0];
+      const zoom = region
+        ? createZoom(region.x + region.width / 2, region.y + region.height / 2)
+        : createZoom(50, 50);
+      startSpotlightEdit(index, "zoom");
+      setPauseStops((stops) => {
+        const current = stops[index];
+        if (!current || current.zoom) return stops;
+        const updated = [...stops];
+        updated[index] = { ...current, zoom };
+        return updated;
+      });
+      return;
+    }
+    startSpotlightEdit(index, "zoom");
+  };
+
+  const updateZoom = (index: number, patch: Partial<PauseZoom>) => {
+    setPauseStops((stops) => {
+      const stop = stops[index];
+      if (!stop?.zoom) return stops;
+      const updated = [...stops];
+      updated[index] = { ...stop, zoom: normalizeZoom({ ...stop.zoom, ...patch }) };
+      return updated;
+    });
+  };
+
+  const removeZoom = (index: number) => {
+    setPauseStops((stops) => {
+      const stop = stops[index];
+      if (!stop) return stops;
+      const updated = [...stops];
+      updated[index] = { ...stop, zoom: undefined };
+      return updated;
+    });
+    finishSpotlightEdit();
   };
 
   const finishSpotlightEdit = () => {
@@ -862,6 +946,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     setDrawingStart(null);
     setDraftRegion(null);
     setSpotlightManipulation(null);
+    setDraggingZoomPoint(false);
     setInspectorTab("moments");
   };
 
@@ -870,7 +955,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     editingSpotlightIndex !== null &&
     spotlightEditOriginal !== null &&
     spotlightEditOriginal.index === editingSpotlightIndex &&
-    !spotlightsEqual(pauseStops[editingSpotlightIndex]?.spotlight, spotlightEditOriginal.spotlight);
+    (
+      !spotlightsEqual(pauseStops[editingSpotlightIndex]?.spotlight, spotlightEditOriginal.spotlight) ||
+      !zoomsEqual(pauseStops[editingSpotlightIndex]?.zoom, spotlightEditOriginal.zoom)
+    );
   spotlightEditDirtyRef.current = spotlightEditDirty;
 
   const requestSpotlightExit = (next: () => void) => {
@@ -902,7 +990,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
         const stop = stops[original.index];
         if (!stop) return stops;
         const updated = [...stops];
-        updated[original.index] = { ...stop, spotlight: original.spotlight };
+        updated[original.index] = { ...stop, spotlight: original.spotlight, zoom: original.zoom };
         return updated;
       });
     }
@@ -910,17 +998,17 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     next?.();
   };
 
-  // Spotlight moments open straight into edit mode; switching between spotlights keeps edits.
+  // Spotlight/zoom moments open straight into edit mode; switching between moments keeps edits.
   const openTimelineMoment = (index: number) => {
     const stop = pauseStops[index];
     if (!stop) return;
-    if (!stop.spotlight) {
+    if (!stop.spotlight && !stop.zoom) {
       requestSpotlightExit(() => selectMoment(index));
       return;
     }
     if (editingSpotlightIndex === index) return;
     selectMoment(index);
-    startSpotlightEdit(index);
+    startSpotlightEdit(index, stop.spotlight ? "spotlight" : "zoom");
   };
 
   const removeSpotlight = (index: number) => {
@@ -1154,10 +1242,43 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     if (editingSpotlightIndex === null || !videoRef.current || spotlightManipulation) return;
     if ((e.target as HTMLElement | null)?.closest("[data-spotlight-editor-interactive='true']")) return;
     e.preventDefault();
+    if (momentEditorMode === "zoom") {
+      const point = pointerToVideoPoint(videoRef.current, e.clientX, e.clientY);
+      updateZoom(editingSpotlightIndex, { x: point.x, y: point.y });
+      setDraggingZoomPoint(true);
+      return;
+    }
     setSelectedSpotlightRegion(null);
     setDrawingStart(pointerToVideoPoint(videoRef.current, e.clientX, e.clientY));
     setDraftRegion(null);
   };
+
+  const handleZoomWheel = (e: React.WheelEvent) => {
+    if (editingSpotlightIndex === null || momentEditorMode !== "zoom") return;
+    const zoom = pauseStops[editingSpotlightIndex]?.zoom;
+    if (!zoom || e.deltaY === 0) return;
+    const direction = e.deltaY < 0 ? 1 : -1;
+    updateZoom(editingSpotlightIndex, { scale: clampZoomScale(zoom.scale + direction * ZOOM_SCALE_STEP) });
+  };
+
+  useEffect(() => {
+    if (!draggingZoomPoint || editingSpotlightIndex === null) return;
+    const index = editingSpotlightIndex;
+    const onMove = (e: MouseEvent) => {
+      const vid = videoRef.current;
+      if (!vid) return;
+      const point = pointerToVideoPoint(vid, e.clientX, e.clientY);
+      updateZoom(index, { x: point.x, y: point.y });
+    };
+    const onUp = () => setDraggingZoomPoint(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    // updateZoom only uses the functional setPauseStops form, so it is safe to omit.
+  }, [draggingZoomPoint, editingSpotlightIndex]);
 
   useEffect(() => {
     if (!drawingStart || editingSpotlightIndex === null) return;
@@ -1234,6 +1355,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       stop.time,
       stop.label ?? "",
       spotlightSignature(stop.spotlight),
+      zoomSignature(stop.zoom),
     ]),
   }, duration > 0);
 
@@ -1323,6 +1445,23 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     selectedSpotlightRegionData && videoContentBox
       ? regionToBox(selectedSpotlightRegionData, videoContentBox)
       : null;
+  const editingZoom = editingSpotlightStop?.zoom;
+  // Assumes the playback window matches the video aspect, so the frame shows what fills the screen.
+  const editingZoomFrame =
+    editingZoom && videoContentBox
+      ? getZoomVisibleFrame(
+          editingZoom,
+          { width: videoContentBox.width, height: videoContentBox.height },
+          { left: 0, top: 0, width: videoContentBox.width, height: videoContentBox.height },
+        )
+      : null;
+  const previewZoom =
+    editingSpotlightIndex === null && activePreviewStop?.kind === "pause" ? activePreviewStop.pauseStop.zoom : undefined;
+  const previewZoomTransform =
+    previewZoom && videoContentBox && previewViewport
+      ? computeZoomTransform(previewZoom, previewViewport, videoContentBox)
+      : IDENTITY_ZOOM_TRANSFORM;
+  const previewZoomTransitionMs = prefersReducedMotion() || !previewZoom ? 0 : zoomDurationMs(previewZoom);
   const readinessItems = [
     { label: "Name", ready: Boolean(title.trim()) },
     { label: "Hotkey", ready: hotkeyStatus.state === "available" },
@@ -1363,16 +1502,106 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
             }}
             data-testid="spotlight-editor-toolbar"
             data-editing-index={editingSpotlightIndex ?? undefined}
+            data-editor-mode={momentEditorMode}
           >
+            <div
+              className="flex items-center gap-0.5 rounded p-0.5"
+              style={{ backgroundColor: "var(--color-surface-inset)" }}
+              role="group"
+              aria-label="Moment editor mode"
+            >
+              {(["spotlight", "zoom"] as const).map((mode) => {
+                const active = momentEditorMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    className="rounded px-2 py-0.5"
+                    aria-pressed={active}
+                    style={{
+                      backgroundColor: active ? "var(--color-accent)" : "transparent",
+                      color: active ? "var(--color-text-on-accent)" : "var(--color-text)",
+                    }}
+                    onClick={() => {
+                      if (mode === "zoom") startZoomEdit(editingSpotlightIndex);
+                      else setMomentEditorMode("spotlight");
+                    }}
+                    data-testid={`moment-editor-mode-${mode}`}
+                  >
+                    {mode === "spotlight" ? "Highlight" : "Zoom"}
+                  </button>
+                );
+              })}
+            </div>
             <span className="mr-1 font-medium">
               {editingSpotlightStop?.label
-                ? `Spotlight: ${editingSpotlightStop.label}`
-                : `Spotlight at ${formatTime(editingSpotlightStop?.time ?? currentTime, true)}`}
+                ? `${editingSpotlightStop.label}`
+                : `Moment at ${formatTime(editingSpotlightStop?.time ?? currentTime, true)}`}
             </span>
             <span style={{ color: "var(--color-text-secondary)" }}>
-              {selectedSpotlightRegion === null ? "Draw a rectangle" : "Drag to move or resize"}
+              {momentEditorMode === "zoom"
+                ? "Click to pick the zoom point · scroll to zoom"
+                : selectedSpotlightRegion === null ? "Draw a rectangle" : "Drag to move or resize"}
             </span>
-            {editingSpotlight && editingSpotlight.regions.length > 1 && (
+            {momentEditorMode === "zoom" && editingSpotlightStop?.zoom && (
+              <>
+                <label
+                  className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="How far to zoom in (ZoomIt-style magnification)"
+                >
+                  Zoom
+                  <input
+                    type="range"
+                    min={ZOOM_MIN_SCALE}
+                    max={ZOOM_MAX_SCALE}
+                    step={ZOOM_SCALE_STEP}
+                    value={editingSpotlightStop.zoom.scale}
+                    onChange={(e) => updateZoom(editingSpotlightIndex, { scale: Number(e.target.value) })}
+                    className="w-24 accent-[var(--color-accent)]"
+                    aria-label="Zoom level"
+                    data-testid="zoom-scale"
+                  />
+                  <span className="w-9 tabular-nums" data-testid="zoom-scale-label">
+                    {formatZoomScale(editingSpotlightStop.zoom.scale)}
+                  </span>
+                </label>
+                <label
+                  className="flex items-center gap-1 px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  title="Zoom animation length in milliseconds (0 = instant)"
+                >
+                  Ease
+                  <input
+                    type="number"
+                    min={0}
+                    max={ZOOM_MAX_DURATION_MS}
+                    step={50}
+                    value={zoomDurationMs(editingSpotlightStop.zoom)}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (!Number.isFinite(value)) return;
+                      updateZoom(editingSpotlightIndex, { durationMs: value });
+                    }}
+                    className="w-16 rounded px-1 py-0 text-xs"
+                    style={{ backgroundColor: "var(--color-surface)", color: "var(--color-text)", border: "1px solid var(--color-border)" }}
+                    aria-label="Zoom duration in milliseconds"
+                    data-testid="zoom-duration"
+                  />
+                  ms
+                </label>
+                <button
+                  type="button"
+                  className="px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  onClick={() => removeZoom(editingSpotlightIndex)}
+                  data-testid="zoom-remove"
+                >
+                  Remove zoom
+                </button>
+              </>
+            )}
+            {momentEditorMode === "spotlight" && editingSpotlight && editingSpotlight.regions.length > 1 && (
               <div
                 className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5"
                 style={{ backgroundColor: "var(--color-surface-inset)" }}
@@ -1400,7 +1629,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 ))}
               </div>
             )}
-            {editingSpotlight && (
+            {momentEditorMode === "spotlight" && editingSpotlight && (
               <>
                 <label
                   className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded"
@@ -1492,25 +1721,29 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 </label>
               </>
             )}
-            <button
-              type="button"
-              className="px-2 py-0.5 rounded"
-              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-              onClick={() => setSelectedSpotlightRegion(null)}
-              data-testid="spotlight-add-region"
-            >
-              Add region
-            </button>
-            <button
-              type="button"
-              className="px-2 py-0.5 rounded disabled:opacity-50"
-              style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
-              disabled={selectedSpotlightRegion === null}
-              onClick={deleteSelectedSpotlightRegion}
-              data-testid="spotlight-delete-region"
-            >
-              Delete region
-            </button>
+            {momentEditorMode === "spotlight" && (
+              <>
+                <button
+                  type="button"
+                  className="px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  onClick={() => setSelectedSpotlightRegion(null)}
+                  data-testid="spotlight-add-region"
+                >
+                  Add region
+                </button>
+                <button
+                  type="button"
+                  className="px-2 py-0.5 rounded disabled:opacity-50"
+                  style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text)" }}
+                  disabled={selectedSpotlightRegion === null}
+                  onClick={deleteSelectedSpotlightRegion}
+                  data-testid="spotlight-delete-region"
+                >
+                  Delete region
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="px-2 py-0.5 rounded"
@@ -1524,17 +1757,33 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
         )}
       {/* Video — fills all available space */}
       <div className="relative flex-1 min-h-0 rounded-lg overflow-hidden" style={{ backgroundColor: "var(--color-surface)" }}>
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          preload="auto"
-          className="w-full h-full object-contain"
-          data-testid="clip-editor-video"
-        />
+        <div
+          className="absolute inset-0"
+          style={{
+            transformOrigin: "0 0",
+            transform: zoomTransformCss(previewZoomTransform),
+            transition: previewZoomTransitionMs > 0
+              ? `transform ${previewZoomTransitionMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
+              : "none",
+            willChange: "transform",
+          }}
+          data-testid="clip-editor-zoom-stage"
+          data-zoom-active={previewZoom ? "true" : "false"}
+          data-zoom-scale={previewZoomTransform.scale}
+        >
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            preload="auto"
+            className="w-full h-full object-contain"
+            data-testid="clip-editor-video"
+          />
+        </div>
         {editingSpotlightIndex === null && activePreviewStop?.kind === "pause" && activePreviewStop.pauseStop.spotlight && videoContentBox && (
           <SpotlightOverlay
             spotlight={activePreviewStop.pauseStop.spotlight}
-            contentBox={videoContentBox}
+            contentBox={applyZoomTransform(videoContentBox, previewZoomTransform)}
+            clipBox={previewViewport ? { left: 0, top: 0, ...previewViewport } : undefined}
             label={activePreviewStop.pauseStop.label}
             testIdPrefix="preview-spotlight"
           />
@@ -1543,9 +1792,64 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           <div
             className="absolute inset-0 cursor-crosshair"
             onMouseDown={beginSpotlightDraw}
+            onWheel={handleZoomWheel}
             data-testid="spotlight-editor-surface"
+            data-editor-mode={momentEditorMode}
           >
-            {editingSpotlightStop?.spotlight && (
+            {editingSpotlightStop?.spotlight && momentEditorMode === "zoom" && (
+              <div className="absolute inset-0 pointer-events-none" style={{ opacity: 0.6 }}>
+                <SpotlightOverlay
+                  spotlight={editingSpotlightStop.spotlight}
+                  contentBox={videoContentBox}
+                  showOutsideEffect={false}
+                  testIdPrefix="editor-zoom-spotlight"
+                />
+              </div>
+            )}
+            {momentEditorMode === "zoom" && editingZoom && (
+              <>
+                {editingZoomFrame && (
+                  <div
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: videoContentBox.left + (editingZoomFrame.x / 100) * videoContentBox.width,
+                      top: videoContentBox.top + (editingZoomFrame.y / 100) * videoContentBox.height,
+                      width: (editingZoomFrame.width / 100) * videoContentBox.width,
+                      height: (editingZoomFrame.height / 100) * videoContentBox.height,
+                      border: "2px dashed rgba(255, 255, 255, 0.9)",
+                      boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.45)",
+                      zIndex: 40,
+                    }}
+                    data-testid="editor-zoom-frame"
+                  >
+                    <span
+                      className="absolute right-1 top-1 rounded px-1.5 py-0.5 text-xs font-medium tabular-nums"
+                      style={{ backgroundColor: "rgba(0, 0, 0, 0.7)", color: "#fff" }}
+                    >
+                      {formatZoomScale(editingZoom.scale)}
+                    </span>
+                  </div>
+                )}
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: videoContentBox.left + (editingZoom.x / 100) * videoContentBox.width,
+                    top: videoContentBox.top + (editingZoom.y / 100) * videoContentBox.height,
+                    width: 22,
+                    height: 22,
+                    transform: "translate(-50%, -50%)",
+                    borderRadius: "50%",
+                    border: "2px solid #fff",
+                    boxShadow: "0 0 0 2px rgba(0, 0, 0, 0.6)",
+                    zIndex: 45,
+                  }}
+                  data-testid="editor-zoom-point"
+                  data-zoom-x={editingZoom.x}
+                  data-zoom-y={editingZoom.y}
+                />
+              </>
+            )}
+            {editingSpotlightStop?.spotlight && momentEditorMode === "spotlight" && (
               <SpotlightOverlay
                 spotlight={editingSpotlightStop.spotlight}
                 contentBox={videoContentBox}
@@ -1557,7 +1861,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 testIdPrefix="editor-spotlight"
               />
             )}
-            {selectedSpotlightRegion !== null && selectedSpotlightRegionBox && (
+            {momentEditorMode === "spotlight" && selectedSpotlightRegion !== null && selectedSpotlightRegionBox && (
               <div
                 className="absolute pointer-events-none"
                 style={{
@@ -1910,6 +2214,32 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                       Clear
                     </button>
                   )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => startZoomEdit(selectedMomentIndex)}
+                    className="flex-1 px-2 py-0.5 rounded text-sm"
+                    style={{
+                      color: selectedMoment.zoom ? "var(--color-text-on-accent)" : "var(--color-text)",
+                      backgroundColor: selectedMoment.zoom ? "var(--color-accent)" : "var(--color-surface)",
+                      border: "1px solid var(--color-border)",
+                    }}
+                    data-testid="selected-moment-zoom"
+                  >
+                    {selectedMoment.zoom ? `Edit zoom (${formatZoomScale(selectedMoment.zoom.scale)})` : "Add zoom"}
+                  </button>
+                  {selectedMoment.zoom && (
+                    <button
+                      type="button"
+                      onClick={() => removeZoom(selectedMomentIndex)}
+                      className="px-2 py-0.5 rounded text-sm"
+                      style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface)" }}
+                      data-testid="selected-moment-clear-zoom"
+                    >
+                      Clear
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => removePauseStop(selectedMomentIndex)}
@@ -2022,6 +2352,39 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                           style={{ color: "var(--color-danger)" }}
                           aria-label={`Remove spotlight ${index + 1}`}
                           data-testid={`remove-spotlight-${index}`}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startZoomEdit(index);
+                        }}
+                        className="flex-1 px-2 py-0.5 rounded text-sm"
+                        style={{
+                          color: stop.zoom ? "var(--color-text-on-accent)" : "var(--color-text)",
+                          backgroundColor: stop.zoom ? "var(--color-accent)" : "var(--color-surface)",
+                          border: "1px solid var(--color-border)",
+                        }}
+                        data-testid={`pause-stop-zoom-${index}`}
+                      >
+                        {stop.zoom ? `Edit zoom (${formatZoomScale(stop.zoom.scale)})` : "Add zoom"}
+                      </button>
+                      {stop.zoom && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeZoom(index);
+                          }}
+                          className="px-1 text-sm"
+                          style={{ color: "var(--color-danger)" }}
+                          aria-label={`Remove zoom ${index + 1}`}
+                          data-testid={`remove-zoom-${index}`}
                         >
                           Clear
                         </button>
@@ -2226,14 +2589,15 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                   openTimelineMoment(index);
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
-                title={`${stop.spotlight ? "Spotlight moment" : "Moment"} at ${formatTime(stop.time, true)}`}
-                aria-label={`${stop.spotlight ? "Edit spotlight moment" : "Select moment"} ${index + 1} at ${formatTime(stop.time, true)}`}
+                title={`${stop.spotlight ? "Spotlight moment" : stop.zoom ? "Zoom moment" : "Moment"} at ${formatTime(stop.time, true)}${stop.zoom ? ` (${formatZoomScale(stop.zoom.scale)} zoom)` : ""}`}
+                aria-label={`${stop.spotlight || stop.zoom ? "Edit moment" : "Select moment"} ${index + 1} at ${formatTime(stop.time, true)}`}
                 data-timeline-interactive="true"
                 data-spotlight={stop.spotlight ? "true" : undefined}
+                data-zoom={stop.zoom ? "true" : undefined}
                 data-testid={`pause-stop-marker-${index}`}
               >
                 <span
-                  className="block rounded-full"
+                  className="relative block rounded-full"
                   style={{
                     width: selected ? 12 : 8,
                     height: selected ? 20 : 14,
@@ -2241,7 +2605,15 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                     border: selected ? "2px solid var(--color-text)" : "2px solid var(--color-surface)",
                     boxShadow: stop.spotlight ? "0 0 8px var(--color-warning)" : undefined,
                   }}
-                />
+                >
+                  {stop.zoom && (
+                    <span
+                      className="absolute left-1/2 -top-1.5 block h-1.5 w-1.5 -translate-x-1/2 rounded-full"
+                      style={{ backgroundColor: "var(--color-text)", boxShadow: "0 0 0 1px var(--color-surface)" }}
+                      data-testid={`pause-stop-marker-zoom-${index}`}
+                    />
+                  )}
+                </span>
               </button>
             );
           })}
@@ -2444,8 +2816,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       </div>
       {pendingSpotlightExit && (
         <ConfirmDialog
-          title="Save spotlight changes?"
-          message="You changed this spotlight. Save the changes, or discard them and restore the spotlight as it was?"
+          title="Save moment changes?"
+          message="You changed this moment's highlight or zoom. Save the changes, or discard them and restore it as it was?"
           confirmLabel="Save"
           secondaryLabel="Discard"
           cancelLabel="Keep editing"
