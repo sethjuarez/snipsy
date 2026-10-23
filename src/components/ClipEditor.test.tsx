@@ -275,4 +275,74 @@ describe("ClipEditor zoom editing", () => {
     save();
     expect(savedStops().map((stop) => stop.zoom)).toEqual([undefined, undefined]);
   });
+
+  it("removing a different moment's zoom keeps the current edit open and dirty", async () => {
+    renderEditor([
+      { time: 2, zoom: { x: 50, y: 50, scale: 2 } },
+      { time: 4, zoom: { x: 20, y: 20, scale: 2 } },
+    ]);
+
+    fireEvent.click(screen.getByTestId("pause-stop-marker-0"));
+    fireEvent.change(await screen.findByTestId("zoom-scale"), { target: { value: "4" } });
+    const showAll = screen.queryByTestId("moments-show-all-toggle");
+    if (showAll) fireEvent.click(showAll);
+    fireEvent.click(await screen.findByTestId("remove-zoom-1"));
+
+    const toolbar = screen.getByTestId("spotlight-editor-toolbar");
+    expect(toolbar.getAttribute("data-editing-index")).toBe("0");
+    expect(screen.getByTestId("zoom-scale-label").textContent).toContain("4×");
+    expect(screen.queryByTestId("pause-stop-marker-zoom-1")).toBeNull();
+  });
+
+  it("removing the edited zoom on a highlighted moment returns to highlight mode", async () => {
+    const { save, savedStops } = renderEditor([{ ...spotlightStop, zoom: { x: 10, y: 10, scale: 2 } }]);
+
+    fireEvent.click(screen.getByTestId("pause-stop-zoom-0"));
+    fireEvent.click(await screen.findByTestId("zoom-remove"));
+
+    expect(screen.getByTestId("spotlight-editor-toolbar").getAttribute("data-editor-mode")).toBe("spotlight");
+    fireEvent.click(screen.getByTestId("spotlight-done"));
+    save();
+    expect(savedStops()[0].zoom).toBeUndefined();
+    expect(savedStops()[0].spotlight?.regions).toHaveLength(1);
+  });
+
+  it("rejects moving a moment onto another moment's time so effects never merge", async () => {
+    const { save, savedStops } = renderEditor([
+      { ...spotlightStop, time: 2 },
+      { time: 4, zoom: { x: 20, y: 20, scale: 3 } },
+    ]);
+
+    fireEvent.click(screen.getByTestId("pause-stop-marker-1"));
+    await screen.findByTestId("editor-zoom-point");
+    fireEvent.change(screen.getByTestId("selected-moment-time"), { target: { value: "2" } });
+    fireEvent.click(screen.getByTestId("spotlight-done"));
+
+    save();
+    expect(savedStops()).toHaveLength(2);
+    expect(savedStops()[0].spotlight?.regions).toHaveLength(1);
+    expect(savedStops()[0].zoom).toBeUndefined();
+    expect(savedStops()[1]).toMatchObject({ time: 4, zoom: { x: 20, y: 20, scale: 3 } });
+  });
+
+  it("accumulates small trackpad wheel deltas and prevents page scrolling", async () => {
+    renderEditor([{ time: 2, zoom: { x: 50, y: 50, scale: 2 } }]);
+
+    fireEvent.click(screen.getByTestId("pause-stop-zoom-0"));
+    const surface = await screen.findByTestId("spotlight-editor-surface");
+    const wheel = (deltaY: number) => {
+      const event = new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true });
+      act(() => { surface.dispatchEvent(event); });
+      return event;
+    };
+
+    for (let i = 0; i < 4; i += 1) {
+      expect(wheel(-20).defaultPrevented).toBe(true);
+    }
+    expect(screen.getByTestId("zoom-scale-label").textContent).toContain("2×");
+    wheel(-20);
+    expect(screen.getByTestId("zoom-scale-label").textContent).toContain("2.25×");
+    wheel(30);
+    expect(screen.getByTestId("zoom-scale-label").textContent).toContain("2.25×");
+  });
 });

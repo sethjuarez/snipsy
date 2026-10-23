@@ -54,6 +54,7 @@ function formatZoomScale(scale: number) {
 
 const backend = getBackend();
 const MIN_SPOTLIGHT_REGION_SIZE = 2;
+const ZOOM_WHEEL_DELTA_PER_STEP = 100;
 const SPOTLIGHT_COLOR_PRESETS = ["#facc15", "#38bdf8", "#34d399", "#fb7185", "#c084fc", "#fb923c"];
 
 type SpotlightResizeHandle = "nw" | "ne" | "sw" | "se";
@@ -838,6 +839,10 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
 
   const updatePauseStop = (index: number, field: "time" | "label", value: string | number) => {
     setPauseStops((stops) => {
+      // Moving a moment onto another would merge them and drop one moment's effects.
+      if (field === "time" && stops.some((stop, i) => i !== index && Math.abs(stop.time - Number(value)) <= STOP_EPSILON)) {
+        return stops;
+      }
       const updated = [...stops];
       updated[index] = {
         ...updated[index],
@@ -936,7 +941,9 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       updated[index] = { ...stop, zoom: undefined };
       return updated;
     });
-    finishSpotlightEdit();
+    if (editingSpotlightIndex !== index) return;
+    if (pauseStops[index]?.spotlight) setMomentEditorMode("spotlight");
+    else finishSpotlightEdit();
   };
 
   const finishSpotlightEdit = () => {
@@ -1019,7 +1026,9 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       updated[index] = { ...stop, spotlight: undefined };
       return updated;
     });
-    finishSpotlightEdit();
+    if (editingSpotlightIndex !== index) return;
+    if (pauseStops[index]?.zoom) setMomentEditorMode("zoom");
+    else finishSpotlightEdit();
   };
 
   useEffect(() => {
@@ -1253,13 +1262,33 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     setDraftRegion(null);
   };
 
-  const handleZoomWheel = (e: React.WheelEvent) => {
+  const zoomWheelAccumRef = useRef(0);
+  const handleZoomWheel = (e: WheelEvent) => {
     if (editingSpotlightIndex === null || momentEditorMode !== "zoom") return;
     const zoom = pauseStops[editingSpotlightIndex]?.zoom;
-    if (!zoom || e.deltaY === 0) return;
-    const direction = e.deltaY < 0 ? 1 : -1;
-    updateZoom(editingSpotlightIndex, { scale: clampZoomScale(zoom.scale + direction * ZOOM_SCALE_STEP) });
+    if (!zoom) return;
+    e.preventDefault();
+    // Accumulate so trackpads (many tiny deltas) step like one mouse-wheel notch.
+    const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1;
+    const delta = e.deltaY * unit;
+    if (delta === 0) return;
+    if (Math.sign(delta) !== Math.sign(zoomWheelAccumRef.current)) zoomWheelAccumRef.current = 0;
+    zoomWheelAccumRef.current += delta;
+    const steps = Math.trunc(zoomWheelAccumRef.current / ZOOM_WHEEL_DELTA_PER_STEP);
+    if (steps === 0) return;
+    zoomWheelAccumRef.current -= steps * ZOOM_WHEEL_DELTA_PER_STEP;
+    updateZoom(editingSpotlightIndex, { scale: clampZoomScale(zoom.scale - steps * ZOOM_SCALE_STEP) });
   };
+  const zoomWheelHandlerRef = useRef(handleZoomWheel);
+  zoomWheelHandlerRef.current = handleZoomWheel;
+  const [editorSurface, setEditorSurface] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!editorSurface) return;
+    // React's onWheel is passive, so preventDefault needs a native listener.
+    const onWheel = (e: WheelEvent) => zoomWheelHandlerRef.current(e);
+    editorSurface.addEventListener("wheel", onWheel, { passive: false });
+    return () => editorSurface.removeEventListener("wheel", onWheel);
+  }, [editorSurface]);
 
   useEffect(() => {
     if (!draggingZoomPoint || editingSpotlightIndex === null) return;
@@ -1792,7 +1821,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           <div
             className="absolute inset-0 cursor-crosshair"
             onMouseDown={beginSpotlightDraw}
-            onWheel={handleZoomWheel}
+            ref={setEditorSurface}
             data-testid="spotlight-editor-surface"
             data-editor-mode={momentEditorMode}
           >
