@@ -74,9 +74,42 @@ function start(command, args, options = {}) {
 }
 
 function stopWrappedApp() {
-  if (wrappedAppProcess && !wrappedAppProcess.killed) {
-    wrappedAppProcess.kill();
+  if (!wrappedAppProcess) return;
+  // On Windows, kill() only ends `auditaur run`, which may already have exited and
+  // orphaned npm/vite/cargo/snipsy. Orphans keep their parent PID, so walk the tree.
+  if (process.platform === "win32" && wrappedAppProcess.pid) {
+    for (const pid of windowsDescendantPids(wrappedAppProcess.pid)) {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    }
   }
+  if (!wrappedAppProcess.killed) wrappedAppProcess.kill();
+  wrappedAppProcess = null;
+}
+
+function windowsDescendantPids(rootPid) {
+  const result = spawnSync("powershell", [
+    "-NoProfile",
+    "-Command",
+    "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,@{n='CreatedMs';e={([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}} | ConvertTo-Json -Compress",
+  ], { encoding: "utf8" });
+  let processes;
+  try {
+    processes = [JSON.parse(result.stdout)].flat();
+  } catch {
+    return [rootPid];
+  }
+  // Ignore processes older than the drill so a reused PID can't match.
+  const startedAt = drillStartedAtMs - 5_000;
+  const createdAt = (p) => Number(p.CreatedMs);
+  const pids = [rootPid];
+  for (let i = 0; i < pids.length; i += 1) {
+    for (const p of processes) {
+      if (p.ParentProcessId === pids[i] && !pids.includes(p.ProcessId) && !(createdAt(p) < startedAt)) {
+        pids.push(p.ProcessId);
+      }
+    }
+  }
+  return pids;
 }
 
 function writeReport() {
