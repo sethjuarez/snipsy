@@ -126,6 +126,20 @@ describe("Playback zoom", () => {
     expect(playSpy).not.toHaveBeenCalled();
   });
 
+  it("navigating during a zoom-out snaps to identity instead of finishing the animation", async () => {
+    const slow: PauseStop = { ...zoomStop, zoom: { ...zoomStop.zoom!, durationMs: 2000 } };
+    renderPlayback([slow, { time: 5 }]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(stage().dataset.zoomActive).toBe("true"));
+    fireEvent.click(window);
+    await waitFor(() => expect(stage().dataset.zoomActive).toBe("false"));
+    expect(stage().style.transition).toContain("2000ms");
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(stage().style.transition).toBe("none");
+    expect(stage().style.transform).toBe("matrix(1, 0, 0, 1, 0, 0)");
+  });
+
   it("snaps to identity before seeking to the next zoomed stop, then zooms in fresh", async () => {
     const second: PauseStop = { time: 5, zoom: { x: 100, y: 100, scale: 4, durationMs: 60 } };
     renderPlayback([zoomStop, second]);

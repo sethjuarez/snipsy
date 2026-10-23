@@ -156,7 +156,11 @@ function Playback() {
   const setActiveZoom = useCallback((zoom: PauseZoom | null, animate = true) => {
     const previous = activeZoomRef.current;
     activeZoomRef.current = zoom;
-    if (previous === zoom) return 0;
+    if (previous === zoom) {
+      // A snap must still cancel any in-flight transition (e.g. a zoom-out after resume).
+      if (!animate) setActiveZoomState((state) => (state.durationMs === 0 && state.zoom === zoom ? state : { zoom, durationMs: 0 }));
+      return 0;
+    }
     const durationMs = !animate || prefersReducedMotion()
       ? 0
       : zoomDurationMs(zoom ?? previous ?? undefined);
