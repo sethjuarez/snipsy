@@ -288,6 +288,16 @@ function Playback() {
       await Promise.race([waitForZoomTransition(zoomInMs), resumePromise]);
       if (seekVersionRef.current !== seekVersion) return;
     }
+    if (targetZoom && !resumed && stageRef.current) {
+      // Diagnostic for runtime drills: the playback window has no drive bridge.
+      console.info(`Playback zoom applied ${JSON.stringify({
+        time: stop.time,
+        x: targetZoom.x,
+        y: targetZoom.y,
+        scale: targetZoom.scale,
+        transform: getComputedStyle(stageRef.current).transform,
+      })}`);
+    }
 
     if (!resumed) {
       setActiveSpotlight(
