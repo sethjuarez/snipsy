@@ -22,6 +22,21 @@
               "height": 24
             }
           ]
+        },
+        "zoom": {
+          "x": 37,
+          "y": 34,
+          "scale": 2
+        }
+      },
+      {
+        "time": 30.0,
+        "label": "Zoom on status",
+        "zoom": {
+          "x": 85,
+          "y": 10,
+          "scale": 3.5,
+          "durationMs": 600
         }
       }
     ],

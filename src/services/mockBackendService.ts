@@ -59,6 +59,12 @@ const FIXTURE_PROJECT: ProjectData = {
               { type: "rectangle", x: 18, y: 22, width: 38, height: 24 },
             ],
           },
+          zoom: { x: 37, y: 34, scale: 2 },
+        },
+        {
+          time: 20,
+          label: "Zoom on status",
+          zoom: { x: 85, y: 10, scale: 3.5, durationMs: 600 },
         },
       ],
       transitionActions: [
