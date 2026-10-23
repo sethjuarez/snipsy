@@ -28,6 +28,10 @@ interface ActiveZoomState {
 const SEEK_PRESENTATION_TIMEOUT_MS = 500;
 const ZOOM_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 const ZOOM_TRANSITION_GRACE_MS = 150;
+// Hold the frozen frame briefly so the stop reads as a pause before the zoom moves.
+const FREEZE_HOLD_MS = 150;
+// A playback pause this close to the stop shows the stop frame; seeking would only jitter.
+const STOP_SNAP_TOLERANCE = 0.05;
 
 function parsePauseStops(raw: string | null): PauseStop[] {
   if (!raw) return [];
@@ -285,24 +289,30 @@ function Playback() {
     return promise;
   }, []);
 
-  const activatePlaybackStop = useCallback(async (stop: PlaybackNavigationStop) => {
+  const activatePlaybackStop = useCallback(async (stop: PlaybackNavigationStop, fromPlayback = false) => {
     const video = videoRef.current;
     if (!video) return;
 
     const seekVersion = seekVersionRef.current + 1;
     seekVersionRef.current = seekVersion;
     video.pause();
+    const pausedAt = video.currentTime;
+    // Seeking back after an overshoot visibly jumps the frame, so only seek when
+    // navigating or when playback did not pause on the stop.
+    const seeked = !fromPlayback || Math.abs(pausedAt - stop.time) > STOP_SNAP_TOLERANCE;
     // Navigating away from a zoomed stop: snap back so the new frame is never
     // shown through the previous stop's zoom; the target zoom animates from identity.
     setActiveZoom(null, false);
-    video.currentTime = stop.time;
+    if (seeked) video.currentTime = stop.time;
     nextStopIndexRef.current = getNextPauseStopIndexAfter(pauseStops, stop.time);
     resumingRef.current = true;
     setActivePlaybackStop(stop);
     setActiveSpotlight(null);
 
-    await waitForPresentedSeekFrame(video);
-    if (seekVersionRef.current !== seekVersion) return;
+    if (seeked) {
+      await waitForPresentedSeekFrame(video);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
 
     // Start listening right away so a click during the zoom-in is not lost.
     let resumed = false;
@@ -312,7 +322,11 @@ function Playback() {
 
     const targetZoom = stop.kind === "pause" ? stop.pauseStop.zoom ?? null : null;
     const frozen = targetZoom ? freezeVideoFrame() : false;
-    const zoomInMs = setActiveZoom(targetZoom);
+    if (targetZoom) {
+      await Promise.race([new Promise((resolve) => setTimeout(resolve, FREEZE_HOLD_MS)), resumePromise]);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
+    const zoomInMs = resumed ? 0 : setActiveZoom(targetZoom);
     if (zoomInMs > 0) {
       await Promise.race([waitForZoomTransition(zoomInMs), resumePromise]);
       if (seekVersionRef.current !== seekVersion) return;
@@ -332,6 +346,8 @@ function Playback() {
         y: targetZoom.y,
         scale: targetZoom.scale,
         frozenFrame: frozen,
+        stopDriftMs: Math.round((pausedAt - stop.time) * 1000),
+        seeked,
         videoVisibility: getComputedStyle(videoRef.current).visibility,
         freezeFrameVisibility: freezeCanvasRef.current ? getComputedStyle(freezeCanvasRef.current).visibility : null,
         transform,
@@ -456,13 +472,35 @@ function Playback() {
       }
     })();
 
+    // timeupdate fires only every ~250ms, which overshoots stops; a timer aimed at
+    // the next stop pauses on it, and timeupdate re-aims the timer and is the fallback.
+    let stopTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearStopTimer = () => {
+      if (stopTimer) clearTimeout(stopTimer);
+      stopTimer = null;
+    };
+    const checkPauseStop = () => {
+      const nextStop = pauseStops[nextStopIndexRef.current];
+      if (!nextStop || resumingRef.current || video.currentTime < nextStop.time - STOP_EPSILON) return false;
+      clearStopTimer();
+      activatePlaybackStop({ kind: "pause", time: nextStop.time, pauseStop: nextStop }, true);
+      return true;
+    };
+    const scheduleStopTimer = () => {
+      clearStopTimer();
+      const nextStop = pauseStops[nextStopIndexRef.current];
+      if (!nextStop || resumingRef.current || video.paused) return;
+      const delayMs = ((nextStop.time - video.currentTime) / (video.playbackRate || 1)) * 1000;
+      stopTimer = setTimeout(() => {
+        stopTimer = null;
+        if (!checkPauseStop()) scheduleStopTimer();
+      }, Math.max(0, delayMs));
+    };
+
     // Timeupdate for end-time clipping
     const handleTimeUpdate = () => {
-      const nextStop = pauseStops[nextStopIndexRef.current];
-      if (nextStop && !resumingRef.current && video.currentTime >= nextStop.time - STOP_EPSILON) {
-        activatePlaybackStop({ kind: "pause", time: nextStop.time, pauseStop: nextStop });
-        return;
-      }
+      if (checkPauseStop()) return;
+      scheduleStopTimer();
 
       if (end > 0 && video.currentTime >= end) {
         video.pause();
@@ -475,10 +513,15 @@ function Playback() {
     };
 
     video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("playing", scheduleStopTimer);
+    video.addEventListener("seeked", scheduleStopTimer);
+    video.addEventListener("ratechange", scheduleStopTimer);
+    video.addEventListener("pause", clearStopTimer);
     video.addEventListener("ended", handleEnded);
 
     return () => {
       cancelled = true;
+      clearStopTimer();
       // Abort any in-flight stop sequence (zoom-in/out waits).
       seekVersionRef.current += 1;
       waitCleanupRef.current?.();
@@ -486,6 +529,10 @@ function Playback() {
       setActiveSpotlight(null);
       setActiveZoom(null, false);
       video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("playing", scheduleStopTimer);
+      video.removeEventListener("seeked", scheduleStopTimer);
+      video.removeEventListener("ratechange", scheduleStopTimer);
+      video.removeEventListener("pause", clearStopTimer);
       video.removeEventListener("ended", handleEnded);
     };
   }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, activatePlaybackStop, closeWindow, setActiveZoom, showWindow, waitForResume]);

@@ -86,8 +86,13 @@ describe("Playback freeze frame", () => {
     expect(canvas().style.visibility).toBe("hidden");
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
+    // The still frame shows first and holds briefly before the zoom starts.
+    await waitFor(() => expect(stage().dataset.frozenFrame).toBe("true"));
+    expect(stage().dataset.zoomActive).toBe("false");
+    expect(stage().style.transform).toBe("matrix(1, 0, 0, 1, 0, 0)");
+    await act(() => new Promise((resolve) => setTimeout(resolve, 75)));
+    expect(stage().dataset.zoomActive).toBe("false");
     await waitFor(() => expect(stage().dataset.zoomActive).toBe("true"));
-    // The freeze is committed in the same render as the zoom transform.
     expect(stage().dataset.frozenFrame).toBe("true");
     expect(drawImage).toHaveBeenCalledWith(video(), 0, 0, 1920, 1080);
     expect(canvas().width).toBe(1920);
@@ -111,6 +116,19 @@ describe("Playback freeze frame", () => {
     expect(stage().dataset.frozenFrame).toBe("false");
     expect(video().style.visibility).toBe("visible");
     expect(canvas().style.visibility).toBe("hidden");
+  });
+
+  it("resuming during the freeze hold skips the zoom and plays", async () => {
+    renderPlayback([zoomStop]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(stage().dataset.frozenFrame).toBe("true"));
+    await waitFor(() => expect(screen.getByTestId("playback-container").dataset.waitingForResume).toBe("true"));
+    fireEvent.click(window);
+    await waitFor(() => expect(playSpy).toHaveBeenCalledTimes(1));
+    expect(stage().dataset.zoomActive).toBe("false");
+    expect(stage().dataset.frozenFrame).toBe("false");
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    expect(stage().dataset.zoomActive).toBe("false");
   });
 
   it("unfreezes immediately when navigating away from a zoomed stop", async () => {
@@ -139,6 +157,91 @@ describe("Playback freeze frame", () => {
     await waitFor(() => expect(stage().dataset.zoomActive).toBe("true"));
     expect(stage().dataset.frozenFrame).toBe("false");
     expect(video().style.visibility).toBe("visible");
+  });
+});
+
+describe("Playback stop timing", () => {
+  const video = () => screen.getByTestId("playback-video") as HTMLVideoElement;
+  let seeks: number[];
+  let pausedAt: number | null;
+  let clock: () => number;
+
+  beforeEach(() => {
+    seeks = [];
+    pausedAt = null;
+    clock = () => 0;
+    stubProperty(HTMLMediaElement.prototype, "paused", { get: () => pausedAt !== null });
+    stubProperty(HTMLMediaElement.prototype, "playbackRate", { get: () => 1, set: () => {} });
+    stubProperty(HTMLMediaElement.prototype, "currentTime", {
+      get: () => pausedAt ?? clock(),
+      set: (value: number) => seeks.push(value),
+    });
+    stubProperty(HTMLMediaElement.prototype, "pause", {
+      value: vi.fn(() => {
+        pausedAt ??= clock();
+      }),
+    });
+  });
+
+  // Media time follows the fake clock while playing; play() resumes from the paused time.
+  function startFakeMediaClock() {
+    vi.useFakeTimers();
+    let base = 0;
+    let startedAt = Date.now();
+    clock = () => base + (Date.now() - startedAt) / 1000;
+    playSpy.mockImplementation(() => {
+      base = pausedAt ?? base;
+      startedAt = Date.now();
+      pausedAt = null;
+      return Promise.resolve();
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("pauses on the stop between timeupdates without seeking back", async () => {
+    renderPlayback([{ time: 0.3, zoom: { x: 50, y: 50, scale: 2, durationMs: 0 } }]);
+    startFakeMediaClock();
+    fireEvent(video(), new Event("playing"));
+
+    await act(() => vi.advanceTimersByTimeAsync(299));
+    expect(pausedAt).toBeNull();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(pausedAt).toBeCloseTo(0.3, 5);
+    expect(seeks).not.toContain(0.3);
+    // The freeze holds before the zoom starts.
+    expect(stage().dataset.zoomActive).toBe("false");
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(stage().dataset.zoomActive).toBe("true");
+  });
+
+  it("re-arms the stop timer after resuming so the next stop is also exact", async () => {
+    renderPlayback([{ time: 0.3 }, { time: 0.6 }]);
+    startFakeMediaClock();
+    fireEvent(video(), new Event("playing"));
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    expect(pausedAt).toBeCloseTo(0.3, 5);
+
+    fireEvent.click(window);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(pausedAt).toBeNull();
+    fireEvent(video(), new Event("playing"));
+
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    expect(pausedAt).toBeCloseTo(0.6, 5);
+    expect(seeks).not.toContain(0.3);
+    expect(seeks).not.toContain(0.6);
+    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalledTimes(2);
+  });
+
+  it("seeks back to the stop when a late timeupdate overshoots it", async () => {
+    renderPlayback([{ time: 0.3 }]);
+    clock = () => 0.5;
+    fireEvent(video(), new Event("timeupdate"));
+    await waitFor(() => expect(seeks).toContain(0.3));
   });
 });
 

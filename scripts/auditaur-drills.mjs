@@ -1132,6 +1132,11 @@ function runPlaybackZoomDrill() {
     "zoom animates a frozen canvas copy of the paused frame, not the live video layer",
     { frozenFrame: details?.frozenFrame, videoVisibility: details?.videoVisibility, freezeFrameVisibility: details?.freezeFrameVisibility },
   );
+  assertCondition(
+    details?.seeked === false && Math.abs(details?.stopDriftMs ?? Infinity) <= 50,
+    "playback pauses on the zoom stop without seeking back (no jump before the freeze)",
+    { stopDriftMs: details?.stopDriftMs, seeked: details?.seeked },
+  );
 
   evaluate(`window.__TAURI_INTERNALS__?.invoke("close_playback_window").then(() => true, () => false)`, {
     label: "close zoomed playback window",
