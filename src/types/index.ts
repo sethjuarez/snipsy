@@ -75,6 +75,15 @@ export interface PauseStop {
   time: number;
   label?: string;
   spotlight?: PauseSpotlight;
+  zoom?: PauseZoom;
+}
+
+/** ZoomIt-style zoom: center point (percent of the video frame) and magnification. */
+export interface PauseZoom {
+  x: number;
+  y: number;
+  scale: number;
+  durationMs?: number;
 }
 
 export interface MonitorInfo {

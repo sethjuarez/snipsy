@@ -1,4 +1,5 @@
 import type { PauseSpotlight, PauseSpotlightRegion, PauseStop, RectanglePauseSpotlightRegion } from "../types";
+import { normalizeZoom } from "./zoom";
 
 export const DEFAULT_SPOTLIGHT_STYLE = {
   blur: 6,
@@ -144,6 +145,7 @@ export function normalizePauseStops(
       time: round(stop.time),
       label: stop.label?.trim() || undefined,
       spotlight: normalizeSpotlight(stop.spotlight),
+      zoom: normalizeZoom(stop.zoom),
     }))
     .sort((a, b) => a.time - b.time);
 

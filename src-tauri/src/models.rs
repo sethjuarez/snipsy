@@ -97,6 +97,20 @@ pub struct PauseStop {
     pub label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spotlight: Option<PauseSpotlight>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zoom: Option<PauseZoom>,
+}
+
+/// ZoomIt-style zoom for a pause stop: centered on a point (percent of the
+/// video frame) at a magnification `scale`, animated over `duration_ms`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PauseZoom {
+    pub x: f64,
+    pub y: f64,
+    pub scale: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -274,6 +288,7 @@ mod tests {
         assert_eq!(stops[0].time, 18.5);
         assert_eq!(stops[0].label.as_deref(), Some("Wait for presenter"));
         assert!(stops[0].spotlight.is_none());
+        assert!(stops[0].zoom.is_none());
         assert!(snippet.transition_actions.is_some());
         let actions = snippet.transition_actions.as_ref().unwrap();
         assert_eq!(actions.len(), 1);
@@ -360,6 +375,39 @@ mod tests {
         assert!(re_json.contains("\"glow\":false"));
         let re_spotlight: PauseSpotlight = serde_json::from_str(&re_json).unwrap();
         assert_eq!(spotlight, re_spotlight);
+    }
+
+    #[test]
+    fn pause_stop_zoom_round_trip() {
+        let json = r#"{
+            "time": 4.5,
+            "zoom": { "x": 62.5, "y": 30.0, "scale": 2.5, "durationMs": 650.0 }
+        }"#;
+        let stop: PauseStop = serde_json::from_str(json).unwrap();
+        assert!(stop.spotlight.is_none());
+        let zoom = stop.zoom.as_ref().unwrap();
+        assert_eq!(zoom.x, 62.5);
+        assert_eq!(zoom.y, 30.0);
+        assert_eq!(zoom.scale, 2.5);
+        assert_eq!(zoom.duration_ms, Some(650.0));
+
+        let re_json = serde_json::to_string(&stop).unwrap();
+        assert!(re_json.contains("\"durationMs\":650.0"));
+        let re_stop: PauseStop = serde_json::from_str(&re_json).unwrap();
+        assert_eq!(stop, re_stop);
+    }
+
+    #[test]
+    fn pause_stop_without_zoom_serializes_unchanged() {
+        let json = r#"{"time":4.5,"label":"Intro"}"#;
+        let stop: PauseStop = serde_json::from_str(json).unwrap();
+        assert!(stop.zoom.is_none());
+        assert_eq!(serde_json::to_string(&stop).unwrap(), json);
+
+        let default_duration: PauseStop =
+            serde_json::from_str(r#"{"time":1.0,"zoom":{"x":50.0,"y":50.0,"scale":2.0}}"#).unwrap();
+        let re_json = serde_json::to_string(&default_duration).unwrap();
+        assert!(!re_json.contains("durationMs"));
     }
 
     #[test]
