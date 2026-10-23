@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { useSearchParams } from "react-router";
 import SpotlightOverlay from "../components/SpotlightOverlay";
 import { auditaurInvoke, isTauriRuntime, tauriFileSrc } from "../services/auditaur";
@@ -150,12 +151,35 @@ function Playback() {
   const activeZoomRef = useRef<PauseZoom | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const freezeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [frozenFrame, setFrozenFrame] = useState(false);
   const [, setLayoutVersion] = useState(0);
+
+  // Zooming a live <video> layer artifacts in WebView2 (hardware overlay
+  // promotion/demotion while the transform animates). The video is paused
+  // during a zoom, so zoom a canvas copy of the paused frame instead.
+  const freezeVideoFrame = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = freezeCanvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return false;
+    try {
+      const context = canvas.getContext("2d");
+      if (!context) return false;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } catch {
+      return false;
+    }
+    setFrozenFrame(true);
+    return true;
+  }, []);
 
   // Returns how long the CSS transition takes, so callers can wait for it.
   const setActiveZoom = useCallback((zoom: PauseZoom | null, animate = true) => {
     const previous = activeZoomRef.current;
     activeZoomRef.current = zoom;
+    if (!zoom && !animate) setFrozenFrame(false);
     if (previous === zoom) {
       // A snap must still cancel any in-flight transition (e.g. a zoom-out after resume).
       if (!animate) setActiveZoomState((state) => (state.durationMs === 0 && state.zoom === zoom ? state : { zoom, durationMs: 0 }));
@@ -287,6 +311,7 @@ function Playback() {
     });
 
     const targetZoom = stop.kind === "pause" ? stop.pauseStop.zoom ?? null : null;
+    const frozen = targetZoom ? freezeVideoFrame() : false;
     const zoomInMs = setActiveZoom(targetZoom);
     if (zoomInMs > 0) {
       await Promise.race([waitForZoomTransition(zoomInMs), resumePromise]);
@@ -306,6 +331,9 @@ function Playback() {
         x: targetZoom.x,
         y: targetZoom.y,
         scale: targetZoom.scale,
+        frozenFrame: frozen,
+        videoVisibility: getComputedStyle(videoRef.current).visibility,
+        freezeFrameVisibility: freezeCanvasRef.current ? getComputedStyle(freezeCanvasRef.current).visibility : null,
         transform,
         anchor,
         anchorOnScreen: { x: anchor.x * a + e, y: anchor.y * d + f },
@@ -337,10 +365,12 @@ function Playback() {
       await waitForZoomTransition(zoomOutMs);
       if (seekVersionRef.current !== seekVersion) return;
     }
+    // Commit the swap back to the live video before it starts playing.
+    flushSync(() => setFrozenFrame(false));
 
     resumingRef.current = false;
     video.play().catch(() => {});
-  }, [pauseStops, setActiveZoom, waitForResume, waitForZoomTransition]);
+  }, [freezeVideoFrame, pauseStops, setActiveZoom, waitForResume, waitForZoomTransition]);
 
   // Single effect: resolve src, load, seek, (optionally wait for click), play, show
   useEffect(() => {
@@ -540,6 +570,7 @@ function Playback() {
         data-zoom-scale={zoomTransform.scale}
         data-zoom-active={activeZoom.zoom ? "true" : "false"}
         data-zoom-duration-ms={activeZoom.durationMs}
+        data-frozen-frame={frozenFrame ? "true" : "false"}
         style={{
           position: "absolute",
           inset: 0,
@@ -572,6 +603,22 @@ function Playback() {
           // transparent hole through the letterbox bars when play() activates
           // the hardware decoder.
           transform: "translateZ(0)",
+          visibility: frozenFrame ? "hidden" : "visible",
+        }}
+      />
+      <canvas
+        ref={freezeCanvasRef}
+        data-testid="playback-freeze-frame"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          backgroundColor,
+          visibility: frozenFrame ? "visible" : "hidden",
+          pointerEvents: "none",
         }}
       />
       </div>

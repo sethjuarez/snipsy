@@ -1127,6 +1127,11 @@ function runPlaybackZoomDrill() {
     "zoom point stays fixed on screen unless shifted to avoid bars (smart anchoring, no drift)",
     { anchor: details?.anchor, anchorOnScreen: details?.anchorOnScreen, zoomedContent: details?.zoomedContent, viewport: details?.viewport },
   );
+  assertCondition(
+    details?.frozenFrame === true && details.videoVisibility === "hidden" && details.freezeFrameVisibility === "visible",
+    "zoom animates a frozen canvas copy of the paused frame, not the live video layer",
+    { frozenFrame: details?.frozenFrame, videoVisibility: details?.videoVisibility, freezeFrameVisibility: details?.freezeFrameVisibility },
+  );
 
   evaluate(`window.__TAURI_INTERNALS__?.invoke("close_playback_window").then(() => true, () => false)`, {
     label: "close zoomed playback window",

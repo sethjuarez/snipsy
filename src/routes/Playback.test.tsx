@@ -67,6 +67,81 @@ const zoomStop: PauseStop = {
 
 const stage = () => screen.getByTestId("playback-zoom-stage");
 
+describe("Playback freeze frame", () => {
+  let drawImage: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    stubProperty(HTMLVideoElement.prototype, "videoWidth", { get: () => 1920 });
+    stubProperty(HTMLVideoElement.prototype, "videoHeight", { get: () => 1080 });
+    drawImage = vi.fn();
+    stubProperty(HTMLCanvasElement.prototype, "getContext", { value: vi.fn(() => ({ drawImage })) });
+  });
+
+  const video = () => screen.getByTestId("playback-video");
+  const canvas = () => screen.getByTestId("playback-freeze-frame") as HTMLCanvasElement;
+
+  it("zooms a canvas copy of the paused frame, then restores the live video before playing", async () => {
+    renderPlayback([zoomStop]);
+    expect(stage().dataset.frozenFrame).toBe("false");
+    expect(canvas().style.visibility).toBe("hidden");
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(stage().dataset.zoomActive).toBe("true"));
+    // The freeze is committed in the same render as the zoom transform.
+    expect(stage().dataset.frozenFrame).toBe("true");
+    expect(drawImage).toHaveBeenCalledWith(video(), 0, 0, 1920, 1080);
+    expect(canvas().width).toBe(1920);
+    expect(canvas().height).toBe(1080);
+    expect(canvas().style.visibility).toBe("visible");
+    expect(video().style.visibility).toBe("hidden");
+
+    await screen.findByTestId("playback-spotlight-region-0");
+    playSpy.mockClear();
+    const visibilityAtPlay: string[] = [];
+    playSpy.mockImplementation(() => {
+      visibilityAtPlay.push(`${video().style.visibility}/${canvas().style.visibility}`);
+      return Promise.resolve();
+    });
+    fireEvent.click(window);
+    await waitFor(() => expect(stage().dataset.zoomActive).toBe("false"));
+    // Still frozen while zooming out.
+    expect(stage().dataset.frozenFrame).toBe("true");
+    await waitFor(() => expect(playSpy).toHaveBeenCalledTimes(1));
+    expect(visibilityAtPlay).toEqual(["visible/hidden"]);
+    expect(stage().dataset.frozenFrame).toBe("false");
+    expect(video().style.visibility).toBe("visible");
+    expect(canvas().style.visibility).toBe("hidden");
+  });
+
+  it("unfreezes immediately when navigating away from a zoomed stop", async () => {
+    renderPlayback([zoomStop, { time: 5 }]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await screen.findByTestId("playback-spotlight-region-0");
+    expect(stage().dataset.frozenFrame).toBe("true");
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(stage().dataset.frozenFrame).toBe("false");
+    expect(video().style.visibility).toBe("visible");
+  });
+
+  it("does not freeze stops without a zoom", async () => {
+    renderPlayback([{ ...zoomStop, zoom: undefined }]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await screen.findByTestId("playback-spotlight-region-0");
+    expect(stage().dataset.frozenFrame).toBe("false");
+    expect(drawImage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to zooming the live video when no frame is available", async () => {
+    stubProperty(HTMLVideoElement.prototype, "videoWidth", { get: () => 0 });
+    renderPlayback([zoomStop]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(stage().dataset.zoomActive).toBe("true"));
+    expect(stage().dataset.frozenFrame).toBe("false");
+    expect(video().style.visibility).toBe("visible");
+  });
+});
+
 describe("Playback zoom", () => {
   it("parses zoom from the playback URL", () => {
     renderPlayback([zoomStop]);
