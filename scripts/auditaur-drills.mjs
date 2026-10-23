@@ -1111,6 +1111,22 @@ function runPlaybackZoomDrill() {
     "playback window animates the stop's zoom to 3× toward the top-right point",
     { zoomLog, details, matrix },
   );
+  // Smart anchoring: wherever the scaled video can fill an axis it must (no bars), and the point stays
+  // fixed unless it had to move to pin the nearer edge.
+  const axisOk = (axis, start, end, size) => {
+    const c = details?.zoomedContent;
+    if (!details?.anchor || !details?.anchorOnScreen || !c || !size) return false;
+    const fills = c[end] - c[start] >= size - 1;
+    if (fills && (c[start] > 1 || c[end] < size - 1)) return false;
+    if (Math.abs(details.anchor[axis] - details.anchorOnScreen[axis]) < 1) return true;
+    const pinnedEdge = details.anchor[axis] < size / 2 ? Math.abs(c[start]) < 1 : Math.abs(c[end] - size) < 1;
+    return fills ? pinnedEdge : Math.abs((c[start] + c[end]) / 2 - size / 2) < 1;
+  };
+  assertCondition(
+    axisOk("x", "left", "right", details?.viewport?.width) && axisOk("y", "top", "bottom", details?.viewport?.height),
+    "zoom point stays fixed on screen unless shifted to avoid bars (smart anchoring, no drift)",
+    { anchor: details?.anchor, anchorOnScreen: details?.anchorOnScreen, zoomedContent: details?.zoomedContent, viewport: details?.viewport },
+  );
 
   evaluate(`window.__TAURI_INTERNALS__?.invoke("close_playback_window").then(() => true, () => false)`, {
     label: "close zoomed playback window",

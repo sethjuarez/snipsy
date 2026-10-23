@@ -95,22 +95,31 @@ export function getUntransformedVideoContentBox(video: HTMLVideoElement): Rect {
   });
 }
 
+// ZoomIt-style smart anchoring. The transform is always a pure zoom around one
+// fixed screen point, so the CSS transition never drifts sideways. That point is
+// the zoom point itself, unless keeping it there would leave empty bars (e.g. a
+// letterboxed video zoomed near its edge); then it shifts just enough to fill the
+// viewport. If the scaled content still can't fill an axis, it stays centered.
 function solveAxis(viewSize: number, contentStart: number, contentSize: number, pointPercent: number, scale: number) {
-  const scaledSize = contentSize * scale;
-  if (scaledSize <= viewSize) {
-    return (viewSize - scaledSize) / 2 - scale * contentStart;
-  }
   const point = contentStart + (pointPercent / 100) * contentSize;
-  const centered = viewSize / 2 - scale * point;
-  const min = viewSize - scale * (contentStart + contentSize);
-  const max = -scale * contentStart;
-  return clamp(centered, min, max) + 0;
+  const contentEnd = contentStart + contentSize;
+  let anchor: number;
+  if (contentSize * scale >= viewSize) {
+    // Fixed point f keeps edges past the viewport: f + s(start - f) <= 0 and f + s(end - f) >= viewSize.
+    const min = (scale * contentStart) / (scale - 1);
+    const max = (scale * contentEnd - viewSize) / (scale - 1);
+    anchor = clamp(point, min, max);
+  } else {
+    // Fixed point that leaves the scaled content centered.
+    anchor = (scale * contentStart - (viewSize - scale * contentSize) / 2) / (scale - 1);
+  }
+  return anchor * (1 - scale) + 0;
 }
 
 /**
- * ZoomIt-style transform: magnify by `zoom.scale`, center the zoom point in the
- * viewport, and clamp so no empty space shows past the video edges.
- * `content` is the untransformed video content box relative to the viewport.
+ * ZoomIt-style transform: magnify by `zoom.scale` around the zoom point, which
+ * stays fixed on screen unless that would reveal empty bars. `content` is the
+ * untransformed video content box relative to the viewport.
  */
 export function computeZoomTransform(zoom: PauseZoom | undefined, viewport: Size, content: Rect): ZoomTransform {
   const normalized = normalizeZoom(zoom);

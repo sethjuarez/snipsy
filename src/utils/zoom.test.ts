@@ -76,44 +76,63 @@ describe("computeZoomTransform", () => {
     expect(computeZoomTransform(undefined, viewport, fullContent)).toEqual(IDENTITY_ZOOM_TRANSFORM);
   });
 
-  it("centers the zoom point in the viewport", () => {
+  it("anchors the zoom point so it stays fixed on screen", () => {
     const t = computeZoomTransform({ x: 50, y: 50, scale: 2 }, viewport, fullContent);
     expect(t).toEqual({ scale: 2, translateX: -800, translateY: -450 });
-    // The point maps to the viewport center.
-    expect(800 * t.scale + t.translateX).toBe(800);
-    expect(450 * t.scale + t.translateY).toBe(450);
+    const off = computeZoomTransform({ x: 75, y: 20, scale: 3 }, viewport, fullContent);
+    expect(1200 * off.scale + off.translateX).toBeCloseTo(1200);
+    expect(180 * off.scale + off.translateY).toBeCloseTo(180);
   });
 
-  it("clamps at corners so no empty space shows", () => {
-    expect(computeZoomTransform({ x: 0, y: 0, scale: 3 }, viewport, fullContent)).toEqual({
-      scale: 3, translateX: 0, translateY: 0,
-    });
-    const br = computeZoomTransform({ x: 100, y: 100, scale: 3 }, viewport, fullContent);
-    expect(br).toEqual({ scale: 3, translateX: 1600 - 4800, translateY: 900 - 2700 });
-    const zoomed = applyZoomTransform(fullContent, br);
-    expect(zoomed.left + zoomed.width).toBe(1600);
-    expect(zoomed.top + zoomed.height).toBe(900);
+  it("stays a pure zoom around the point at every step of a linear transition", () => {
+    // CSS interpolates scale and translate with the same progress; the point must not drift.
+    const end = computeZoomTransform({ x: 75, y: 20, scale: 3 }, viewport, fullContent);
+    for (const p of [0.1, 0.25, 0.5, 0.9]) {
+      const scale = 1 + p * (end.scale - 1);
+      expect(1200 * scale + p * end.translateX).toBeCloseTo(1200);
+      expect(180 * scale + p * end.translateY).toBeCloseTo(180);
+    }
   });
 
-  it("removes letterbox bars once the scaled content fills the axis", () => {
+  it("never reveals new empty space, even at the edges", () => {
+    for (const [x, y] of [[0, 0], [100, 100], [3, 97]]) {
+      const zoomed = applyZoomTransform(fullContent, computeZoomTransform({ x, y, scale: 3 }, viewport, fullContent));
+      expect(zoomed.left).toBeLessThanOrEqual(0);
+      expect(zoomed.top).toBeLessThanOrEqual(0);
+      expect(zoomed.left + zoomed.width).toBeGreaterThanOrEqual(1600);
+      expect(zoomed.top + zoomed.height).toBeGreaterThanOrEqual(900);
+    }
+  });
+
+  it("anchors within letterboxed content", () => {
     // 16:9 video in a 4:3 window -> letterboxed (top bar of 150px).
+    const content = { left: 0, top: 150, width: 1600, height: 900 };
+    const view = { width: 1600, height: 1200 };
+    const t = computeZoomTransform({ x: 25, y: 50, scale: 2 }, view, content);
+    expect(400 * t.scale + t.translateX).toBe(400);
+    expect(600 * t.scale + t.translateY).toBe(600);
+    const zoomed = applyZoomTransform(content, t);
+    expect(zoomed.top).toBeLessThanOrEqual(0);
+    expect(zoomed.top + zoomed.height).toBeGreaterThanOrEqual(1200);
+  });
+
+  it("smart-anchors near a letterbox edge so no bars show", () => {
     const content = { left: 0, top: 150, width: 1600, height: 900 };
     const view = { width: 1600, height: 1200 };
     const t = computeZoomTransform({ x: 0, y: 0, scale: 2 }, view, content);
     const zoomed = applyZoomTransform(content, t);
-    expect(zoomed.left).toBe(0);
-    expect(zoomed.top).toBe(0);
+    expect(zoomed.left).toBe(0); // full-width axis: still anchored at the point
+    expect(zoomed.top).toBe(0); // anchor shifted just enough to remove the top bar
+    expect(zoomed.top + zoomed.height).toBeGreaterThanOrEqual(1200);
   });
 
   it("keeps an axis centered while scaled content is still smaller than the viewport", () => {
-    // Very wide window with a narrow pillarboxed video.
     const content = { left: 700, top: 0, width: 400, height: 225 };
     const view = { width: 1800, height: 225 };
     const t = computeZoomTransform({ x: 0, y: 50, scale: 2 }, view, content);
     const zoomed = applyZoomTransform(content, t);
-    expect(zoomed.width).toBe(800);
-    expect(zoomed.left).toBe(500); // centered horizontally
-    expect(zoomed.top + zoomed.height / 2).toBe(112.5);
+    expect(zoomed.left + zoomed.width / 2).toBe(900);
+    expect(112.5 * t.scale + t.translateY).toBe(112.5);
   });
 
   it("produces a CSS matrix", () => {
@@ -126,13 +145,15 @@ describe("getZoomVisibleFrame", () => {
     expect(getZoomVisibleFrame(undefined, viewport, fullContent)).toEqual({ x: 0, y: 0, width: 100, height: 100 });
   });
 
-  it("is a 1/scale window around the point, clamped to edges", () => {
+  it("is a 1/scale window anchored at the point", () => {
     expect(getZoomVisibleFrame({ x: 50, y: 50, scale: 2 }, viewport, fullContent)).toEqual({
       x: 25, y: 25, width: 50, height: 50,
     });
-    expect(getZoomVisibleFrame({ x: 95, y: 5, scale: 4 }, viewport, fullContent)).toEqual({
-      x: 75, y: 0, width: 25, height: 25,
-    });
+    const edge = getZoomVisibleFrame({ x: 95, y: 5, scale: 4 }, viewport, fullContent);
+    expect(edge.x).toBeCloseTo(71.25);
+    expect(edge.y).toBeCloseTo(3.75);
+    expect(edge.width).toBeCloseTo(25);
+    expect(edge.height).toBeCloseTo(25);
   });
 });
 

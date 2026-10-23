@@ -78,7 +78,7 @@ export interface PauseStop {
   zoom?: PauseZoom;
 }
 
-/** ZoomIt-style zoom: center point (percent of the video frame) and magnification. */
+/** ZoomIt-style zoom: anchor point (percent of the video frame, stays fixed on screen) and magnification. */
 export interface PauseZoom {
   x: number;
   y: number;

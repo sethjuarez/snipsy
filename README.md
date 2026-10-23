@@ -133,7 +133,7 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 - `speed`: Playback multiplier (1.0 = normal).
 - `pauseStops` (optional): Source-video timestamps where playback pauses on the designated frame until the presenter clicks or presses Space. Stops still target the same frame when playback speed is changed.
   - `spotlight` (optional): Rectangle highlight regions (percent of the video frame) with optional style.
-  - `zoom` (optional): ZoomIt-style magnification while paused. `x`/`y` pick the zoom point (percent of the video frame), `scale` sets magnification (1.25–6, default 2), and `durationMs` sets the ease in/out (0–2000, default 400). Edit it in the clip editor's **Zoom** mode: click or drag to pick the point, scroll or use the slider to zoom.
+  - `zoom` (optional): ZoomIt-style magnification while paused. `x`/`y` pick the zoom point (percent of the video frame), which stays fixed on screen while the video grows around it (ZoomIt-style smart anchoring shifts it only as needed to avoid empty bars), `scale` sets magnification (1.25–6, default 2), and `durationMs` sets the ease in/out (0–2000, default 400). Edit it in the clip editor's **Zoom** mode: click or drag to pick the point, scroll or use the slider to zoom.
 - `transitionActions` (optional): Array of automation actions to execute during/at the end of playback for seamless transitions.
 
 ### Automation Schema (Advanced Mode)

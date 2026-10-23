@@ -292,14 +292,30 @@ function Playback() {
       await Promise.race([waitForZoomTransition(zoomInMs), resumePromise]);
       if (seekVersionRef.current !== seekVersion) return;
     }
-    if (targetZoom && !resumed && stageRef.current) {
+    if (targetZoom && !resumed && stageRef.current && videoRef.current) {
       // Diagnostic for runtime drills: the playback window has no drive bridge.
+      const content = getUntransformedVideoContentBox(videoRef.current);
+      const anchor = {
+        x: content.left + (targetZoom.x / 100) * content.width,
+        y: content.top + (targetZoom.y / 100) * content.height,
+      };
+      const transform = getComputedStyle(stageRef.current).transform;
+      const [a = 1, , , d = 1, e = 0, f = 0] = /matrix\(([^)]+)\)/.exec(transform)?.[1].split(",").map(Number) ?? [];
       console.info(`Playback zoom applied ${JSON.stringify({
         time: stop.time,
         x: targetZoom.x,
         y: targetZoom.y,
         scale: targetZoom.scale,
-        transform: getComputedStyle(stageRef.current).transform,
+        transform,
+        anchor,
+        anchorOnScreen: { x: anchor.x * a + e, y: anchor.y * d + f },
+        viewport: { width: containerRef.current?.clientWidth ?? 0, height: containerRef.current?.clientHeight ?? 0 },
+        zoomedContent: {
+          left: content.left * a + e,
+          top: content.top * d + f,
+          right: (content.left + content.width) * a + e,
+          bottom: (content.top + content.height) * d + f,
+        },
       })}`);
     }
 
