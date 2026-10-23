@@ -26,10 +26,7 @@ interface ActiveZoomState {
 
 const SEEK_PRESENTATION_TIMEOUT_MS = 500;
 const ZOOM_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-
-function delay(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
+const ZOOM_TRANSITION_GRACE_MS = 150;
 
 function parsePauseStops(raw: string | null): PauseStop[] {
   if (!raw) return [];
@@ -152,6 +149,7 @@ function Playback() {
   const [activeZoom, setActiveZoomState] = useState<ActiveZoomState>({ zoom: null, durationMs: 0 });
   const activeZoomRef = useRef<PauseZoom | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [, setLayoutVersion] = useState(0);
 
   // Returns how long the CSS transition takes, so callers can wait for it.
@@ -170,6 +168,27 @@ function Playback() {
     const handleResize = () => setLayoutVersion((version) => version + 1);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Resolves when the stage's transform transition ends (or a timeout fallback,
+  // e.g. when the transition is interrupted or the WebView never fires events).
+  const waitForZoomTransition = useCallback(async (durationMs: number) => {
+    // Let React commit the new transform before timing the transition.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => {
+      const stage = stageRef.current;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const finish = (event?: TransitionEvent) => {
+        if (event && (event.target !== stage || event.propertyName !== "transform")) return;
+        if (timeoutId) clearTimeout(timeoutId);
+        stage?.removeEventListener("transitionend", finish);
+        stage?.removeEventListener("transitioncancel", finish);
+        resolve();
+      };
+      stage?.addEventListener("transitionend", finish);
+      stage?.addEventListener("transitioncancel", finish);
+      timeoutId = setTimeout(() => finish(), durationMs + ZOOM_TRANSITION_GRACE_MS);
+    });
   }, []);
 
   const file = searchParams.get("file") ?? "";
@@ -245,6 +264,9 @@ function Playback() {
     const seekVersion = seekVersionRef.current + 1;
     seekVersionRef.current = seekVersion;
     video.pause();
+    // Navigating away from a zoomed stop: snap back so the new frame is never
+    // shown through the previous stop's zoom; the target zoom animates from identity.
+    setActiveZoom(null, false);
     video.currentTime = stop.time;
     nextStopIndexRef.current = getNextPauseStopIndexAfter(pauseStops, stop.time);
     resumingRef.current = true;
@@ -263,7 +285,7 @@ function Playback() {
     const targetZoom = stop.kind === "pause" ? stop.pauseStop.zoom ?? null : null;
     const zoomInMs = setActiveZoom(targetZoom);
     if (zoomInMs > 0) {
-      await Promise.race([delay(zoomInMs), resumePromise]);
+      await Promise.race([waitForZoomTransition(zoomInMs), resumePromise]);
       if (seekVersionRef.current !== seekVersion) return;
     }
 
@@ -282,13 +304,13 @@ function Playback() {
 
     const zoomOutMs = setActiveZoom(null);
     if (zoomOutMs > 0) {
-      await delay(zoomOutMs);
+      await waitForZoomTransition(zoomOutMs);
       if (seekVersionRef.current !== seekVersion) return;
     }
 
     resumingRef.current = false;
     video.play().catch(() => {});
-  }, [pauseStops, setActiveZoom, waitForResume]);
+  }, [pauseStops, setActiveZoom, waitForResume, waitForZoomTransition]);
 
   // Single effect: resolve src, load, seek, (optionally wait for click), play, show
   useEffect(() => {
@@ -483,6 +505,7 @@ function Playback() {
       data-active-stop-kind={activePlaybackStop?.kind ?? "none"}
     >
       <div
+        ref={stageRef}
         data-testid="playback-zoom-stage"
         data-zoom-scale={zoomTransform.scale}
         data-zoom-active={activeZoom.zoom ? "true" : "false"}

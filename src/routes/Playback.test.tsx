@@ -126,6 +126,48 @@ describe("Playback zoom", () => {
     expect(playSpy).not.toHaveBeenCalled();
   });
 
+  it("snaps to identity before seeking to the next zoomed stop, then zooms in fresh", async () => {
+    const second: PauseStop = { time: 5, zoom: { x: 100, y: 100, scale: 4, durationMs: 60 } };
+    renderPlayback([zoomStop, second]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await screen.findByTestId("playback-spotlight-region-0");
+    expect(stage().dataset.zoomScale).toBe("2");
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    // Synchronously after navigation: back at identity with no animation.
+    expect(stage().dataset.zoomActive).toBe("false");
+    expect(stage().style.transition).toBe("none");
+    expect(stage().style.transform).toBe("matrix(1, 0, 0, 1, 0, 0)");
+    expect(screen.queryByTestId("playback-spotlight-overlay")).toBeNull();
+
+    await waitFor(() => expect(stage().dataset.zoomScale).toBe("4"));
+    expect(stage().style.transform).toBe(`matrix(4, 0, 0, 4, ${VIEW_WIDTH - 4 * VIEW_WIDTH}, ${VIEW_HEIGHT - 4 * VIEW_HEIGHT})`);
+    expect(stage().style.transition).toContain("60ms");
+  });
+
+  it("waits for the stage transitionend rather than only a timer", async () => {
+    renderPlayback([{ ...zoomStop, zoom: { ...zoomStop.zoom!, durationMs: 2000 } }]);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(stage().dataset.zoomActive).toBe("true"));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(screen.queryByTestId("playback-spotlight-overlay")).toBeNull();
+
+    // Child transitions (bubbling) and other properties are ignored.
+    const childEvent = new Event("transitionend", { bubbles: true });
+    Object.defineProperty(childEvent, "propertyName", { value: "transform" });
+    screen.getByTestId("playback-video").dispatchEvent(childEvent);
+    const opacityEvent = new Event("transitionend");
+    Object.defineProperty(opacityEvent, "propertyName", { value: "opacity" });
+    stage().dispatchEvent(opacityEvent);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(screen.queryByTestId("playback-spotlight-overlay")).toBeNull();
+
+    const event = new Event("transitionend");
+    Object.defineProperty(event, "propertyName", { value: "transform" });
+    stage().dispatchEvent(event);
+    await screen.findByTestId("playback-spotlight-region-0");
+  });
+
   it("supports zoom-only moments without a spotlight", async () => {
     renderPlayback([{ time: 2, zoom: { x: 0, y: 0, scale: 3, durationMs: 0 } }]);
     fireEvent.keyDown(window, { key: "ArrowRight" });
