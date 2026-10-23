@@ -2,15 +2,34 @@ import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import SpotlightOverlay from "../components/SpotlightOverlay";
 import { auditaurInvoke, isTauriRuntime, tauriFileSrc } from "../services/auditaur";
-import type { PauseSpotlight, PauseStop } from "../types";
-import { STOP_EPSILON, getVideoContentBox, normalizePauseStops } from "../utils/spotlight";
+import type { PauseSpotlight, PauseStop, PauseZoom } from "../types";
+import { STOP_EPSILON, normalizePauseStops } from "../utils/spotlight";
+import {
+  IDENTITY_ZOOM_TRANSFORM,
+  applyZoomTransform,
+  computeZoomTransform,
+  getUntransformedVideoContentBox,
+  prefersReducedMotion,
+  zoomDurationMs,
+  zoomTransformCss,
+} from "../utils/zoom";
 
 type PlaybackNavigationStop =
   | { kind: "start"; time: number }
   | { kind: "pause"; time: number; pauseStop: PauseStop }
   | { kind: "end"; time: number };
 
+interface ActiveZoomState {
+  zoom: PauseZoom | null;
+  durationMs: number;
+}
+
 const SEEK_PRESENTATION_TIMEOUT_MS = 500;
+const ZOOM_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 function parsePauseStops(raw: string | null): PauseStop[] {
   if (!raw) return [];
@@ -29,6 +48,7 @@ function parsePauseStops(raw: string | null): PauseStop[] {
       time: item.time,
       label: typeof item.label === "string" ? item.label : undefined,
       spotlight: item.spotlight,
+      zoom: item.zoom,
     }));
 }
 
@@ -129,6 +149,28 @@ function Playback() {
   const [waitingForResume, setWaitingForResume] = useState(false);
   const [activeSpotlight, setActiveSpotlight] = useState<{ spotlight: PauseSpotlight; label?: string } | null>(null);
   const [activePlaybackStop, setActivePlaybackStop] = useState<PlaybackNavigationStop | null>(null);
+  const [activeZoom, setActiveZoomState] = useState<ActiveZoomState>({ zoom: null, durationMs: 0 });
+  const activeZoomRef = useRef<PauseZoom | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [, setLayoutVersion] = useState(0);
+
+  // Returns how long the CSS transition takes, so callers can wait for it.
+  const setActiveZoom = useCallback((zoom: PauseZoom | null, animate = true) => {
+    const previous = activeZoomRef.current;
+    activeZoomRef.current = zoom;
+    if (previous === zoom) return 0;
+    const durationMs = !animate || prefersReducedMotion()
+      ? 0
+      : zoomDurationMs(zoom ?? previous ?? undefined);
+    setActiveZoomState({ zoom, durationMs });
+    return durationMs;
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setLayoutVersion((version) => version + 1);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const file = searchParams.get("file") ?? "";
   const start = parseFloat(searchParams.get("start") ?? "0");
@@ -212,20 +254,41 @@ function Playback() {
     await waitForPresentedSeekFrame(video);
     if (seekVersionRef.current !== seekVersion) return;
 
-    setActiveSpotlight(
-      stop.kind === "pause" && stop.pauseStop.spotlight
-        ? { spotlight: stop.pauseStop.spotlight, label: stop.pauseStop.label }
-        : null,
-    );
-
-    waitForResume().then(() => {
-      if (seekVersionRef.current !== seekVersion) return;
-      setActivePlaybackStop(null);
-      setActiveSpotlight(null);
-      resumingRef.current = false;
-      video.play().catch(() => {});
+    // Start listening right away so a click during the zoom-in is not lost.
+    let resumed = false;
+    const resumePromise = waitForResume().then(() => {
+      resumed = true;
     });
-  }, [pauseStops, waitForResume]);
+
+    const targetZoom = stop.kind === "pause" ? stop.pauseStop.zoom ?? null : null;
+    const zoomInMs = setActiveZoom(targetZoom);
+    if (zoomInMs > 0) {
+      await Promise.race([delay(zoomInMs), resumePromise]);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
+
+    if (!resumed) {
+      setActiveSpotlight(
+        stop.kind === "pause" && stop.pauseStop.spotlight
+          ? { spotlight: stop.pauseStop.spotlight, label: stop.pauseStop.label }
+          : null,
+      );
+    }
+
+    await resumePromise;
+    if (seekVersionRef.current !== seekVersion) return;
+    setActivePlaybackStop(null);
+    setActiveSpotlight(null);
+
+    const zoomOutMs = setActiveZoom(null);
+    if (zoomOutMs > 0) {
+      await delay(zoomOutMs);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
+
+    resumingRef.current = false;
+    video.play().catch(() => {});
+  }, [pauseStops, setActiveZoom, waitForResume]);
 
   // Single effect: resolve src, load, seek, (optionally wait for click), play, show
   useEffect(() => {
@@ -237,6 +300,7 @@ function Playback() {
     resumingRef.current = false;
     setActivePlaybackStop(null);
     setActiveSpotlight(null);
+    setActiveZoom(null, false);
 
     (async () => {
       // 1. Resolve file path to asset URL
@@ -333,13 +397,16 @@ function Playback() {
 
     return () => {
       cancelled = true;
+      // Abort any in-flight stop sequence (zoom-in/out waits).
+      seekVersionRef.current += 1;
       waitCleanupRef.current?.();
       setActivePlaybackStop(null);
       setActiveSpotlight(null);
+      setActiveZoom(null, false);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, activatePlaybackStop, closeWindow, showWindow, waitForResume]);
+  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, activatePlaybackStop, closeWindow, setActiveZoom, showWindow, waitForResume]);
 
   // Escape closes playback; arrows jump between clip start, pause stops, and clip end.
   useEffect(() => {
@@ -379,19 +446,35 @@ function Playback() {
     );
   }
 
-  const spotlightContentBox = activeSpotlight && videoRef.current
-    ? getVideoContentBox(videoRef.current)
+  const video = videoRef.current;
+  const container = containerRef.current;
+  const viewport = {
+    width: container?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 0),
+    height: container?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 0),
+  };
+  const baseContentBox = video ? getUntransformedVideoContentBox(video) : null;
+  const zoomTransform = activeZoom.zoom && baseContentBox
+    ? computeZoomTransform(activeZoom.zoom, viewport, baseContentBox)
+    : IDENTITY_ZOOM_TRANSFORM;
+  const spotlightContentBox = activeSpotlight && baseContentBox
+    ? applyZoomTransform(baseContentBox, zoomTransform)
     : null;
   const pauseSpotlightRegionCount = pauseStops.reduce(
     (count, stop) => count + (stop.spotlight?.regions.length ?? 0),
     0,
   );
+  const pauseZoomCount = pauseStops.filter((stop) => stop.zoom).length;
+  const zoomTransition = activeZoom.durationMs > 0
+    ? `transform ${activeZoom.durationMs}ms ${ZOOM_EASING}`
+    : "none";
 
   return (
     <div
+      ref={containerRef}
       className="flex items-center justify-center"
       style={{
         position: "fixed", inset: 0,
+        overflow: "hidden",
         cursor: waitingForResume ? "pointer" : hideCursor ? "none" : "auto",
         backgroundColor,
       }}
@@ -399,6 +482,19 @@ function Playback() {
       data-waiting-for-resume={waitingForResume}
       data-active-stop-kind={activePlaybackStop?.kind ?? "none"}
     >
+      <div
+        data-testid="playback-zoom-stage"
+        data-zoom-scale={zoomTransform.scale}
+        data-zoom-active={activeZoom.zoom ? "true" : "false"}
+        data-zoom-duration-ms={activeZoom.durationMs}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformOrigin: "0 0",
+          transform: zoomTransformCss(zoomTransform),
+          transition: zoomTransition,
+        }}
+      >
       <video
         ref={videoRef}
         preload="auto"
@@ -412,6 +508,7 @@ function Playback() {
         data-muted={muted}
         data-pause-stops={pauseStops.length}
         data-pause-spotlight-regions={pauseSpotlightRegionCount}
+        data-pause-zooms={pauseZoomCount}
         className="object-contain"
         style={{
           width: "100%", height: "100%",
@@ -424,10 +521,12 @@ function Playback() {
           transform: "translateZ(0)",
         }}
       />
+      </div>
       {activeSpotlight && spotlightContentBox && (
         <SpotlightOverlay
           spotlight={activeSpotlight.spotlight}
           contentBox={spotlightContentBox}
+          clipBox={{ left: 0, top: 0, width: viewport.width, height: viewport.height }}
           label={activeSpotlight.label}
           testIdPrefix="playback-spotlight"
         />
