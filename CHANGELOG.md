@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/sethjuarez/snipsy/compare/v0.22.0...v0.23.0) (2026-10-24)
+
+
+### Features
+
+* ZoomIt-style moment zoom and bulk moment import ([#37](https://github.com/sethjuarez/snipsy/issues/37)) ([dee0368](https://github.com/sethjuarez/snipsy/commit/dee0368b0849b440c843a13848b6a1ea858cc360))
+
 ## [0.22.0](https://github.com/sethjuarez/snipsy/compare/v0.21.0...v0.22.0) (2026-10-10)
 
 
