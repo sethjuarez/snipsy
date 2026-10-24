@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -242,7 +242,7 @@ function click(selector) {
 }
 
 function fill(selector, value) {
-  drive("fill", ["--selector", selector, "--value", value]);
+  drive("fill", ["--selector", selector, `--value=${value}`]);
 }
 
 function optionalClick(selector) {
@@ -366,6 +366,28 @@ function seedDrillProjectFiles() {
       clickToPlay: false,
       muted: true,
       pauseStops: [],
+    },
+    {
+      id: "drill-import-clip",
+      title: "Moment Import Clip",
+      description: "Clip used to validate bulk moment import.",
+      videoFile: "videos/smoke-1080p.mp4",
+      startTime: 0,
+      endTime: 4.5,
+      hotkey: "CmdOrControl+Shift+7",
+      speed: 1,
+      endBehavior: "close",
+      hideCursor: true,
+      backgroundColor: "#000000",
+      clickToPlay: false,
+      muted: true,
+      pauseStops: [
+        {
+          time: 2,
+          label: "Old spotlight",
+          spotlight: { regions: [{ type: "rectangle", x: 10, y: 10, width: 20, height: 20 }] },
+        },
+      ],
     },
   ], null, 2)}\n`);
 
@@ -649,6 +671,106 @@ function runClipEditorDrills() {
       { cleanAfterTitleRevert },
     );
   }
+}
+
+function readImportClipStops() {
+  const clips = JSON.parse(readFileSync(join(drillProjectPath, "video-snippets.json"), "utf8"));
+  return clips.find((clip) => clip.id === "drill-import-clip")?.pauseStops ?? null;
+}
+
+function sleep(ms) {
+  spawnSync(process.execPath, ["-e", `setTimeout(() => {}, ${ms})`]);
+}
+
+// Real OS-level Ctrl+V, so we know WebView2 fires `paste` when no text field has focus.
+function sendNativePaste(text) {
+  const script = [
+    "Set-Clipboard -Value $env:SNIPSY_DRILL_CLIPBOARD",
+    "$app = Get-Process snipsy -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0 | Select-Object -First 1",
+    "if (-not $app) { exit 2 }",
+    "$shell = New-Object -ComObject WScript.Shell",
+    "if (-not $shell.AppActivate($app.Id)) { exit 3 }",
+    "Start-Sleep -Milliseconds 300",
+    "$shell.SendKeys('^v')",
+  ].join("; ");
+  return spawnSync("powershell", ["-NoProfile", "-Command", script], {
+    encoding: "utf8",
+    env: { ...process.env, SNIPSY_DRILL_CLIPBOARD: text },
+  }).status;
+}
+
+function runMomentImportDrill() {
+  optionalClick('[data-testid="nav-home"]');
+  waitForSelector('[data-testid="overview-edit-video-drill-import-clip"]');
+  click('[data-testid="overview-edit-video-drill-import-clip"]');
+  waitForSelector('[data-testid="clip-editor"]');
+  optionalClick('[data-testid="clip-inspector-tab-moments"]');
+  waitForSelector('[data-testid="moments-import-open"]');
+
+  click('[data-testid="moments-import-open"]');
+  waitForSelector('[data-testid="moment-import-dialog"]');
+  fill('[data-testid="moment-import-text"]', "- Intro 1 second\n- Setup 1.5 sec\n- Demo 1s\n- Outro 1s");
+  const preview = evaluate(`(() => ({
+    durations: document.querySelector('[data-testid="moment-import-mode-durations"]')?.getAttribute("aria-pressed"),
+    hint: document.querySelector('[data-testid="moment-import-hint"]')?.textContent ?? "",
+    statuses: Array.from(document.querySelectorAll('[data-testid="moment-import-row"]')).map((row) => row.getAttribute("data-status")),
+    summary: document.querySelector('[data-testid="moment-import-summary"]')?.textContent ?? "",
+    lossWarning: Boolean(document.querySelector('[data-testid="moment-import-loss-warning"]')),
+    apply: document.querySelector('[data-testid="moment-import-apply"]')?.textContent?.trim(),
+  }))()`, { label: "moment import preview" });
+  assertCondition(
+    preview?.durations === "true" &&
+      preview.hint.includes("detected") &&
+      JSON.stringify(preview.statuses) === JSON.stringify(["moment", "moment", "moment", "info"]) &&
+      preview.summary.includes("3 moments replace the current 1") &&
+      preview.lossWarning === true &&
+      preview.apply === "Replace moments",
+    "moment import detects section lengths and previews the rewrite",
+    preview,
+  );
+
+  click('[data-testid="moment-import-apply"]');
+  const afterApply = evaluate(`({
+    dialog: Boolean(document.querySelector('[data-testid="moment-import-dialog"]')),
+    markers: document.querySelectorAll('[data-testid^="pause-stop-marker-"]').length,
+    unsaved: document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved"),
+  })`, { label: "moment import applied" });
+  assertCondition(
+    afterApply?.dialog === false && afterApply.markers === 3 && afterApply.unsaved === "true",
+    "applying the import replaces timeline moments and marks the clip unsaved",
+    afterApply,
+  );
+
+  click('[data-testid="clip-save"]');
+  sleep(1000);
+  const savedStops = readImportClipStops();
+  const savedSummary = (savedStops ?? []).map((stop) => `${stop.time}|${stop.label ?? ""}|${Boolean(stop.spotlight || stop.zoom)}`);
+  assertCondition(
+    JSON.stringify(savedSummary) === JSON.stringify(["1|Setup|false", "2.5|Demo|false", "3.5|Outro|false"]),
+    "saved project JSON holds the imported moments",
+    { savedStops },
+  );
+
+  if (process.platform !== "win32") {
+    recordSkip("native Ctrl+V opens moment import", `Windows-only drill skipped on ${process.platform}.`);
+    return;
+  }
+  evaluate(`(() => { document.activeElement?.blur?.(); return true; })()`, { label: "blur before native paste" });
+  const pasteStatus = sendNativePaste("0:01 Intro\n0:02 Demo");
+  sleep(800);
+  const pasted = evaluate(`({
+    dialog: Boolean(document.querySelector('[data-testid="moment-import-dialog"]')),
+    text: document.querySelector('[data-testid="moment-import-text"]')?.value ?? null,
+    timecodes: document.querySelector('[data-testid="moment-import-mode-timecodes"]')?.getAttribute("aria-pressed"),
+  })`, { label: "native paste state" });
+  assertCondition(
+    pasteStatus === 0 && pasted?.dialog === true && pasted.text?.includes("0:02 Demo") && pasted.timecodes === "true",
+    "native Ctrl+V on the clip editor opens moment import prefilled",
+    { pasteStatus, pasted },
+  );
+  click('[data-testid="moment-import-cancel"]');
+  const afterCancel = evaluate(`document.querySelectorAll('[data-testid^="pause-stop-marker-"]').length`, { label: "markers after cancel" });
+  assertCondition(afterCancel === 3, "cancelling a pasted import keeps current moments", { afterCancel });
 }
 
 function runTextSnippetSaveTrackingDrill() {
@@ -1257,6 +1379,7 @@ click('[data-testid="nav-automations"]');
 waitForAnySelector(['[data-testid="automation-empty-state"]', '[data-testid="automation-list"]']);
 
 runClipEditorDrills();
+runMomentImportDrill();
 runPlaybackWindowDrill();
 runPlaybackZoomDrill();
 runMacCompatibilityDrills();
