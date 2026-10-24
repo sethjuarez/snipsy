@@ -64,7 +64,9 @@ const UNIT_RANK: Record<string, number> = { h: 0, m: 1, s: 2, ms: 3 };
 const UNIT_SECONDS: Record<string, number> = { h: 3600, m: 60, s: 1, ms: 0.001 };
 const LIST_MARKER = /^\s*(?:[-*+•●◦▪‣·–—>]+(?=\s|$)|\(?\d{1,3}[.)](?=\s)|\[[ xX]?\]|#{1,6}(?=\s))\s*/;
 const EDGE_SEPARATORS = /^[\s\-–—:|,;.=>→]+|[\s\-–—:|,;=>→]+$/g;
-const RANGE_SEPARATOR = /^\s*(?:-|–|—|to|→|->)\s*/i;
+const RANGE_SEPARATOR = /^\s*(?:->|-|–|—|to|→)\s*/i;
+// When a larger unit is present, the next one down must stay under this.
+const UNIT_LIMIT: Record<string, number> = { m: 60, s: 60, ms: 1000 };
 
 function toNumber(text: string): number {
   return Number(text.replace(",", "."));
@@ -106,8 +108,12 @@ function parseUnits(text: string): TimeParseResult | null {
     if (rank <= lastRank) {
       return { ok: false, error: "Units are repeated or out of order (write largest first, e.g. 1 min 3 sec)" };
     }
+    const value = toNumber(match[1]);
+    if (lastRank >= 0 && value >= UNIT_LIMIT[unit]) {
+      return { ok: false, error: `"${match[0].trim()}" is too large after a bigger unit (must be under ${UNIT_LIMIT[unit]})` };
+    }
     lastRank = rank;
-    total += toNumber(match[1]) * UNIT_SECONDS[unit];
+    total += value * UNIT_SECONDS[unit];
     matched = true;
   }
   return matched ? { ok: true, seconds: total, syntax: "units" } : null;
@@ -148,6 +154,9 @@ export function parseTimeExpression(input: string, options: ParseOptions = {}): 
   if (iso) {
     const [, h, m, s] = iso;
     if (h === undefined && m === undefined && s === undefined) return { ok: false, error: `"${text}" has no time parts` };
+    if ((h !== undefined && m !== undefined && toNumber(m) >= 60) || ((h !== undefined || m !== undefined) && s !== undefined && toNumber(s) >= 60)) {
+      return { ok: false, error: `Minutes and seconds must be under 60 in "${text}"` };
+    }
     const seconds = (h ? toNumber(h) * 3600 : 0) + (m ? toNumber(m) * 60 : 0) + (s ? toNumber(s) : 0);
     return { ok: true, seconds, syntax: "iso" };
   }
@@ -181,7 +190,7 @@ function parseLabelledLine(text: string, options: ParseOptions): Omit<MomentImpo
   if (whole.ok) return { seconds: whole.seconds, syntax: whole.syntax };
 
   // Give unspaced ranges like `0:00-0:29` word boundaries so the range check can see them.
-  const words = text.replace(/(\d)\s*([-–—])\s*(\d)/g, "$1 $2 $3").split(/\s+/);
+  const words = text.replace(/(\d)\s*(->|[-–—→])\s*(\d)/g, "$1 $2 $3").split(/\s+/);
   let firstError: string | undefined = whole.error;
 
   for (let count = words.length - 1; count >= 1; count--) {
@@ -244,6 +253,22 @@ export function parseMomentList(text: string, options: ParseOptions = {}): Momen
     entries.push({ line, source: cleaned, ...parseLabelledLine(cleaned, options) });
   });
   return entries;
+}
+
+/**
+ * Stricter than the dialog parser: decides whether a global Ctrl+V should open the import dialog.
+ * A plain number with words around it (`Version 2`) is not enough on its own.
+ */
+export function looksLikeMomentList(entries: MomentImportEntry[]): boolean {
+  if (entries.length === 0) return false;
+  const strong = entries.filter(
+    (entry) =>
+      entry.seconds !== undefined &&
+      (entry.syntax !== "number" || entry.label === undefined || entry.rangeEnd !== undefined),
+  );
+  if (strong.length * 2 < entries.length) return false;
+  if (strong.length >= 2) return true;
+  return strong.length === 1 && strong[0].syntax !== "number";
 }
 
 /** Guess whether a list holds timecodes or section lengths. */
@@ -309,14 +334,16 @@ function planDurations(
   startTime: number,
   endTime: number,
 ): { rows: MomentImportRow[]; total: number } {
-  const validIndexes = entries.flatMap((entry, index) => (entry.seconds !== undefined ? [index] : []));
-  const lastValid = validIndexes[validIndexes.length - 1];
+  const sectionLength = (entry: MomentImportEntry) =>
+    entry.seconds === undefined ? NaN : entry.rangeEnd !== undefined ? entry.rangeEnd - entry.seconds : entry.seconds;
+  const acceptedIndexes = entries.flatMap((entry, index) => (sectionLength(entry) > 0 ? [index] : []));
+  const lastValid = acceptedIndexes[acceptedIndexes.length - 1];
   let cursor = startTime;
   let total = 0;
   const rows = entries.map((entry, index): MomentImportRow => {
     if (entry.seconds === undefined) return errorRow(entry);
     const base = { line: entry.line, source: entry.source, label: entry.label };
-    const length = entry.rangeEnd !== undefined ? entry.rangeEnd - entry.seconds : entry.seconds;
+    const length = sectionLength(entry);
     if (!(length > 0)) return { ...base, status: "skipped", message: "Section length must be more than 0" };
     cursor += length;
     total += length;
@@ -327,7 +354,7 @@ function planDurations(
       return { ...base, status: "skipped", time: cursor, message: `Ends past the clip end (${formatImportTime(endTime)})` };
     }
     // The moment marks where the next section starts, so it carries that section's label.
-    const nextLabel = entries.slice(index + 1).find((next) => next.seconds !== undefined)?.label;
+    const nextLabel = entries.slice(index + 1).find((next) => sectionLength(next) > 0)?.label;
     return { ...base, status: "moment", time: cursor, label: nextLabel };
   });
   return { rows, total };

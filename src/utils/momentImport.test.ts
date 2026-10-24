@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   detectMomentImportMode,
   formatImportTime,
+  looksLikeMomentList,
   parseMomentList,
   parseTimeExpression,
   planMomentImport,
@@ -106,6 +107,17 @@ describe("parseTimeExpression", () => {
     expect(error("29 parsecs")).toMatch(/Couldn't read/);
     expect(error("")).toBe("Empty");
   });
+
+  it("flags oversized parts after a bigger unit", () => {
+    expect(error("1m 75s")).toMatch(/too large/);
+    expect(error("1 hour 90 minutes")).toMatch(/too large/);
+    expect(error("1s 1500ms")).toMatch(/too large/);
+    expect(error("PT1M75S")).toMatch(/under 60/);
+    expect(error("PT1H60M")).toMatch(/under 60/);
+    expect(seconds("90 seconds")).toBe(90);
+    expect(seconds("PT90S")).toBe(90);
+    expect(seconds("90m")).toBe(5400);
+  });
 });
 
 describe("parseMomentList", () => {
@@ -137,6 +149,15 @@ describe("parseMomentList", () => {
     expect(entries.map(({ seconds: s, rangeEnd, label }) => [s, rangeEnd, label])).toEqual([
       [0, 29, "Intro"],
       [29, 56, "Setup"],
+    ]);
+  });
+
+  it("reads ASCII and Unicode arrow ranges, spaced or not", () => {
+    const entries = parseMomentList("0:00 -> 0:29 Intro\n0:29->0:56 Setup\n0:56 → 1:37 Demo");
+    expect(entries.map(({ seconds: s, rangeEnd, label }) => [s, rangeEnd, label])).toEqual([
+      [0, 29, "Intro"],
+      [29, 56, "Setup"],
+      [56, 97, "Demo"],
     ]);
   });
 
@@ -243,6 +264,42 @@ describe("planMomentImport", () => {
     const plan = planMomentImport(parseMomentList("nope\n0:10"), "timecodes", 0, 60);
     expect(plan.rows[0]).toMatchObject({ status: "error", line: 1 });
     expect(plan.stops).toEqual([{ time: 10 }]);
+  });
+
+  it("does not turn a trailing zero-length section into a moment", () => {
+    const plan = planMomentImport(parseMomentList("29s\n0s"), "durations", 0, 60);
+    expect(plan.rows[0]).toMatchObject({ status: "info", message: expect.stringMatching(/Last section/) });
+    expect(plan.stops).toEqual([]);
+  });
+
+  it("takes the next label from the next accepted section", () => {
+    const plan = planMomentImport(parseMomentList("Intro 20s\nOops 0s\nDemo 20s\nOutro 20s"), "durations", 0, 60);
+    expect(plan.stops).toEqual([
+      { time: 20, label: "Demo" },
+      { time: 40, label: "Outro" },
+    ]);
+  });
+});
+
+describe("looksLikeMomentList", () => {
+  it.each([
+    ["Cassidy's list", CASSIDY],
+    ["chapter list", "0:00 Intro\n0:29 Setup"],
+    ["bare seconds", "29\n27\n41"],
+    ["single clock time", "1:03"],
+    ["single unit duration", "1 minute 3 seconds"],
+  ])("opens the dialog for %s", (_name, text) => {
+    expect(looksLikeMomentList(parseMomentList(text))).toBe(true);
+  });
+
+  it.each([
+    ["prose ending in a number", "Version 2"],
+    ["a sentence", "Fix the bug in step 3"],
+    ["a lone number", "42"],
+    ["mostly prose", "hello world\nsee you soon\n0:10"],
+    ["empty text", ""],
+  ])("ignores %s", (_name, text) => {
+    expect(looksLikeMomentList(parseMomentList(text))).toBe(false);
   });
 });
 
