@@ -346,3 +346,95 @@ describe("ClipEditor zoom editing", () => {
     expect(screen.getByTestId("zoom-scale-label").textContent).toContain("2.25×");
   });
 });
+
+describe("ClipEditor moment import", () => {
+  const paste = (target: Element, text: string) =>
+    fireEvent.paste(target, { clipboardData: { getData: (type: string) => (type === "text/plain" ? text : "") } });
+
+  it("replaces all moments with a pasted list of section lengths", () => {
+    const { save, savedStops } = renderEditor([spotlightStop, { time: 6 }]);
+
+    fireEvent.click(screen.getByTestId("moments-import-open"));
+    fireEvent.change(screen.getByTestId("moment-import-text"), {
+      target: { value: "- Intro 2 seconds\n- Setup 1.5 sec\n- Demo 3s\n- Outro 1.5s" },
+    });
+
+    expect(screen.getByTestId("moment-import-mode-durations").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("moment-import-loss-warning").textContent).toContain("1 spotlight/zoom moment");
+    expect(screen.getByTestId("moment-import-summary").textContent).toContain("3 moments replace the current 2");
+
+    fireEvent.click(screen.getByTestId("moment-import-apply"));
+    expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
+    save();
+
+    expect(savedStops()).toEqual([
+      { time: 2, label: "Setup" },
+      { time: 3.5, label: "Demo" },
+      { time: 6.5, label: "Outro" },
+    ]);
+  });
+
+  it("lets the user override the detected mode and flags problem lines", () => {
+    renderEditor([]);
+
+    fireEvent.click(screen.getByTestId("moments-import-open"));
+    fireEvent.change(screen.getByTestId("moment-import-text"), { target: { value: "0:02\n0:03\n0:99\n0:20" } });
+    expect(screen.getByTestId("moment-import-mode-timecodes").getAttribute("aria-pressed")).toBe("true");
+    const statuses = () => screen.getAllByTestId("moment-import-row").map((row) => row.getAttribute("data-status"));
+    expect(statuses()).toEqual(["moment", "moment", "error", "skipped"]);
+
+    fireEvent.click(screen.getByTestId("moment-import-mode-durations"));
+    expect(screen.getByTestId("moment-import-mode-durations").getAttribute("aria-pressed")).toBe("true");
+    expect(statuses()).toEqual(["moment", "moment", "error", "info"]);
+    expect(screen.getByTestId("moment-import-note").textContent).toMatch(/longer than the clip/);
+  });
+
+  it("disables apply when nothing usable was pasted and cancels without changes", () => {
+    const { save, savedStops } = renderEditor([{ time: 4 }]);
+
+    fireEvent.click(screen.getByTestId("moments-import-open"));
+    fireEvent.change(screen.getByTestId("moment-import-text"), { target: { value: "hello" } });
+    expect((screen.getByTestId("moment-import-apply") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByTestId("moment-import-cancel"));
+    expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
+    save();
+    expect(savedStops()).toEqual([{ time: 4 }]);
+  });
+
+  it("clears existing moments when the list holds a single section", () => {
+    const { save, savedStops } = renderEditor([{ time: 4 }]);
+
+    fireEvent.click(screen.getByTestId("moments-import-open"));
+    fireEvent.change(screen.getByTestId("moment-import-text"), { target: { value: "8 seconds" } });
+    const apply = screen.getByTestId("moment-import-apply") as HTMLButtonElement;
+    expect(apply.disabled).toBe(false);
+    expect(apply.textContent).toBe("Clear moments");
+
+    fireEvent.click(apply);
+    save();
+    expect(savedStops()).toEqual([]);
+  });
+
+  it("opens the import from Ctrl+V on the editor but not inside text fields", () => {
+    renderEditor([]);
+
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-clip"));
+    paste(screen.getByTestId("clip-title"), "0:02\n0:04");
+    expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
+
+    paste(document.body, "just some words");
+    expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
+
+    paste(document.body, "Version 2");
+    expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
+
+    paste(document.body, "0:02\n0:04");
+    expect(screen.getByTestId("moment-import-dialog")).toBeTruthy();
+    expect((screen.getByTestId("moment-import-text") as HTMLTextAreaElement).value).toBe("0:02\n0:04");
+
+    fireEvent.keyDown(screen.getByTestId("moment-import-text"), { key: "Enter", ctrlKey: true });
+    expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
+    expect(screen.getByTestId("pause-stops-panel").textContent).toContain("2 moments");
+  });
+});

@@ -1,9 +1,11 @@
 import { forwardRef, useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle, useLayoutEffect } from "react";
-import { Play, Pause, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw, MousePointerClick } from "lucide-react";
+import { Play, Pause, X, Keyboard, ChevronLeft, ChevronRight, Monitor, RefreshCw, MousePointerClick, ClipboardPaste } from "lucide-react";
 import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import SpotlightOverlay from "./SpotlightOverlay";
 import ConfirmDialog from "./ConfirmDialog";
+import MomentImportDialog from "./MomentImportDialog";
+import { looksLikeMomentList, parseMomentList } from "../utils/momentImport";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import type { EndBehavior, ImportedVideo, MonitorInfo, PauseSpotlight, PauseSpotlightStyle, PauseStop, PauseZoom, RectanglePauseSpotlightRegion, StreamDeckIcon, VideoSnippet } from "../types";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
@@ -356,6 +358,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const [inspectorTab, setInspectorTab] = useState<ClipInspectorTab>("clip");
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({ type: "clip" });
   const [showAllMoments, setShowAllMoments] = useState(false);
+  const [momentImportText, setMomentImportText] = useState<string | null>(null);
   const [videoContentBox, setVideoContentBox] = useState<Rect | null>(null);
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, existingClip?.id);
 
@@ -1444,6 +1447,36 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activePreviewStop, capturingHotkey, jumpToPreviewStop, playing]);
 
+  const editorFps = Math.round((1 / frameDuration) * 1000) / 1000;
+
+  const openMomentImport = (text = "") => {
+    if (editingSpotlightIndex !== null) return;
+    setInspectorTab("moments");
+    setMomentImportText(text);
+  };
+
+  // A bulk import is a rewrite: the pasted list replaces every existing moment (Discard still restores them).
+  const applyMomentImport = (stops: PauseStop[]) => {
+    setPauseStops(stops);
+    setTimelineSelection({ type: "clip" });
+    setShowAllMoments(false);
+    setMomentImportText(null);
+  };
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (momentImportText !== null || editingSpotlightIndex !== null || capturingHotkey) return;
+      if (isEditableKeyboardTarget(event.target)) return;
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!looksLikeMomentList(parseMomentList(text, { fps: editorFps }))) return;
+      event.preventDefault();
+      setInspectorTab("moments");
+      setMomentImportText(text);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [capturingHotkey, editingSpotlightIndex, editorFps, momentImportText]);
+
   const selectionLeft = duration > 0 ? (startTime / duration) * 100 : 0;
   const selectionWidth = duration > 0 ? ((endTime - startTime) / duration) * 100 : 100;
   const playheadPos = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -2164,6 +2197,22 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
                   {pauseStops.length} moment{pauseStops.length === 1 ? "" : "s"}
                 </span>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded px-2 py-0.5 text-xs disabled:opacity-50"
+                  style={{
+                    color: "var(--color-text)",
+                    backgroundColor: "var(--color-surface-inset)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                  onClick={() => openMomentImport()}
+                  disabled={editingSpotlightIndex !== null}
+                  title="Paste a list of timecodes or section lengths (or press Ctrl+V on the editor)"
+                  data-testid="moments-import-open"
+                >
+                  <ClipboardPaste size={11} />
+                  Paste list
+                </button>
                 {selectedMomentIndex !== null && pauseStops.length > 1 && (
                   <button
                     type="button"
@@ -2843,6 +2892,17 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
         </div>
 
       </div>
+      {momentImportText !== null && (
+        <MomentImportDialog
+          initialText={momentImportText}
+          startTime={startTime}
+          endTime={endTime}
+          fps={editorFps}
+          existingStops={pauseStops}
+          onApply={applyMomentImport}
+          onCancel={() => setMomentImportText(null)}
+        />
+      )}
       {pendingSpotlightExit && (
         <ConfirmDialog
           title="Save moment changes?"
