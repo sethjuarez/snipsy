@@ -114,7 +114,8 @@ All configuration is stored as **JSON files**, making projects human-readable, v
   "pauseStops": [
     {
       "time": 18.5,
-      "label": "Wait for presenter"
+      "label": "Wait for presenter",
+      "zoom": { "x": 72, "y": 30, "scale": 2.5 }
     }
   ],
   "transitionActions": [
@@ -131,6 +132,9 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 - `startTime` / `endTime`: Seconds within the video file.
 - `speed`: Playback multiplier (1.0 = normal).
 - `pauseStops` (optional): Source-video timestamps where playback pauses on the designated frame until the presenter clicks or presses Space. Stops still target the same frame when playback speed is changed.
+  - `spotlight` (optional): Rectangle highlight regions (percent of the video frame) with optional style.
+  - `zoom` (optional): ZoomIt-style magnification while paused. `x`/`y` pick the zoom point (percent of the video frame), which stays fixed on screen while the video grows around it (ZoomIt-style smart anchoring shifts it only as needed to avoid empty bars), `scale` sets magnification (1.25–6, default 2), and `durationMs` sets the ease in/out (0–2000, default 400). Playback pauses exactly on the moment, holds a still copy of that frame for a beat, then zooms the still (avoiding WebView2 video-layer artifacts). Edit it in the clip editor's **Zoom** mode: click or drag to pick the point, scroll or use the slider to zoom.
+  - **Bulk import:** in the clip editor, click **Paste list** in Moments or press Ctrl+V outside a text field. Paste either **timecodes** (video-file times, e.g. `0:29 Setup`, `1:03:07`, `00:01:03:15` frames) or **section lengths** (e.g. `29 seconds`, `1 min 3 sec`, `1m3s`, `PT1M3S`), one per line or comma-separated. Section lengths are added up from the clip start, with a moment between each section; the last section runs to the clip end. The type is detected (unit words or a non-increasing list mean section lengths) and can be switched. Bullets, numbering, labels and ranges (`0:00-0:29 Intro`) are understood; unreadable or out-of-clip lines are flagged and skipped. Applying replaces all existing moments; until you save, leaving the editor with **Discard changes** restores them.
 - `transitionActions` (optional): Array of automation actions to execute during/at the end of playback for seamless transitions.
 
 ### Automation Schema (Advanced Mode)

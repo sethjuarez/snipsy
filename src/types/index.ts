@@ -75,6 +75,15 @@ export interface PauseStop {
   time: number;
   label?: string;
   spotlight?: PauseSpotlight;
+  zoom?: PauseZoom;
+}
+
+/** ZoomIt-style zoom: anchor point (percent of the video frame, stays fixed on screen) and magnification. */
+export interface PauseZoom {
+  x: number;
+  y: number;
+  scale: number;
+  durationMs?: number;
 }
 
 export interface MonitorInfo {

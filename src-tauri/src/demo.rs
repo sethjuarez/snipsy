@@ -445,6 +445,7 @@ mod tests {
                 time: 12.5,
                 label: Some("Explain output".into()),
                 spotlight: None,
+                zoom: None,
             }]),
             script_id: None,
         };

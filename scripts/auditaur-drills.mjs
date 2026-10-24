@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -74,9 +74,42 @@ function start(command, args, options = {}) {
 }
 
 function stopWrappedApp() {
-  if (wrappedAppProcess && !wrappedAppProcess.killed) {
-    wrappedAppProcess.kill();
+  if (!wrappedAppProcess) return;
+  // On Windows, kill() only ends `auditaur run`, which may already have exited and
+  // orphaned npm/vite/cargo/snipsy. Orphans keep their parent PID, so walk the tree.
+  if (process.platform === "win32" && wrappedAppProcess.pid) {
+    for (const pid of windowsDescendantPids(wrappedAppProcess.pid)) {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    }
   }
+  if (!wrappedAppProcess.killed) wrappedAppProcess.kill();
+  wrappedAppProcess = null;
+}
+
+function windowsDescendantPids(rootPid) {
+  const result = spawnSync("powershell", [
+    "-NoProfile",
+    "-Command",
+    "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,@{n='CreatedMs';e={([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}} | ConvertTo-Json -Compress",
+  ], { encoding: "utf8" });
+  let processes;
+  try {
+    processes = [JSON.parse(result.stdout)].flat();
+  } catch {
+    return [rootPid];
+  }
+  // Ignore processes older than the drill so a reused PID can't match.
+  const startedAt = drillStartedAtMs - 5_000;
+  const createdAt = (p) => Number(p.CreatedMs);
+  const pids = [rootPid];
+  for (let i = 0; i < pids.length; i += 1) {
+    for (const p of processes) {
+      if (p.ParentProcessId === pids[i] && !pids.includes(p.ProcessId) && !(createdAt(p) < startedAt)) {
+        pids.push(p.ProcessId);
+      }
+    }
+  }
+  return pids;
 }
 
 function writeReport() {
@@ -209,7 +242,7 @@ function click(selector) {
 }
 
 function fill(selector, value) {
-  drive("fill", ["--selector", selector, "--value", value]);
+  drive("fill", ["--selector", selector, `--value=${value}`]);
 }
 
 function optionalClick(selector) {
@@ -284,6 +317,38 @@ function seedDrillProjectFiles() {
             ],
           },
         },
+        {
+          time: 4.2,
+          label: "Zoom only",
+          zoom: { x: 75, y: 30, scale: 2.5 },
+        },
+      ],
+    },
+    {
+      id: "drill-zoom-playback-clip",
+      title: "Zoom Playback Clip",
+      description: "Clip used to validate ZoomIt-style zoom in the playback window.",
+      videoFile: "videos/smoke-1080p.mp4",
+      startTime: 0.25,
+      endTime: 1.5,
+      hotkey: "CmdOrControl+Shift+6",
+      speed: 1,
+      endBehavior: "close",
+      hideCursor: true,
+      backgroundColor: "#000000",
+      clickToPlay: false,
+      muted: true,
+      pauseStops: [
+        {
+          time: 0.75,
+          label: "Zoomed spotlight",
+          spotlight: {
+            regions: [
+              { type: "rectangle", x: 70, y: 10, width: 20, height: 20 },
+            ],
+          },
+          zoom: { x: 80, y: 20, scale: 3, durationMs: 300 },
+        },
       ],
     },
     {
@@ -301,6 +366,28 @@ function seedDrillProjectFiles() {
       clickToPlay: false,
       muted: true,
       pauseStops: [],
+    },
+    {
+      id: "drill-import-clip",
+      title: "Moment Import Clip",
+      description: "Clip used to validate bulk moment import.",
+      videoFile: "videos/smoke-1080p.mp4",
+      startTime: 0,
+      endTime: 4.5,
+      hotkey: "CmdOrControl+Shift+7",
+      speed: 1,
+      endBehavior: "close",
+      hideCursor: true,
+      backgroundColor: "#000000",
+      clickToPlay: false,
+      muted: true,
+      pauseStops: [
+        {
+          time: 2,
+          label: "Old spotlight",
+          spotlight: { regions: [{ type: "rectangle", x: 10, y: 10, width: 20, height: 20 }] },
+        },
+      ],
     },
   ], null, 2)}\n`);
 
@@ -536,6 +623,8 @@ function runClipEditorDrills() {
       );
 
       runSpotlightEditFlowDrills();
+      runZoomEditFlowDrills();
+      runClipEditorZoomPreviewDrill();
     }
   } else {
     recordSkip("moment and spotlight drills", "The open clip has no timeline moments.");
@@ -582,6 +671,106 @@ function runClipEditorDrills() {
       { cleanAfterTitleRevert },
     );
   }
+}
+
+function readImportClipStops() {
+  const clips = JSON.parse(readFileSync(join(drillProjectPath, "video-snippets.json"), "utf8"));
+  return clips.find((clip) => clip.id === "drill-import-clip")?.pauseStops ?? null;
+}
+
+function sleep(ms) {
+  spawnSync(process.execPath, ["-e", `setTimeout(() => {}, ${ms})`]);
+}
+
+// Real OS-level Ctrl+V, so we know WebView2 fires `paste` when no text field has focus.
+function sendNativePaste(text) {
+  const script = [
+    "Set-Clipboard -Value $env:SNIPSY_DRILL_CLIPBOARD",
+    "$app = Get-Process snipsy -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0 | Select-Object -First 1",
+    "if (-not $app) { exit 2 }",
+    "$shell = New-Object -ComObject WScript.Shell",
+    "if (-not $shell.AppActivate($app.Id)) { exit 3 }",
+    "Start-Sleep -Milliseconds 300",
+    "$shell.SendKeys('^v')",
+  ].join("; ");
+  return spawnSync("powershell", ["-NoProfile", "-Command", script], {
+    encoding: "utf8",
+    env: { ...process.env, SNIPSY_DRILL_CLIPBOARD: text },
+  }).status;
+}
+
+function runMomentImportDrill() {
+  optionalClick('[data-testid="nav-home"]');
+  waitForSelector('[data-testid="overview-edit-video-drill-import-clip"]');
+  click('[data-testid="overview-edit-video-drill-import-clip"]');
+  waitForSelector('[data-testid="clip-editor"]');
+  optionalClick('[data-testid="clip-inspector-tab-moments"]');
+  waitForSelector('[data-testid="moments-import-open"]');
+
+  click('[data-testid="moments-import-open"]');
+  waitForSelector('[data-testid="moment-import-dialog"]');
+  fill('[data-testid="moment-import-text"]', "- Intro 1 second\n- Setup 1.5 sec\n- Demo 1s\n- Outro 1s");
+  const preview = evaluate(`(() => ({
+    durations: document.querySelector('[data-testid="moment-import-mode-durations"]')?.getAttribute("aria-pressed"),
+    hint: document.querySelector('[data-testid="moment-import-hint"]')?.textContent ?? "",
+    statuses: Array.from(document.querySelectorAll('[data-testid="moment-import-row"]')).map((row) => row.getAttribute("data-status")),
+    summary: document.querySelector('[data-testid="moment-import-summary"]')?.textContent ?? "",
+    lossWarning: Boolean(document.querySelector('[data-testid="moment-import-loss-warning"]')),
+    apply: document.querySelector('[data-testid="moment-import-apply"]')?.textContent?.trim(),
+  }))()`, { label: "moment import preview" });
+  assertCondition(
+    preview?.durations === "true" &&
+      preview.hint.includes("detected") &&
+      JSON.stringify(preview.statuses) === JSON.stringify(["moment", "moment", "moment", "info"]) &&
+      preview.summary.includes("3 moments replace the current 1") &&
+      preview.lossWarning === true &&
+      preview.apply === "Replace moments",
+    "moment import detects section lengths and previews the rewrite",
+    preview,
+  );
+
+  click('[data-testid="moment-import-apply"]');
+  const afterApply = evaluate(`({
+    dialog: Boolean(document.querySelector('[data-testid="moment-import-dialog"]')),
+    markers: document.querySelectorAll('[data-testid^="pause-stop-marker-"]').length,
+    unsaved: document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved"),
+  })`, { label: "moment import applied" });
+  assertCondition(
+    afterApply?.dialog === false && afterApply.markers === 3 && afterApply.unsaved === "true",
+    "applying the import replaces timeline moments and marks the clip unsaved",
+    afterApply,
+  );
+
+  click('[data-testid="clip-save"]');
+  sleep(1000);
+  const savedStops = readImportClipStops();
+  const savedSummary = (savedStops ?? []).map((stop) => `${stop.time}|${stop.label ?? ""}|${Boolean(stop.spotlight || stop.zoom)}`);
+  assertCondition(
+    JSON.stringify(savedSummary) === JSON.stringify(["1|Setup|false", "2.5|Demo|false", "3.5|Outro|false"]),
+    "saved project JSON holds the imported moments",
+    { savedStops },
+  );
+
+  if (process.platform !== "win32") {
+    recordSkip("native Ctrl+V opens moment import", `Windows-only drill skipped on ${process.platform}.`);
+    return;
+  }
+  evaluate(`(() => { document.activeElement?.blur?.(); return true; })()`, { label: "blur before native paste" });
+  const pasteStatus = sendNativePaste("0:01 Intro\n0:02 Demo");
+  sleep(800);
+  const pasted = evaluate(`({
+    dialog: Boolean(document.querySelector('[data-testid="moment-import-dialog"]')),
+    text: document.querySelector('[data-testid="moment-import-text"]')?.value ?? null,
+    timecodes: document.querySelector('[data-testid="moment-import-mode-timecodes"]')?.getAttribute("aria-pressed"),
+  })`, { label: "native paste state" });
+  assertCondition(
+    pasteStatus === 0 && pasted?.dialog === true && pasted.text?.includes("0:02 Demo") && pasted.timecodes === "true",
+    "native Ctrl+V on the clip editor opens moment import prefilled",
+    { pasteStatus, pasted },
+  );
+  click('[data-testid="moment-import-cancel"]');
+  const afterCancel = evaluate(`document.querySelectorAll('[data-testid^="pause-stop-marker-"]').length`, { label: "markers after cancel" });
+  assertCondition(afterCancel === 3, "cancelling a pasted import keeps current moments", { afterCancel });
 }
 
 function runTextSnippetSaveTrackingDrill() {
@@ -751,6 +940,207 @@ function runSpotlightEditFlowDrills() {
   }
 }
 
+function readZoomEditState(label) {
+  return evaluate(`(() => {
+    const toolbar = document.querySelector('[data-testid="spotlight-editor-toolbar"]');
+    const point = document.querySelector('[data-testid="editor-zoom-point"]');
+    const frame = document.querySelector('[data-testid="editor-zoom-frame"]');
+    const video = document.querySelector('[data-testid="clip-editor-video"]');
+    const markers = Array.from(document.querySelectorAll('[data-testid^="pause-stop-marker-"][data-zoom="true"]'))
+      .map((marker) => marker.getAttribute("data-testid"));
+    const pointRect = point?.getBoundingClientRect();
+    const frameRect = frame?.getBoundingClientRect();
+    const videoRect = video?.getBoundingClientRect();
+    const inside = (rect) => Boolean(rect && videoRect &&
+      rect.left >= videoRect.left - 1 && rect.right <= videoRect.right + 1 &&
+      rect.top >= videoRect.top - 1 && rect.bottom <= videoRect.bottom + 1);
+    return {
+      editing: Boolean(toolbar),
+      mode: toolbar?.getAttribute("data-editor-mode") ?? null,
+      editingIndex: toolbar?.getAttribute("data-editing-index") ?? null,
+      x: point ? Number(point.getAttribute("data-zoom-x")) : null,
+      y: point ? Number(point.getAttribute("data-zoom-y")) : null,
+      scaleLabel: document.querySelector('[data-testid="zoom-scale-label"]')?.textContent?.trim() ?? null,
+      duration: document.querySelector('[data-testid="zoom-duration"]')?.value ?? null,
+      pointInsideVideo: inside(pointRect),
+      frameInsideVideo: inside(frameRect),
+      frameWidth: frameRect?.width ?? null,
+      videoWidth: videoRect?.width ?? null,
+      dialog: document.querySelector('[data-testid="spotlight-exit-dialog"]') !== null,
+      unsaved: document.querySelector('[data-testid="clip-editor"]')?.getAttribute("data-unsaved") ?? null,
+      zoomMarkers: markers,
+    };
+  })()`, { label });
+}
+
+function runZoomEditFlowDrills() {
+  const startMarker = '[data-testid="timeline-start-marker"]';
+  const zoomMarker = '[data-testid="pause-stop-marker-2"]';
+  if (!selectorExists('[data-testid="pause-stop-marker-2"][data-zoom="true"]')) {
+    recordSkip("zoom edit drills", "The open clip has no seeded zoom-only moment.");
+    return;
+  }
+
+  click(startMarker);
+  optionalClick('[data-testid="confirm-dialog-secondary"]');
+
+  click(zoomMarker);
+  waitForSelector('[data-testid="editor-zoom-point"]');
+  const opened = readZoomEditState("zoom moment opened from timeline");
+  assertCondition(
+    opened?.mode === "zoom" && opened.editingIndex === "2" && opened.x === 75 && opened.y === 30 &&
+      opened.scaleLabel === "2.5×" && opened.duration === "400" &&
+      opened.pointInsideVideo === true && opened.frameInsideVideo === true &&
+      opened.unsaved === "false",
+    "zoom-only marker opens zoom mode with the saved point, scale, and frame",
+    opened,
+  );
+  assertCondition(
+    typeof opened?.frameWidth === "number" && typeof opened?.videoWidth === "number" &&
+      opened.frameWidth < opened.videoWidth * 0.5,
+    "zoom frame previews the magnified region (2.5× shows ≤ 40% of the width)",
+    opened,
+  );
+  drive("screenshot", ["--output", join(reportDir, "zoom-editor.png")], { label: "zoom editor screenshot", allowFailure: true });
+
+  const pointerScript = (statements) => `(() => {
+    const surface = document.querySelector('[data-testid="spotlight-editor-surface"]');
+    const video = document.querySelector('[data-testid="clip-editor-video"]');
+    if (!surface || !video) return { ok: false };
+    const rect = video.getBoundingClientRect();
+    const scale = Math.min(rect.width / (video.videoWidth || rect.width), rect.height / (video.videoHeight || rect.height));
+    const width = (video.videoWidth || rect.width) * scale;
+    const height = (video.videoHeight || rect.height) * scale;
+    const left = rect.left + (rect.width - width) / 2;
+    const top = rect.top + (rect.height - height) / 2;
+    const at = (fx, fy) => ({ bubbles: true, cancelable: true, button: 0, clientX: left + width * fx, clientY: top + height * fy });
+    ${statements}
+    return { ok: true };
+  })()`;
+  // Separate evaluations so React commits the drag listeners between events.
+  const down = evaluate(pointerScript(`surface.dispatchEvent(new MouseEvent("mousedown", at(0.2, 0.6)));`), { label: "zoom point mousedown" });
+  const move = evaluate(pointerScript(`window.dispatchEvent(new MouseEvent("mousemove", at(0.25, 0.5)));
+    window.dispatchEvent(new MouseEvent("mouseup", at(0.25, 0.5)));`), { label: "zoom point drag" });
+  const wheel = evaluate(pointerScript(`surface.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -120 }));`), { label: "zoom wheel" });
+  const picked = { ok: down?.ok === true && move?.ok === true && wheel?.ok === true };
+  assertCondition(picked?.ok === true, "zoom surface accepts point drag and wheel", picked);
+  const edited = readZoomEditState("zoom edited");
+  assertCondition(
+    Math.abs((edited?.x ?? 0) - 25) < 0.5 && Math.abs((edited?.y ?? 0) - 50) < 0.5 &&
+      edited.scaleLabel === "2.75×" && edited.unsaved === "true",
+    "dragging moves the zoom point, the wheel zooms in, and the clip is marked unsaved",
+    edited,
+  );
+
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-secondary"]');
+  click(zoomMarker);
+  waitForSelector('[data-testid="editor-zoom-point"]');
+  const restored = readZoomEditState("zoom after discard");
+  assertCondition(
+    restored?.x === 75 && restored.y === 30 && restored.scaleLabel === "2.5×",
+    "discard restores the saved zoom",
+    restored,
+  );
+
+  click('[data-testid="pause-stop-marker-0"]');
+  waitForSelector('[data-testid="spotlight-editor-toolbar"][data-editing-index="0"]');
+  click('[data-testid="moment-editor-mode-zoom"]');
+  waitForSelector('[data-testid="editor-zoom-point"]');
+  const added = readZoomEditState("zoom added to spotlight moment");
+  assertCondition(
+    added?.mode === "zoom" && added.x === 29 && added.y === 30 && added.scaleLabel === "2×" && added.unsaved === "true",
+    "adding zoom to a spotlight moment centers it on the highlight",
+    added,
+  );
+  click('[data-testid="moment-editor-mode-spotlight"]');
+  const backToHighlight = readZoomEditState("back to highlight mode");
+  assertCondition(
+    backToHighlight?.mode === "spotlight" && selectorExists('[data-testid="spotlight-halo"]'),
+    "highlight mode returns spotlight controls",
+    backToHighlight,
+  );
+  click(startMarker);
+  waitForSelector('[data-testid="spotlight-exit-dialog"]');
+  click('[data-testid="confirm-dialog-secondary"]');
+  const discardedAdd = readZoomEditState("added zoom discarded");
+  assertCondition(
+    discardedAdd?.editing === false &&
+      JSON.stringify(discardedAdd.zoomMarkers) === JSON.stringify(["pause-stop-marker-2"]) &&
+      discardedAdd.unsaved === "false",
+    "discarding a newly added zoom removes it and leaves the clip clean",
+    discardedAdd,
+  );
+}
+
+function runClipEditorZoomPreviewDrill() {
+  if (!selectorExists('[data-testid="pause-stop-marker-2"][data-zoom="true"]')) {
+    recordSkip("clip editor zoom preview", "The open clip has no seeded zoom-only moment.");
+    return;
+  }
+  const readPreview = (label) => evaluate(`(() => {
+    const editor = document.querySelector('[data-testid="clip-editor"]');
+    const stage = document.querySelector('[data-testid="clip-editor-zoom-stage"]');
+    const container = stage?.parentElement;
+    const video = document.querySelector('[data-testid="clip-editor-video"]');
+    const matrix = stage ? new DOMMatrixReadOnly(getComputedStyle(stage).transform) : null;
+    const videoRect = video?.getBoundingClientRect();
+    const containerRect = container?.getBoundingClientRect();
+    return {
+      pauseActive: editor?.getAttribute("data-preview-pause-active") ?? null,
+      zoomActive: stage?.getAttribute("data-zoom-active") ?? null,
+      dataScale: stage ? Number(stage.getAttribute("data-zoom-scale")) : null,
+      computedScale: matrix?.a ?? null,
+      videoToContainerWidth: videoRect && containerRect ? videoRect.width / containerRect.width : null,
+      time: video?.currentTime ?? null,
+    };
+  })()`, { label });
+
+  click('[data-testid="timeline-start-marker"]');
+  click('[data-testid="clip-preview"]');
+  let state = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    state = readPreview("preview waiting for a pause stop");
+    if (state?.pauseActive === "true") break;
+    spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 250)"]);
+  }
+  assertCondition(state?.pauseActive === "true", "editor preview pauses at a moment", state);
+
+  for (let attempt = 0; attempt < 4 && state?.zoomActive !== "true"; attempt += 1) {
+    evaluate(`window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }))`, {
+      label: "preview jump to next moment",
+    });
+    state = readPreview("preview after jump");
+  }
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 700)"]);
+  const zoomed = readPreview("preview zoomed moment");
+  assertCondition(
+    zoomed?.zoomActive === "true" && Math.abs((zoomed.computedScale ?? 0) - 2.5) < 0.01 &&
+      Math.abs((zoomed.videoToContainerWidth ?? 0) - 2.5) < 0.05,
+    "editor preview zooms the video to the moment's scale",
+    zoomed,
+  );
+  drive("screenshot", ["--output", join(reportDir, "zoom-preview.png")], { label: "zoom preview screenshot", allowFailure: true });
+
+  evaluate(`window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }))`, {
+    label: "preview jump back to a non-zoom moment",
+  });
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 300)"]);
+  const unzoomed = readPreview("preview non-zoom moment");
+  assertCondition(
+    unzoomed?.zoomActive === "false" && Math.abs((unzoomed.computedScale ?? 0) - 1) < 0.01,
+    "moments without zoom preview at 1×",
+    unzoomed,
+  );
+
+  click('[data-testid="clip-preview"]');
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 300)"]);
+  if (evaluate(`document.querySelector('[data-testid="clip-editor-video"]')?.paused === false`)) {
+    click('[data-testid="clip-preview"]');
+  }
+}
+
 function runMacCompatibilityDrills() {
   optionalClick('[data-testid="nav-home"]');
 
@@ -846,6 +1236,70 @@ function runPlaybackWindowDrill() {
   );
 }
 
+function runPlaybackZoomDrill() {
+  optionalClick('[data-testid="nav-home"]');
+  const playSelector = '[data-testid="overview-play-drill-zoom-playback-clip"]';
+  waitForSelector(playSelector);
+  click(playSelector);
+
+  let zoomLog = null;
+  for (let attempt = 0; attempt < 20 && !zoomLog; attempt += 1) {
+    spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 500)"]);
+    const logs = JSON.parse(run("auditaur", ["logs", ...telemetryArgs(), "--limit", "300"], {
+      label: "playback zoom logs",
+    }).stdout);
+    zoomLog = logs
+      .map((row) => String(row.bodyJson?.message ?? row.body ?? ""))
+      .find((message) => message.includes("Playback zoom applied") && message.includes('"time":0.75'));
+  }
+  let details = null;
+  try {
+    details = zoomLog ? JSON.parse(zoomLog.slice(zoomLog.indexOf("{"), zoomLog.lastIndexOf("}") + 1)) : null;
+  } catch {
+    details = { raw: zoomLog };
+  }
+  const matrix = /matrix\(([^)]+)\)/.exec(details?.transform ?? "")?.[1]?.split(",").map(Number) ?? [];
+  assertCondition(
+    details?.scale === 3 && details.x === 80 && details.y === 20 &&
+      Math.abs((matrix[0] ?? 0) - 3) < 0.01 && Math.abs((matrix[3] ?? 0) - 3) < 0.01 &&
+      (matrix[4] ?? 0) < 0 && (matrix[5] ?? 1) <= 0,
+    "playback window animates the stop's zoom to 3× toward the top-right point",
+    { zoomLog, details, matrix },
+  );
+  // Smart anchoring: wherever the scaled video can fill an axis it must (no bars), and the point stays
+  // fixed unless it had to move to pin the nearer edge.
+  const axisOk = (axis, start, end, size) => {
+    const c = details?.zoomedContent;
+    if (!details?.anchor || !details?.anchorOnScreen || !c || !size) return false;
+    const fills = c[end] - c[start] >= size - 1;
+    if (fills && (c[start] > 1 || c[end] < size - 1)) return false;
+    if (Math.abs(details.anchor[axis] - details.anchorOnScreen[axis]) < 1) return true;
+    const pinnedEdge = details.anchor[axis] < size / 2 ? Math.abs(c[start]) < 1 : Math.abs(c[end] - size) < 1;
+    return fills ? pinnedEdge : Math.abs((c[start] + c[end]) / 2 - size / 2) < 1;
+  };
+  assertCondition(
+    axisOk("x", "left", "right", details?.viewport?.width) && axisOk("y", "top", "bottom", details?.viewport?.height),
+    "zoom point stays fixed on screen unless shifted to avoid bars (smart anchoring, no drift)",
+    { anchor: details?.anchor, anchorOnScreen: details?.anchorOnScreen, zoomedContent: details?.zoomedContent, viewport: details?.viewport },
+  );
+  assertCondition(
+    details?.frozenFrame === true && details.videoVisibility === "hidden" && details.freezeFrameVisibility === "visible",
+    "zoom animates a frozen canvas copy of the paused frame, not the live video layer",
+    { frozenFrame: details?.frozenFrame, videoVisibility: details?.videoVisibility, freezeFrameVisibility: details?.freezeFrameVisibility },
+  );
+  assertCondition(
+    details?.seeked === false && Math.abs(details?.stopDriftMs ?? Infinity) <= 50,
+    "playback pauses on the zoom stop without seeking back (no jump before the freeze)",
+    { stopDriftMs: details?.stopDriftMs, seeked: details?.seeked },
+  );
+
+  evaluate(`window.__TAURI_INTERNALS__?.invoke("close_playback_window").then(() => true, () => false)`, {
+    label: "close zoomed playback window",
+    allowFailure: true,
+  });
+  spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 750)"]);
+}
+
 function waitForAnySelector(selectors, timeoutMs = 10_000) {
   const attempts = Math.max(1, Math.ceil(timeoutMs / 500));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -925,7 +1379,9 @@ click('[data-testid="nav-automations"]');
 waitForAnySelector(['[data-testid="automation-empty-state"]', '[data-testid="automation-list"]']);
 
 runClipEditorDrills();
+runMomentImportDrill();
 runPlaybackWindowDrill();
+runPlaybackZoomDrill();
 runMacCompatibilityDrills();
 
 run("auditaur", ["ipc", ...telemetryArgs()], { label: "IPC telemetry" });

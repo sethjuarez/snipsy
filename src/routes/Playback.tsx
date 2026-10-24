@@ -1,16 +1,37 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { useSearchParams } from "react-router";
 import SpotlightOverlay from "../components/SpotlightOverlay";
 import { auditaurInvoke, isTauriRuntime, tauriFileSrc } from "../services/auditaur";
-import type { PauseSpotlight, PauseStop } from "../types";
-import { STOP_EPSILON, getVideoContentBox, normalizePauseStops } from "../utils/spotlight";
+import type { PauseSpotlight, PauseStop, PauseZoom } from "../types";
+import { STOP_EPSILON, normalizePauseStops } from "../utils/spotlight";
+import {
+  IDENTITY_ZOOM_TRANSFORM,
+  applyZoomTransform,
+  computeZoomTransform,
+  getUntransformedVideoContentBox,
+  prefersReducedMotion,
+  zoomDurationMs,
+  zoomTransformCss,
+} from "../utils/zoom";
 
 type PlaybackNavigationStop =
   | { kind: "start"; time: number }
   | { kind: "pause"; time: number; pauseStop: PauseStop }
   | { kind: "end"; time: number };
 
+interface ActiveZoomState {
+  zoom: PauseZoom | null;
+  durationMs: number;
+}
+
 const SEEK_PRESENTATION_TIMEOUT_MS = 500;
+const ZOOM_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+const ZOOM_TRANSITION_GRACE_MS = 150;
+// Hold the frozen frame briefly so the stop reads as a pause before the zoom moves.
+const FREEZE_HOLD_MS = 150;
+// A playback pause this close to the stop shows the stop frame; seeking would only jitter.
+const STOP_SNAP_TOLERANCE = 0.05;
 
 function parsePauseStops(raw: string | null): PauseStop[] {
   if (!raw) return [];
@@ -29,6 +50,7 @@ function parsePauseStops(raw: string | null): PauseStop[] {
       time: item.time,
       label: typeof item.label === "string" ? item.label : undefined,
       spotlight: item.spotlight,
+      zoom: item.zoom,
     }));
 }
 
@@ -129,6 +151,77 @@ function Playback() {
   const [waitingForResume, setWaitingForResume] = useState(false);
   const [activeSpotlight, setActiveSpotlight] = useState<{ spotlight: PauseSpotlight; label?: string } | null>(null);
   const [activePlaybackStop, setActivePlaybackStop] = useState<PlaybackNavigationStop | null>(null);
+  const [activeZoom, setActiveZoomState] = useState<ActiveZoomState>({ zoom: null, durationMs: 0 });
+  const activeZoomRef = useRef<PauseZoom | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const freezeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [frozenFrame, setFrozenFrame] = useState(false);
+  const [, setLayoutVersion] = useState(0);
+
+  // Zooming a live <video> layer artifacts in WebView2 (hardware overlay
+  // promotion/demotion while the transform animates). The video is paused
+  // during a zoom, so zoom a canvas copy of the paused frame instead.
+  const freezeVideoFrame = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = freezeCanvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return false;
+    try {
+      const context = canvas.getContext("2d");
+      if (!context) return false;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } catch {
+      return false;
+    }
+    setFrozenFrame(true);
+    return true;
+  }, []);
+
+  // Returns how long the CSS transition takes, so callers can wait for it.
+  const setActiveZoom = useCallback((zoom: PauseZoom | null, animate = true) => {
+    const previous = activeZoomRef.current;
+    activeZoomRef.current = zoom;
+    if (!zoom && !animate) setFrozenFrame(false);
+    if (previous === zoom) {
+      // A snap must still cancel any in-flight transition (e.g. a zoom-out after resume).
+      if (!animate) setActiveZoomState((state) => (state.durationMs === 0 && state.zoom === zoom ? state : { zoom, durationMs: 0 }));
+      return 0;
+    }
+    const durationMs = !animate || prefersReducedMotion()
+      ? 0
+      : zoomDurationMs(zoom ?? previous ?? undefined);
+    setActiveZoomState({ zoom, durationMs });
+    return durationMs;
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setLayoutVersion((version) => version + 1);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Resolves when the stage's transform transition ends (or a timeout fallback,
+  // e.g. when the transition is interrupted or the WebView never fires events).
+  const waitForZoomTransition = useCallback(async (durationMs: number) => {
+    // Let React commit the new transform before timing the transition.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => {
+      const stage = stageRef.current;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const finish = (event?: TransitionEvent) => {
+        if (event && (event.target !== stage || event.propertyName !== "transform")) return;
+        if (timeoutId) clearTimeout(timeoutId);
+        stage?.removeEventListener("transitionend", finish);
+        stage?.removeEventListener("transitioncancel", finish);
+        resolve();
+      };
+      stage?.addEventListener("transitionend", finish);
+      stage?.addEventListener("transitioncancel", finish);
+      timeoutId = setTimeout(() => finish(), durationMs + ZOOM_TRANSITION_GRACE_MS);
+    });
+  }, []);
 
   const file = searchParams.get("file") ?? "";
   const start = parseFloat(searchParams.get("start") ?? "0");
@@ -196,36 +289,104 @@ function Playback() {
     return promise;
   }, []);
 
-  const activatePlaybackStop = useCallback(async (stop: PlaybackNavigationStop) => {
+  const activatePlaybackStop = useCallback(async (stop: PlaybackNavigationStop, fromPlayback = false) => {
     const video = videoRef.current;
     if (!video) return;
 
     const seekVersion = seekVersionRef.current + 1;
     seekVersionRef.current = seekVersion;
     video.pause();
-    video.currentTime = stop.time;
+    const pausedAt = video.currentTime;
+    // Seeking back after an overshoot visibly jumps the frame, so only seek when
+    // navigating or when playback did not pause on the stop.
+    const seeked = !fromPlayback || Math.abs(pausedAt - stop.time) > STOP_SNAP_TOLERANCE;
+    // Navigating away from a zoomed stop: snap back so the new frame is never
+    // shown through the previous stop's zoom; the target zoom animates from identity.
+    setActiveZoom(null, false);
+    if (seeked) video.currentTime = stop.time;
     nextStopIndexRef.current = getNextPauseStopIndexAfter(pauseStops, stop.time);
     resumingRef.current = true;
     setActivePlaybackStop(stop);
     setActiveSpotlight(null);
 
-    await waitForPresentedSeekFrame(video);
-    if (seekVersionRef.current !== seekVersion) return;
-
-    setActiveSpotlight(
-      stop.kind === "pause" && stop.pauseStop.spotlight
-        ? { spotlight: stop.pauseStop.spotlight, label: stop.pauseStop.label }
-        : null,
-    );
-
-    waitForResume().then(() => {
+    if (seeked) {
+      await waitForPresentedSeekFrame(video);
       if (seekVersionRef.current !== seekVersion) return;
-      setActivePlaybackStop(null);
-      setActiveSpotlight(null);
-      resumingRef.current = false;
-      video.play().catch(() => {});
+    }
+
+    // Start listening right away so a click during the zoom-in is not lost.
+    let resumed = false;
+    const resumePromise = waitForResume().then(() => {
+      resumed = true;
     });
-  }, [pauseStops, waitForResume]);
+
+    const targetZoom = stop.kind === "pause" ? stop.pauseStop.zoom ?? null : null;
+    const frozen = targetZoom ? freezeVideoFrame() : false;
+    if (targetZoom) {
+      await Promise.race([new Promise((resolve) => setTimeout(resolve, FREEZE_HOLD_MS)), resumePromise]);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
+    const zoomInMs = resumed ? 0 : setActiveZoom(targetZoom);
+    if (zoomInMs > 0) {
+      await Promise.race([waitForZoomTransition(zoomInMs), resumePromise]);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
+    if (targetZoom && !resumed && stageRef.current && videoRef.current) {
+      // Diagnostic for runtime drills: the playback window has no drive bridge.
+      const content = getUntransformedVideoContentBox(videoRef.current);
+      const anchor = {
+        x: content.left + (targetZoom.x / 100) * content.width,
+        y: content.top + (targetZoom.y / 100) * content.height,
+      };
+      const transform = getComputedStyle(stageRef.current).transform;
+      const [a = 1, , , d = 1, e = 0, f = 0] = /matrix\(([^)]+)\)/.exec(transform)?.[1].split(",").map(Number) ?? [];
+      console.info(`Playback zoom applied ${JSON.stringify({
+        time: stop.time,
+        x: targetZoom.x,
+        y: targetZoom.y,
+        scale: targetZoom.scale,
+        frozenFrame: frozen,
+        stopDriftMs: Math.round((pausedAt - stop.time) * 1000),
+        seeked,
+        videoVisibility: getComputedStyle(videoRef.current).visibility,
+        freezeFrameVisibility: freezeCanvasRef.current ? getComputedStyle(freezeCanvasRef.current).visibility : null,
+        transform,
+        anchor,
+        anchorOnScreen: { x: anchor.x * a + e, y: anchor.y * d + f },
+        viewport: { width: containerRef.current?.clientWidth ?? 0, height: containerRef.current?.clientHeight ?? 0 },
+        zoomedContent: {
+          left: content.left * a + e,
+          top: content.top * d + f,
+          right: (content.left + content.width) * a + e,
+          bottom: (content.top + content.height) * d + f,
+        },
+      })}`);
+    }
+
+    if (!resumed) {
+      setActiveSpotlight(
+        stop.kind === "pause" && stop.pauseStop.spotlight
+          ? { spotlight: stop.pauseStop.spotlight, label: stop.pauseStop.label }
+          : null,
+      );
+    }
+
+    await resumePromise;
+    if (seekVersionRef.current !== seekVersion) return;
+    setActivePlaybackStop(null);
+    setActiveSpotlight(null);
+
+    const zoomOutMs = setActiveZoom(null);
+    if (zoomOutMs > 0) {
+      await waitForZoomTransition(zoomOutMs);
+      if (seekVersionRef.current !== seekVersion) return;
+    }
+    // Commit the swap back to the live video before it starts playing.
+    flushSync(() => setFrozenFrame(false));
+
+    resumingRef.current = false;
+    video.play().catch(() => {});
+  }, [freezeVideoFrame, pauseStops, setActiveZoom, waitForResume, waitForZoomTransition]);
 
   // Single effect: resolve src, load, seek, (optionally wait for click), play, show
   useEffect(() => {
@@ -237,6 +398,7 @@ function Playback() {
     resumingRef.current = false;
     setActivePlaybackStop(null);
     setActiveSpotlight(null);
+    setActiveZoom(null, false);
 
     (async () => {
       // 1. Resolve file path to asset URL
@@ -310,13 +472,35 @@ function Playback() {
       }
     })();
 
+    // timeupdate fires only every ~250ms, which overshoots stops; a timer aimed at
+    // the next stop pauses on it, and timeupdate re-aims the timer and is the fallback.
+    let stopTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearStopTimer = () => {
+      if (stopTimer) clearTimeout(stopTimer);
+      stopTimer = null;
+    };
+    const checkPauseStop = () => {
+      const nextStop = pauseStops[nextStopIndexRef.current];
+      if (!nextStop || resumingRef.current || video.currentTime < nextStop.time - STOP_EPSILON) return false;
+      clearStopTimer();
+      activatePlaybackStop({ kind: "pause", time: nextStop.time, pauseStop: nextStop }, true);
+      return true;
+    };
+    const scheduleStopTimer = () => {
+      clearStopTimer();
+      const nextStop = pauseStops[nextStopIndexRef.current];
+      if (!nextStop || resumingRef.current || video.paused) return;
+      const delayMs = ((nextStop.time - video.currentTime) / (video.playbackRate || 1)) * 1000;
+      stopTimer = setTimeout(() => {
+        stopTimer = null;
+        if (!checkPauseStop()) scheduleStopTimer();
+      }, Math.max(0, delayMs));
+    };
+
     // Timeupdate for end-time clipping
     const handleTimeUpdate = () => {
-      const nextStop = pauseStops[nextStopIndexRef.current];
-      if (nextStop && !resumingRef.current && video.currentTime >= nextStop.time - STOP_EPSILON) {
-        activatePlaybackStop({ kind: "pause", time: nextStop.time, pauseStop: nextStop });
-        return;
-      }
+      if (checkPauseStop()) return;
+      scheduleStopTimer();
 
       if (end > 0 && video.currentTime >= end) {
         video.pause();
@@ -329,17 +513,29 @@ function Playback() {
     };
 
     video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("playing", scheduleStopTimer);
+    video.addEventListener("seeked", scheduleStopTimer);
+    video.addEventListener("ratechange", scheduleStopTimer);
+    video.addEventListener("pause", clearStopTimer);
     video.addEventListener("ended", handleEnded);
 
     return () => {
       cancelled = true;
+      clearStopTimer();
+      // Abort any in-flight stop sequence (zoom-in/out waits).
+      seekVersionRef.current += 1;
       waitCleanupRef.current?.();
       setActivePlaybackStop(null);
       setActiveSpotlight(null);
+      setActiveZoom(null, false);
       video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("playing", scheduleStopTimer);
+      video.removeEventListener("seeked", scheduleStopTimer);
+      video.removeEventListener("ratechange", scheduleStopTimer);
+      video.removeEventListener("pause", clearStopTimer);
       video.removeEventListener("ended", handleEnded);
     };
-  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, activatePlaybackStop, closeWindow, showWindow, waitForResume]);
+  }, [file, start, end, speed, endBehavior, clickToPlay, muted, pauseStops, activatePlaybackStop, closeWindow, setActiveZoom, showWindow, waitForResume]);
 
   // Escape closes playback; arrows jump between clip start, pause stops, and clip end.
   useEffect(() => {
@@ -379,19 +575,35 @@ function Playback() {
     );
   }
 
-  const spotlightContentBox = activeSpotlight && videoRef.current
-    ? getVideoContentBox(videoRef.current)
+  const video = videoRef.current;
+  const container = containerRef.current;
+  const viewport = {
+    width: container?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 0),
+    height: container?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 0),
+  };
+  const baseContentBox = video ? getUntransformedVideoContentBox(video) : null;
+  const zoomTransform = activeZoom.zoom && baseContentBox
+    ? computeZoomTransform(activeZoom.zoom, viewport, baseContentBox)
+    : IDENTITY_ZOOM_TRANSFORM;
+  const spotlightContentBox = activeSpotlight && baseContentBox
+    ? applyZoomTransform(baseContentBox, zoomTransform)
     : null;
   const pauseSpotlightRegionCount = pauseStops.reduce(
     (count, stop) => count + (stop.spotlight?.regions.length ?? 0),
     0,
   );
+  const pauseZoomCount = pauseStops.filter((stop) => stop.zoom).length;
+  const zoomTransition = activeZoom.durationMs > 0
+    ? `transform ${activeZoom.durationMs}ms ${ZOOM_EASING}`
+    : "none";
 
   return (
     <div
+      ref={containerRef}
       className="flex items-center justify-center"
       style={{
         position: "fixed", inset: 0,
+        overflow: "hidden",
         cursor: waitingForResume ? "pointer" : hideCursor ? "none" : "auto",
         backgroundColor,
       }}
@@ -399,6 +611,21 @@ function Playback() {
       data-waiting-for-resume={waitingForResume}
       data-active-stop-kind={activePlaybackStop?.kind ?? "none"}
     >
+      <div
+        ref={stageRef}
+        data-testid="playback-zoom-stage"
+        data-zoom-scale={zoomTransform.scale}
+        data-zoom-active={activeZoom.zoom ? "true" : "false"}
+        data-zoom-duration-ms={activeZoom.durationMs}
+        data-frozen-frame={frozenFrame ? "true" : "false"}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformOrigin: "0 0",
+          transform: zoomTransformCss(zoomTransform),
+          transition: zoomTransition,
+        }}
+      >
       <video
         ref={videoRef}
         preload="auto"
@@ -412,6 +639,7 @@ function Playback() {
         data-muted={muted}
         data-pause-stops={pauseStops.length}
         data-pause-spotlight-regions={pauseSpotlightRegionCount}
+        data-pause-zooms={pauseZoomCount}
         className="object-contain"
         style={{
           width: "100%", height: "100%",
@@ -422,12 +650,30 @@ function Playback() {
           // transparent hole through the letterbox bars when play() activates
           // the hardware decoder.
           transform: "translateZ(0)",
+          visibility: frozenFrame ? "hidden" : "visible",
         }}
       />
+      <canvas
+        ref={freezeCanvasRef}
+        data-testid="playback-freeze-frame"
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          backgroundColor,
+          visibility: frozenFrame ? "visible" : "hidden",
+          pointerEvents: "none",
+        }}
+      />
+      </div>
       {activeSpotlight && spotlightContentBox && (
         <SpotlightOverlay
           spotlight={activeSpotlight.spotlight}
           contentBox={spotlightContentBox}
+          clipBox={{ left: 0, top: 0, width: viewport.width, height: viewport.height }}
           label={activeSpotlight.label}
           testIdPrefix="playback-spotlight"
         />

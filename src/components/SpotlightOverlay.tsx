@@ -7,10 +7,13 @@ import {
   regionToBox,
   resolveSpotlightStyle,
 } from "../utils/spotlight";
+import { intersectRects } from "../utils/zoom";
 
 interface SpotlightOverlayProps {
   spotlight: PauseSpotlight;
   contentBox: Rect;
+  /** Visible viewport; when zoomed the content box is larger than the screen. */
+  clipBox?: Rect;
   label?: string;
   selectedRegionIndex?: number | null;
   testIdPrefix?: string;
@@ -19,24 +22,25 @@ interface SpotlightOverlayProps {
   onRegionMouseDown?: (index: number, event: React.MouseEvent) => void;
 }
 
-function buildOutsideMask(contentBox: Rect, regions: Rect[]): string {
-  const outer = `M0 0H${contentBox.width}V${contentBox.height}H0Z`;
+function buildOutsideMask(box: Rect, regions: Rect[]): string {
+  const outer = `M0 0H${box.width}V${box.height}H0Z`;
   const holes = regions
     .map((region) => {
-      const left = region.left - contentBox.left;
-      const top = region.top - contentBox.top;
+      const left = region.left - box.left;
+      const top = region.top - box.top;
       const right = left + region.width;
       const bottom = top + region.height;
       return `M${left} ${top}H${right}V${bottom}H${left}Z`;
     })
     .join("");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${contentBox.width}" height="${contentBox.height}" viewBox="0 0 ${contentBox.width} ${contentBox.height}"><path fill="black" fill-rule="evenodd" d="${outer}${holes}"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}" viewBox="0 0 ${box.width} ${box.height}"><path fill="black" fill-rule="evenodd" d="${outer}${holes}"/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
 function SpotlightOverlay({
   spotlight,
   contentBox,
+  clipBox,
   label,
   selectedRegionIndex,
   testIdPrefix = "spotlight",
@@ -55,7 +59,9 @@ function SpotlightOverlay({
 
   if (regions.length === 0) return null;
 
-  const outsideMask = buildOutsideMask(contentBox, regions);
+  const effectBox = clipBox ? intersectRects(contentBox, clipBox) : contentBox;
+  const outsideMask = effectBox ? buildOutsideMask(effectBox, regions) : null;
+  const labelLeft = regions[0] && clipBox ? Math.max(clipBox.left + 8, regions[0].left) : regions[0]?.left ?? 0;
 
   return (
     <div
@@ -63,14 +69,14 @@ function SpotlightOverlay({
       style={{ pointerEvents: onRegionClick ? "auto" : "none", zIndex: 30 }}
       data-testid={`${testIdPrefix}-overlay`}
     >
-      {showOutsideEffect && (blurEnabled || dimEnabled) && (
+      {showOutsideEffect && effectBox && outsideMask && (blurEnabled || dimEnabled) && (
         <div
           className="absolute"
           style={{
-            left: contentBox.left,
-            top: contentBox.top,
-            width: contentBox.width,
-            height: contentBox.height,
+            left: effectBox.left,
+            top: effectBox.top,
+            width: effectBox.width,
+            height: effectBox.height,
             backgroundColor: dimEnabled ? `rgba(0, 0, 0, ${style.dimOpacity})` : undefined,
             backdropFilter,
             WebkitBackdropFilter: backdropFilter,
@@ -129,7 +135,7 @@ function SpotlightOverlay({
         <div
           className="absolute px-2 py-1 rounded text-sm font-medium"
           style={{
-            left: regions[0].left,
+            left: labelLeft,
             top: Math.max(8, regions[0].top - 34),
             color: "#111827",
             backgroundColor: style.borderColor,

@@ -505,7 +505,7 @@ mod tests {
                 { "triggerAt": "end", "action": "click", "x": 100, "y": 200 }
             ],
             "pauseStops": [
-                { "time": 10.5, "label": "Explain result" }
+                { "time": 10.5, "label": "Explain result", "zoom": { "x": 25.0, "y": 75.0, "scale": 3.0 } }
             ]
         }"#;
         let params: PlayVideoParams = serde_json::from_str(json).unwrap();
@@ -521,6 +521,10 @@ mod tests {
         assert_eq!(stops.len(), 1);
         assert_eq!(stops[0].time, 10.5);
         assert_eq!(stops[0].label.as_deref(), Some("Explain result"));
+        let zoom = stops[0].zoom.as_ref().unwrap();
+        assert_eq!((zoom.x, zoom.y, zoom.scale), (25.0, 75.0, 3.0));
+        // Zoom must survive re-serialization into the playback window URL.
+        assert!(serde_json::to_string(&stops).unwrap().contains("\"zoom\":{\"x\":25.0"));
     }
 
     #[test]

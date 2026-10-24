@@ -56,3 +56,37 @@ describe("SpotlightOverlay effects", () => {
     expect(region.style.border).toContain("solid");
   });
 });
+
+describe("SpotlightOverlay clipBox", () => {
+  it("limits the outside effect to the visible viewport when zoomed", () => {
+    const spotlight: PauseSpotlight = { regions: [{ type: "rectangle", x: 40, y: 40, width: 20, height: 20 }] };
+    render(
+      <SpotlightOverlay
+        spotlight={spotlight}
+        contentBox={{ left: -800, top: -450, width: 3200, height: 1800 }}
+        clipBox={{ left: 0, top: 0, width: 1600, height: 900 }}
+        label="Zoomed"
+      />,
+    );
+    const outside = screen.getByTestId("spotlight-outside-blur");
+    expect(outside.style.left).toBe("0px");
+    expect(outside.style.width).toBe("1600px");
+    expect(outside.style.height).toBe("900px");
+    const region = screen.getByTestId("spotlight-region-0");
+    expect(region.style.left).toBe("480px");
+    expect(region.style.width).toBe("640px");
+  });
+
+  it("keeps the label on screen when the region starts off screen", () => {
+    const spotlight: PauseSpotlight = { regions: [{ type: "rectangle", x: 0, y: 50, width: 50, height: 10 }] };
+    render(
+      <SpotlightOverlay
+        spotlight={spotlight}
+        contentBox={{ left: -400, top: 0, width: 1600, height: 900 }}
+        clipBox={{ left: 0, top: 0, width: 800, height: 900 }}
+        label="Edge"
+      />,
+    );
+    expect(screen.getByTestId("spotlight-label").style.left).toBe("8px");
+  });
+});
