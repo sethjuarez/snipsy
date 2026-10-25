@@ -77,19 +77,12 @@ fn load_automation(project_path: &str, script_id: &str) -> Result<Script, String
 
 fn idempotency_key(contribution: &AutomationContribution) -> String {
     match contribution {
-        AutomationContribution::OpenSite {
-            id,
-            url,
-            idempotency_key,
-            ..
-        } => {
-            let key = idempotency_key
-                .clone()
-                .unwrap_or_else(|| format!("openSite:{}", url.trim()));
-            if key.trim().is_empty() {
+        AutomationContribution::OpenSite { id, url, .. } => {
+            let url = url.trim();
+            if url.is_empty() {
                 id.clone()
             } else {
-                key
+                format!("openSite:{url}")
             }
         }
     }
@@ -402,13 +395,16 @@ mod tests {
                         id: "site-1".into(),
                         title: None,
                         url: "https://snipsy.dev".into(),
-                        idempotency_key: Some("docs".into()),
                     },
                     AutomationContribution::OpenSite {
                         id: "site-2".into(),
                         title: None,
-                        url: "https://snipsy.dev".into(),
-                        idempotency_key: Some("docs".into()),
+                        url: " https://snipsy.dev ".into(),
+                    },
+                    AutomationContribution::OpenSite {
+                        id: "site-3".into(),
+                        title: None,
+                        url: "  ".into(),
                     },
                 ],
             }],
@@ -421,7 +417,10 @@ mod tests {
             .map(idempotency_key)
             .collect::<Vec<_>>();
 
-        assert_eq!(keys, vec!["docs", "docs"]);
+        assert_eq!(
+            keys,
+            vec!["openSite:https://snipsy.dev", "openSite:https://snipsy.dev", "site-3"]
+        );
     }
 
     #[test]
@@ -430,13 +429,11 @@ mod tests {
             id: "site-1".into(),
             title: None,
             url: "https://example.com/Path".into(),
-            idempotency_key: None,
         };
         let second = AutomationContribution::OpenSite {
             id: "site-2".into(),
             title: None,
             url: "https://example.com/path".into(),
-            idempotency_key: None,
         };
 
         assert_ne!(idempotency_key(&first), idempotency_key(&second));

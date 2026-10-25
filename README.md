@@ -57,7 +57,7 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - The first built-in contribution is `openSite`, which opens an `http://` or `https://` URL in the default browser.
 - When an automation is executed, Snipsy:
   1. Runs each contribution group in order.
-  2. Skips duplicate contribution idempotency keys that already ran in the same automation execution.
+  2. Skips sites whose URL already opened in the same automation execution.
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
 - Automations are stored as human-editable JSON files within the project folder.
 
@@ -246,7 +246,7 @@ The automation engine runs entirely on the Rust backend:
 1. The user triggers an automation run from the UI, a hotkey, or a Stream Deck button.
 2. The backend runs contribution groups in stored order.
 3. Contributions inside each group run in stored order.
-4. Duplicate contribution idempotency keys are skipped within the same automation execution.
+4. Duplicate site URLs are skipped within the same automation execution.
 
 ### Cross-Platform
 

@@ -139,7 +139,6 @@ export interface OpenSiteContribution {
   kind: "openSite";
   title?: string;
   url: string;
-  idempotencyKey?: string;
 }
 
 export interface ImportedVideo {
