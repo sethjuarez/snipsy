@@ -387,9 +387,9 @@ function App() {
     }
   };
 
-  // Leaving the clip editor asks before discarding unsaved edits; list forms stay open per view.
+  // Leaving an open editor asks before discarding unsaved edits, since switching views unmounts it.
   const changeView = (view: AppView) => {
-    if (clipEditingVideo) guardEditorExit(() => setActiveView(view));
+    if (clipEditingVideo || (activeSaveState && view !== activeView)) guardEditorExit(() => setActiveView(view));
     else setActiveView(view);
   };
 
@@ -682,6 +682,7 @@ function App() {
             {clipEditingVideo && projectPath ? (
               <div className="h-full rounded-lg p-4" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                 <ClipEditor
+                  key={editingVideoSnippet?.id ?? clipEditingVideo.relativePath}
                   ref={clipEditorRef}
                   video={clipEditingVideo}
                   existingClip={editingVideoSnippet}
@@ -717,6 +718,7 @@ function App() {
               showForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                   <TextSnippetForm
+                    key={editingSnippet?.id ?? "new-text"}
                     snippet={editingSnippet}
                     onSave={handleSave}
                     hotkeyOwners={hotkeyOwners}
@@ -766,6 +768,7 @@ function App() {
               showVideoForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                   <VideoSnippetForm
+                    key={editingVideoSnippet?.id ?? "new-video"}
                     snippet={editingVideoSnippet}
                     onSave={handleVideoSave}
                     hotkeyOwners={hotkeyOwners}
@@ -791,6 +794,7 @@ function App() {
                 {showScriptForm ? (
                   <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
                     <ScriptForm
+                      key={editingScript?.id ?? "new-automation"}
                       script={editingScript}
                       onSave={handleScriptSave}
                       hotkeyOwners={hotkeyOwners}
