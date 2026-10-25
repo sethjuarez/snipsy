@@ -1,4 +1,12 @@
-import type { ToastMessage } from "../components/ToastViewport";
+import type { ToastMessage, ToastTone } from "../components/ToastViewport";
+
+/** How long a transient toast stays up: quick confirmations fade fast, problems linger. */
+export function toastDuration(tone: ToastTone, detail?: string): number {
+  if (tone === "error") return 8000;
+  if (tone === "warning") return 6000;
+  if (tone === "success" && !detail) return 2500;
+  return 4000;
+}
 
 const MAX_TRANSIENT_TOASTS = 4;
 

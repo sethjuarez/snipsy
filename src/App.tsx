@@ -35,7 +35,7 @@ import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners, describeHotkeyIssues, type HotkeyOwner } from "./utils/hotkeys";
 import { duplicateAutomation, duplicateTextSnippet, duplicateVideoSnippet } from "./utils/duplicate";
-import { upsertToast } from "./utils/toasts";
+import { toastDuration, upsertToast } from "./utils/toasts";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
@@ -99,13 +99,19 @@ function App() {
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
   const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, automations);
 
-  const showToast = useCallback((title: string, detail?: string, tone: ToastTone = "info") => {
-    const id = crypto.randomUUID();
-    setToasts((current) => upsertToast(current, { id, title, detail, tone }));
-    window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 6000);
+  const toastTimersRef = useRef(new Map<string, number>());
+  const dismissToast = useCallback((id: string) => {
+    window.clearTimeout(toastTimersRef.current.get(id));
+    toastTimersRef.current.delete(id);
+    setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
+  /** Pass `key` to replace an earlier toast of the same kind (and restart its timer) instead of stacking. */
+  const showToast = useCallback((title: string, detail?: string, tone: ToastTone = "info", key?: string) => {
+    const id = key ?? crypto.randomUUID();
+    window.clearTimeout(toastTimersRef.current.get(id));
+    setToasts((current) => upsertToast(current, { id, title, detail, tone, shownAt: Date.now() }));
+    toastTimersRef.current.set(id, window.setTimeout(() => dismissToast(id), toastDuration(tone, detail)));
+  }, [dismissToast]);
 
   // Demo mode hides the window, so hotkey problems stay until dismissed and
   // update in place as snippets are edited.
@@ -200,10 +206,10 @@ function App() {
     try {
       await saving;
     } catch (error: unknown) {
-      showToast(`Couldn't save ${noun}`, String(error), "error");
+      showToast(`Couldn't save ${noun}`, String(error), "error", "editor-save");
       throw error;
     }
-    showToast(`Saved "${title}"`, undefined, "success");
+    showToast(`Saved "${title}"`, undefined, "success", "editor-save");
   };
 
   // -- Text snippet handlers --
@@ -821,7 +827,7 @@ function App() {
       <StatusBar projectPath={projectPath} demoMode={demoMode} />
       <ToastViewport
         toasts={toasts}
-        onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
+        onDismiss={dismissToast}
       />
 
       {confirmDialog && (

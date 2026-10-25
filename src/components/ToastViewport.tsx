@@ -9,6 +9,8 @@ export interface ToastMessage {
   tone: ToastTone;
   /** Sticky toasts stay until dismissed and don't count toward the visible limit. */
   sticky?: boolean;
+  /** Changes when a keyed toast is re-shown, so it replays its entrance instead of updating silently. */
+  shownAt?: number;
 }
 
 interface ToastViewportProps {
@@ -37,8 +39,8 @@ function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
         const { color, Icon } = TONE_STYLES[toast.tone];
         return (
           <div
-            key={toast.id}
-            className="rounded-lg p-3 shadow-lg"
+            key={`${toast.id}-${toast.shownAt ?? 0}`}
+            className="toast-in rounded-lg p-3 shadow-lg"
             style={{
               backgroundColor: "var(--color-surface-alt)",
               border: "1px solid var(--color-border)",
