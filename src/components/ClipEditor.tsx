@@ -89,7 +89,7 @@ type SpotlightManipulation =
       startPoint: Point;
       startRegion: RectanglePauseSpotlightRegion;
     };
-type ClipInspectorTab = "clip" | "playback" | "moments";
+type ClipInspectorTab = "clip" | "playback" | "moments" | "stream-deck";
 
 function areRectsEqual(a: Rect | null, b: Rect | null) {
   if (a === b) return true;
@@ -1530,10 +1530,24 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     { label: "Range", ready: endTime > startTime },
   ];
   const inspectorTabs: Array<{ id: ClipInspectorTab; label: string; badge?: string }> = [
-    { id: "clip", label: "Clip" },
+    { id: "clip", label: "Basics", badge: hotkeyStatus.state === "available" && title.trim() ? undefined : "!" },
     { id: "playback", label: "Playback" },
     { id: "moments", label: "Moments", badge: String(pauseStops.length) },
+    { id: "stream-deck", label: "Stream Deck" },
   ];
+  const handleInspectorTabKey = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const ids = inspectorTabs.map((tab) => tab.id);
+    const current = ids.indexOf(inspectorTab);
+    const next = event.key === "ArrowRight" ? ids[(current + 1) % ids.length]
+      : event.key === "ArrowLeft" ? ids[(current - 1 + ids.length) % ids.length]
+      : event.key === "Home" ? ids[0]
+      : event.key === "End" ? ids[ids.length - 1]
+      : null;
+    if (!next) return;
+    event.preventDefault();
+    setInspectorTab(next);
+    document.getElementById(`clip-inspector-tab-${next}`)?.focus();
+  };
   const missingReadinessLabels = readinessItems.filter((item) => !item.ready).map((item) => item.label);
   const readinessText = canSave ? "Ready" : `Needs ${missingReadinessLabels.join(", ")}`;
 
@@ -2010,8 +2024,12 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                   key={tab.id}
                   type="button"
                   role="tab"
+                  id={`clip-inspector-tab-${tab.id}`}
                   aria-selected={active}
+                  aria-controls={active ? `clip-inspector-panel-${tab.id}` : undefined}
+                  tabIndex={active ? 0 : -1}
                   onClick={() => setInspectorTab(tab.id)}
+                  onKeyDown={handleInspectorTabKey}
                   className="flex min-w-0 items-center justify-center gap-1 rounded px-1.5 py-1 text-sm font-medium"
                   style={{
                     backgroundColor: active ? "var(--color-accent)" : "transparent",
@@ -2019,7 +2037,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                   }}
                   data-testid={`clip-inspector-tab-${tab.id}`}
                 >
-                  <span className="truncate">{tab.label}</span>
+                  <span className="truncate">{tab.label}</span>{tab.badge === "!" && <span className="sr-only"> (needs attention)</span>}
                   {tab.badge && (
                     <span
                       className="shrink-0 rounded-full px-1.5 text-xs leading-4"
@@ -2037,8 +2055,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           </div>
 
           {inspectorTab === "clip" && (
-          <section className="space-y-2" data-testid="clip-details-section">
-            <h3 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Clip details</h3>
+          <section className="space-y-2" role="tabpanel" id="clip-inspector-panel-clip" aria-labelledby="clip-inspector-tab-clip" data-testid="clip-details-section">
+            <h3 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Basics</h3>
             <div>
               <label htmlFor="clip-title" className="block text-xs font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Name</label>
               <input
@@ -2065,14 +2083,6 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 data-testid="clip-description"
               />
             </div>
-            <IconEditor
-              icon={streamDeckIcon}
-              title={title || "Clip"}
-              snippetType="video"
-              onChange={setStreamDeckIcon}
-              compact
-              testIdPrefix="clip-icon"
-            />
             <div>
               <label htmlFor="clip-hotkey" className="block text-xs font-medium mb-1" style={{ color: "var(--color-text-secondary)" }}>Hotkey</label>
               <div className="flex items-center gap-1.5">
@@ -2107,7 +2117,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           )}
 
           {inspectorTab === "playback" && (
-          <section className="space-y-2" data-testid="clip-playback-settings">
+          <section className="space-y-2" role="tabpanel" id="clip-inspector-panel-playback" aria-labelledby="clip-inspector-tab-playback" data-testid="clip-playback-settings">
             <h3 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Playback settings</h3>
             {monitors.length > 0 && (
               <div className="space-y-1.5">
@@ -2190,7 +2200,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
           )}
 
           {inspectorTab === "moments" && (
-          <section data-testid="pause-stops-panel">
+          <section role="tabpanel" id="clip-inspector-panel-moments" aria-labelledby="clip-inspector-tab-moments" data-testid="pause-stops-panel">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Moments</h3>
               <div className="flex items-center gap-2">
@@ -2472,6 +2482,21 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                 ))}
               </div>
             ) : null}
+          </section>
+          )}
+
+          {inspectorTab === "stream-deck" && (
+          <section className="space-y-2" role="tabpanel" id="clip-inspector-panel-stream-deck" aria-labelledby="clip-inspector-tab-stream-deck" data-testid="clip-stream-deck-section">
+            <h3 className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Stream Deck</h3>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>How this clip's key looks on a Stream Deck.</p>
+            <IconEditor
+              icon={streamDeckIcon}
+              title={title || "Clip"}
+              snippetType="video"
+              onChange={setStreamDeckIcon}
+              compact
+              testIdPrefix="clip-icon"
+            />
           </section>
           )}
 

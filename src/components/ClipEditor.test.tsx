@@ -438,3 +438,57 @@ describe("ClipEditor moment import", () => {
     expect(screen.getByTestId("pause-stops-panel").textContent).toContain("2 moments");
   });
 });
+
+describe("ClipEditor inspector tabs", () => {
+  it("moves between tabs with arrow, Home, and End keys", () => {
+    renderEditor([]);
+    const moments = screen.getByTestId("clip-inspector-tab-moments");
+    expect(moments.getAttribute("aria-selected")).toBe("true");
+    expect(moments.tabIndex).toBe(0);
+
+    fireEvent.keyDown(moments, { key: "ArrowRight" });
+    const streamDeck = screen.getByTestId("clip-inspector-tab-stream-deck");
+    expect(streamDeck.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(streamDeck);
+    expect(moments.tabIndex).toBe(-1);
+
+    fireEvent.keyDown(streamDeck, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(screen.getByTestId("clip-inspector-tab-clip"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(streamDeck);
+    fireEvent.keyDown(streamDeck, { key: "Home" });
+    expect(document.activeElement).toBe(screen.getByTestId("clip-inspector-tab-clip"));
+    fireEvent.keyDown(document.activeElement!, { key: "End" });
+    expect(document.activeElement).toBe(streamDeck);
+  });
+
+  it("links each tab to its panel", () => {
+    renderEditor([]);
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-clip"));
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.id).toBe("clip-inspector-panel-clip");
+    expect(panel.getAttribute("aria-labelledby")).toBe("clip-inspector-tab-clip");
+    expect(screen.getByTestId("clip-inspector-tab-clip").getAttribute("aria-controls")).toBe(panel.id);
+    expect(screen.getByTestId("clip-inspector-tab-moments").getAttribute("aria-controls")).toBeNull();
+  });
+
+  it("keeps the Stream Deck icon on its own tab", () => {
+    renderEditor([]);
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-clip"));
+    expect(screen.getByTestId("clip-details-section").textContent).toContain("Basics");
+    expect(screen.queryByTestId("clip-icon-preview")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-stream-deck"));
+    expect(screen.getByTestId("clip-stream-deck-section")).toBeTruthy();
+    expect(screen.getByTestId("clip-icon-preview")).toBeTruthy();
+  });
+
+  it("flags Basics when the clip has no name", () => {
+    renderEditor([]);
+    const basics = screen.getByTestId("clip-inspector-tab-clip");
+    fireEvent.click(basics);
+    expect(basics.textContent).not.toContain("needs attention");
+    fireEvent.change(screen.getByTestId("clip-title"), { target: { value: "" } });
+    expect(basics.textContent).toContain("needs attention");
+  });
+});
