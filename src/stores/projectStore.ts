@@ -51,7 +51,6 @@ interface ProjectState {
   videoSnippets: VideoSnippet[];
   automations: Script[];
   demoMode: boolean;
-  ffmpegAvailable: boolean | null;
   recentProjects: RecentProject[];
 
   createProject: (
@@ -71,7 +70,6 @@ interface ProjectState {
   loadAutomations: () => Promise<void>;
   saveAutomation: (script: Script) => Promise<void>;
   deleteAutomation: (id: string) => Promise<void>;
-  checkFfmpeg: () => Promise<void>;
 
   /** Hotkeys the last demo registration could not arm (duplicates, OS failures). */
   demoHotkeyIssues: HotkeyIssue[];
@@ -165,7 +163,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   automations: [],
   demoMode: false,
   demoHotkeyIssues: [],
-  ffmpegAvailable: null,
   recentProjects: loadRecentProjects(),
 
   createProject: async (path, name, description) => {
@@ -184,15 +181,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     saveRecentProject(path, data.project.name);
     set({ recentProjects: loadRecentProjects() });
 
-    // Load automations and check FFmpeg in parallel (non-blocking)
-    const [automations, ffmpegStatus] = await Promise.allSettled([
-      backend.loadAutomations(path),
-      backend.checkFfmpeg(),
-    ]);
+    const [automations] = await Promise.allSettled([backend.loadAutomations(path)]);
     set({ automations: automations.status === "fulfilled" ? automations.value : [] });
-    if (ffmpegStatus.status === "fulfilled") {
-      set({ ffmpegAvailable: ffmpegStatus.value.available });
-    }
     // Swap the live demo hotkeys to this project even if a side load failed.
     await get().syncDemoHotkeys();
     if (automations.status === "rejected") throw automations.reason;
@@ -285,11 +275,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
     set({ automations: automations.filter((s) => s.id !== id) });
     await get().syncDemoHotkeys();
-  },
-
-  checkFfmpeg: async () => {
-    const status = await backend.checkFfmpeg();
-    set({ ffmpegAvailable: status.available });
   },
 
   enterDemoMode: async () => {

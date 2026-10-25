@@ -1,5 +1,5 @@
 import { auditaurInvoke as invoke } from "./auditaur";
-import type { BackendService, FfmpegStatus, HotkeyIssue, SnippetHotkey } from "./backendService";
+import type { BackendService, HotkeyIssue, SnippetHotkey } from "./backendService";
 import type { ProjectData, MonitorInfo, StreamDeckButton, StreamDeckTriggerResult, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
@@ -58,6 +58,14 @@ export class TauriBackendService implements BackendService {
 
   async getImportedVideos(projectPath: string): Promise<import("../types").ImportedVideo[]> {
     return invoke<import("../types").ImportedVideo[]>("list_imported_videos", { projectPath });
+  }
+
+  async saveVideoThumbnail(
+    projectPath: string,
+    relativePath: string,
+    jpegBase64: string,
+  ): Promise<string> {
+    return invoke<string>("save_video_thumbnail", { projectPath, relativePath, jpegBase64 });
   }
 
   async playVideo(
@@ -119,20 +127,6 @@ export class TauriBackendService implements BackendService {
 
   async runAutomation(projectPath: string, scriptId: string): Promise<string> {
     return invoke("run_automation", { projectPath, scriptId });
-  }
-
-  async checkFfmpeg(): Promise<FfmpegStatus> {
-    return invoke<FfmpegStatus>("check_ffmpeg");
-  }
-
-  async setFfmpegPaths(
-    ffmpegExecutablePath: string | null,
-    ffprobeExecutablePath: string | null,
-  ): Promise<FfmpegStatus> {
-    return invoke<FfmpegStatus>("set_ffmpeg_paths", {
-      ffmpegExecutablePath,
-      ffprobeExecutablePath,
-    });
   }
 
   async activateDemoTray(): Promise<void> {

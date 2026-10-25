@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-import { Folder, AlertTriangle, Radio } from "lucide-react";
+import { Folder, Radio } from "lucide-react";
 import UpdateIndicator from "./UpdateIndicator";
 
 interface StatusBarProps {
   projectPath: string | null;
-  ffmpegAvailable: boolean | null;
   demoMode: boolean;
-  onFfmpegClick?: () => void;
 }
 
-function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: StatusBarProps) {
+function StatusBar({ projectPath, demoMode }: StatusBarProps) {
   const [version, setVersion] = useState("");
 
   useEffect(() => {
@@ -49,15 +47,6 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
         )}
       </div>
       <div className="flex items-center gap-3">
-        {ffmpegAvailable === false && (
-          <button
-            onClick={onFfmpegClick}
-            className="flex items-center gap-1 cursor-pointer hover:underline"
-            style={{ color: demoMode ? "var(--color-text-on-accent)" : "var(--color-warning)" }}
-          >
-            <AlertTriangle size={11} /> FFmpeg missing — click to fix
-          </button>
-        )}
         {version && (
           <span className="opacity-60" data-testid="version-badge">v{version}</span>
         )}

@@ -1,4 +1,4 @@
-import type { BackendService, FfmpegStatus, HotkeyIssue, SnippetHotkey } from "./backendService";
+import type { BackendService, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
 import type { ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
@@ -180,6 +180,18 @@ export class MockBackendService implements BackendService {
     return structuredClone(this._importedVideos);
   }
 
+  async saveVideoThumbnail(
+    _projectPath: string,
+    relativePath: string,
+    _jpegBase64: string,
+  ): Promise<string> {
+    const video = this._importedVideos.find((v) => v.relativePath === relativePath);
+    if (!video) throw new Error(`Video not found: ${relativePath}`);
+    const stem = video.name.replace(/\.[^.]+$/, "");
+    video.thumbnailPath = `/mock/project/videos/thumbnails/${stem}.jpg`;
+    return video.thumbnailPath;
+  }
+
   async playVideo(
     _projectPath: string | null,
     _videoFile: string,
@@ -225,31 +237,6 @@ export class MockBackendService implements BackendService {
 
   async runAutomation(_projectPath: string, _scriptId: string): Promise<string> {
     return "Automation completed";
-  }
-
-  async checkFfmpeg(): Promise<FfmpegStatus> {
-    return {
-      available: false,
-      ffmpeg: {
-        available: false,
-        path: null,
-        version: null,
-        error: "FFmpeg is unavailable in frontend-only mode.",
-      },
-      ffprobe: {
-        available: false,
-        path: null,
-        version: null,
-        error: "FFprobe is unavailable in frontend-only mode.",
-      },
-    };
-  }
-
-  async setFfmpegPaths(
-    _ffmpegExecutablePath: string | null,
-    _ffprobeExecutablePath: string | null,
-  ): Promise<FfmpegStatus> {
-    return this.checkFfmpeg();
   }
 
   async activateDemoTray(): Promise<void> {

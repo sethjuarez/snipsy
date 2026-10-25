@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -429,6 +429,30 @@ function createSeededDrillProject() {
 
   assertCondition(openResult?.opened === true, "open seeded drill project from recent projects", openResult);
   waitForSelector('[data-testid="sidebar"]');
+}
+
+function runVideoThumbnailDrill() {
+  // Thumbnails are captured in the webview (no FFmpeg) and saved via save_video_thumbnail.
+  waitForSelector('[data-testid="video-list"]');
+  waitForSelector('img[alt="smoke-1080p.mp4"]', 20_000);
+  let decoded = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    decoded = evaluate(`(() => {
+      const img = document.querySelector('img[alt="smoke-1080p.mp4"]');
+      return { complete: img.complete, width: img.naturalWidth, height: img.naturalHeight };
+    })()`, { label: "video thumbnail image decodes" });
+    if (decoded?.complete) break;
+    sleep(250);
+  }
+  assertCondition(decoded?.width > 0 && decoded?.height > 0, "video thumbnail renders in list", decoded);
+
+  const thumbPath = join(drillProjectPath, "videos", "thumbnails", "smoke-1080p.jpg");
+  const bytes = existsSync(thumbPath) ? readFileSync(thumbPath) : Buffer.alloc(0);
+  assertCondition(
+    bytes.length > 0 && bytes[0] === 0xff && bytes[1] === 0xd8,
+    "video thumbnail JPEG saved to project",
+    { thumbPath, size: bytes.length },
+  );
 }
 
 function runClipEditorDrills() {
@@ -1374,6 +1398,7 @@ runTextSnippetSaveTrackingDrill();
 
 click('[data-testid="nav-videos"]');
 waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);
+runVideoThumbnailDrill();
 
 click('[data-testid="nav-automations"]');
 waitForAnySelector(['[data-testid="automation-empty-state"]', '[data-testid="automation-list"]']);

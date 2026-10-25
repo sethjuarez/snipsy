@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useProjectStore } from "./stores/projectStore";
 import { useUpdateStore } from "./stores/updateStore";
-import { Plus, AlertTriangle, X as XIcon, CheckCircle, Circle, Radio, Save, Upload } from "lucide-react";
+import { Plus, X as XIcon, CheckCircle, Circle, Radio, Save, Upload } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import TrayHint from "./components/TrayHint";
-import FFmpegHelper from "./components/FFmpegHelper";
 import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList, { type VideoListHandle, type VideoListToolbarState } from "./components/VideoList";
@@ -63,8 +62,6 @@ function App() {
   const enterDemoMode = useProjectStore((s) => s.enterDemoMode);
   const exitDemoMode = useProjectStore((s) => s.exitDemoMode);
   const playVideo = useProjectStore((s) => s.playVideo);
-  const ffmpegAvailable = useProjectStore((s) => s.ffmpegAvailable);
-  const checkFfmpeg = useProjectStore((s) => s.checkFfmpeg);
   const closeProject = useProjectStore((s) => s.closeProject);
   const autoOpenLastProject = useProjectStore((s) => s.autoOpenLastProject);
 
@@ -75,7 +72,6 @@ function App() {
   const [editingVideoSnippet, setEditingVideoSnippet] = useState<VideoSnippet | undefined>(undefined);
   const [showScriptForm, setShowScriptForm] = useState(false);
   const [editingScript, setEditingScript] = useState<Script | undefined>(undefined);
-  const [showFfmpegHelper, setShowFfmpegHelper] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [clipEditingVideo, setClipEditingVideo] = useState<ImportedVideo | null>(null);
@@ -129,10 +125,9 @@ function App() {
     // hold hotkeys; reset the backend so the two sides agree.
     void useProjectStore.getState().reconcileDemoMode();
     void autoOpenLastProject();
-    void checkFfmpeg();
     // Silent update check on startup
     useUpdateStore.getState().checkForUpdate();
-  }, [autoOpenLastProject, checkFfmpeg]);
+  }, [autoOpenLastProject]);
 
   // Listen for tray "Exit Demo Mode" event
   useEffect(() => {
@@ -345,7 +340,7 @@ function App() {
           <Welcome />
         </div>
         <TrayHint />
-        <StatusBar projectPath={null} ffmpegAvailable={null} demoMode={false} />
+        <StatusBar projectPath={null} demoMode={false} />
       </div>
     );
   }
@@ -473,7 +468,6 @@ function App() {
                   videoCount={videoSnippets.length}
                   automationCount={automations.length}
                   demoMode={demoMode}
-                  ffmpegAvailable={ffmpegAvailable}
                 />
                 <HotkeyOverview
                   textSnippets={textSnippets}
@@ -574,7 +568,7 @@ function App() {
       </div>
 
       <TrayHint />
-      <StatusBar projectPath={projectPath} ffmpegAvailable={ffmpegAvailable} demoMode={demoMode} onFfmpegClick={() => setShowFfmpegHelper(true)} />
+      <StatusBar projectPath={projectPath} demoMode={demoMode} />
       <ToastViewport
         toasts={toasts}
         onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
@@ -593,12 +587,6 @@ function App() {
         />
       )}
 
-      {showFfmpegHelper && (
-        <FFmpegHelper
-          onClose={() => setShowFfmpegHelper(false)}
-          onFixed={() => { setShowFfmpegHelper(false); checkFfmpeg(); }}
-        />
-      )}
     </div>
   );
 }
@@ -608,13 +596,11 @@ function DemoReadinessPanel({
   videoCount,
   automationCount,
   demoMode,
-  ffmpegAvailable,
 }: {
   textCount: number;
   videoCount: number;
   automationCount: number;
   demoMode: boolean;
-  ffmpegAvailable: boolean | null;
 }) {
   const deliverableCount = textCount + videoCount;
   const ready = deliverableCount > 0;
@@ -652,11 +638,6 @@ function DemoReadinessPanel({
         <ReadinessItem ready={videoCount > 0} label={`${videoCount} clip hotkey${videoCount === 1 ? "" : "s"}`} />
         <ReadinessItem ready={automationCount > 0} label={`${automationCount} automation${automationCount === 1 ? "" : "s"}`} />
       </div>
-      {ffmpegAvailable === false && (
-        <p className="text-sm mt-3 flex items-center gap-1" style={{ color: "var(--color-warning)" }} data-testid="demo-readiness-warning">
-          <AlertTriangle size={13} /> FFmpeg is missing, so video processing may not be available.
-        </p>
-      )}
     </section>
   );
 }

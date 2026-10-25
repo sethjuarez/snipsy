@@ -44,19 +44,6 @@ export interface HotkeyIssue {
   detail: string;
 }
 
-export interface FfmpegToolStatus {
-  available: boolean;
-  path: string | null;
-  version: string | null;
-  error: string | null;
-}
-
-export interface FfmpegStatus {
-  available: boolean;
-  ffmpeg: FfmpegToolStatus;
-  ffprobe: FfmpegToolStatus;
-}
-
 export interface BackendService {
   createProject(
     path: string,
@@ -76,6 +63,12 @@ export interface BackendService {
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;
+  /** Persist a JPEG thumbnail for an imported video; returns its absolute path. */
+  saveVideoThumbnail(
+    projectPath: string,
+    relativePath: string,
+    jpegBase64: string,
+  ): Promise<string>;
   playVideo(
     projectPath: string | null,
     videoFile: string,
@@ -97,11 +90,6 @@ export interface BackendService {
   loadAutomations(projectPath: string): Promise<Script[]>;
   deleteAutomation(projectPath: string, id: string): Promise<void>;
   runAutomation(projectPath: string, scriptId: string): Promise<string>;
-  checkFfmpeg(): Promise<FfmpegStatus>;
-  setFfmpegPaths(
-    ffmpegExecutablePath: string | null,
-    ffprobeExecutablePath: string | null,
-  ): Promise<FfmpegStatus>;
   activateDemoTray(): Promise<void>;
   deactivateDemoTray(): Promise<void>;
   isElevated(): Promise<boolean>;

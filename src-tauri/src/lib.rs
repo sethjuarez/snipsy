@@ -2,7 +2,6 @@ mod commands;
 mod delivery;
 mod demo;
 mod elevation;
-mod ffmpeg;
 mod focus;
 mod keyboard_hook;
 mod models;
@@ -11,6 +10,7 @@ mod scripting;
 mod stream_deck;
 mod stream_deck_control;
 mod tray;
+mod video_meta;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -82,10 +82,9 @@ pub fn run() {
             commands::list_imported_videos,
             commands::delete_video,
             commands::get_video_fps,
+            commands::save_video_thumbnail,
             commands::list_monitors,
             commands::capture_monitor_preview,
-            commands::check_ffmpeg,
-            commands::set_ffmpeg_paths,
             commands::save_automation,
             commands::load_automations,
             commands::delete_automation,

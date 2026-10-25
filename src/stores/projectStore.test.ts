@@ -9,7 +9,6 @@ const backend = vi.hoisted(() => ({
   loadAutomations: vi.fn(),
   saveAutomation: vi.fn(),
   deleteAutomation: vi.fn(),
-  checkFfmpeg: vi.fn(),
   enterDemoMode: vi.fn(),
   exitDemoMode: vi.fn(),
   isDemoMode: vi.fn(),
@@ -42,7 +41,6 @@ beforeEach(async () => {
   for (const fn of Object.values(backend)) fn.mockReset().mockResolvedValue(undefined);
   backend.enterDemoMode.mockResolvedValue([]);
   backend.loadAutomations.mockResolvedValue([]);
-  backend.checkFfmpeg.mockResolvedValue({ available: true });
   backend.isDemoMode.mockResolvedValue(false);
   useProjectStore.setState({
     projectPath: "C:/project",
@@ -141,15 +139,15 @@ describe("demo hotkey sync", () => {
     expect(useProjectStore.getState().demoMode).toBe(false);
   });
 
-  it("re-syncs hotkeys on project open even if FFmpeg checks fail", async () => {
+  it("re-syncs hotkeys on project open even if automations fail to load", async () => {
     await useProjectStore.getState().enterDemoMode();
     backend.openProject.mockResolvedValue({
       project: { name: "Other", description: "" },
       textSnippets: [text("o", "Ctrl+5")],
       videoSnippets: [],
     });
-    backend.checkFfmpeg.mockRejectedValue(new Error("no ffmpeg"));
-    await useProjectStore.getState().openProject("C:/other");
+    backend.loadAutomations.mockRejectedValue(new Error("bad automations"));
+    await expect(useProjectStore.getState().openProject("C:/other")).rejects.toThrow("bad automations");
     expect(registeredIds()).toEqual(["o:Ctrl+5"]);
   });
 

@@ -182,7 +182,7 @@ Open-site contributions are idempotent by URL within one automation run. If the 
 | Desktop shell | `tauri` | Window management, IPC, system tray, bundling |
 | Global hotkeys | `global-hotkey` (or Tauri's built-in global shortcut API) | Register/unregister system-wide hotkeys |
 | Input simulation | `enigo` | Simulate keyboard and mouse input for fast-type delivery and transition actions |
-| Video playback | HTML `<video>` element + FFmpeg for transcoding | Fullscreen chromeless playback of video snippets |
+| Video playback | HTML `<video>` element; thumbnails captured in the webview, FPS read from MP4/MOV metadata (no FFmpeg) | Fullscreen chromeless playback of video snippets |
 | File system | `std::fs` + `serde_json` | Read/write project JSON files and manage video assets |
 | Async runtime | `tokio` | Async operations for automation execution and file I/O |
 | Observability | Auditaur | Local-first telemetry for frontend errors, console logs, Tauri events, IPC, traces, and full-app drive/smoke workflows |
@@ -234,6 +234,6 @@ The automation engine runs entirely on the Rust backend:
 
 - Tauri + React supports Windows, macOS, and Linux.
 - `enigo` supports input simulation on all three platforms.
-- FFmpeg is cross-platform.
+- Video features need no external tools; FFmpeg is not required.
 - Global hotkey registration uses platform-native APIs (abstracted by Tauri/`global-hotkey`).
 - Project folders are plain files on disk — fully portable across operating systems.
