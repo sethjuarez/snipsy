@@ -1,5 +1,5 @@
 import type { Script, TextSnippet, VideoSnippet } from "../types";
-import { collectHotkeyOwners, normalizeHotkey, validateHotkey } from "./hotkeys";
+import { assignHotkeys, collectHotkeyOwners } from "./hotkeys";
 
 export type PreflightState = "pass" | "warn" | "fail";
 
@@ -33,27 +33,10 @@ const plural = (count: number, one: string, many = `${one}s`) => `${count} ${cou
 
 /** Checks to show before and during demo mode. Only "no hotkeys" is a failure. */
 export function computePreflight(input: PreflightInput): Preflight {
-  // Same order the store sends hotkeys to the backend, which arms the first
-  // owner of a hotkey and skips later duplicates.
-  const owners = collectHotkeyOwners(input.textSnippets, input.videoSnippets, input.automations);
-  const seen = new Set<string>();
-  const armedIds: string[] = [];
-  let problemCount = 0;
-  let unassignedCount = 0;
-  for (const owner of owners) {
-    const status = validateHotkey(owner.hotkey, []);
-    if (status.state === "empty") {
-      unassignedCount += 1;
-      continue;
-    }
-    const key = normalizeHotkey(owner.hotkey);
-    if (status.state !== "available" || seen.has(key)) {
-      problemCount += 1;
-      continue;
-    }
-    seen.add(key);
-    armedIds.push(owner.id);
-  }
+  const assignments = assignHotkeys(collectHotkeyOwners(input.textSnippets, input.videoSnippets, input.automations));
+  const armedIds = assignments.filter((item) => item.state === "armed").map((item) => item.owner.id);
+  const problemCount = assignments.filter((item) => item.state === "duplicate" || item.state === "invalid").length;
+  const unassignedCount = assignments.filter((item) => item.state === "unassigned").length;
   const armedCount = armedIds.length;
 
   const checks: PreflightCheck[] = [

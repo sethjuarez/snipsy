@@ -61,10 +61,15 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
 - Automations are stored as human-editable JSON files within the project folder.
 
+### Hotkeys View
+
+- **Hotkeys** in the sidebar lists every text snippet, clip, and automation with its hotkey and what demo mode will do with it: **Ready**/**Armed**, **Duplicate** (the first item listed wins), **Invalid**, **No hotkey** (or **Optional** for automations), or **Not registered** when the OS refused it during a live demo.
+- **Change** captures a new hotkey in place (conflicts are rejected), **Remove** clears an automation's optional hotkey, and **Open** jumps to the item's editor. **Problems only** filters the list.
+
 ### Command Palette & Shortcuts
 
 - Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
-- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–6** switch sidebar views, and **Ctrl/Cmd+S** saves the open editor.
+- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–7** switch sidebar views, and **Ctrl/Cmd+S** saves the open editor.
 - These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
 
 ## Data Model

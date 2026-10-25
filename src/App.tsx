@@ -6,6 +6,7 @@ import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import StreamDeckEmulator from "./components/StreamDeckEmulator";
+import HotkeysTable from "./components/HotkeysTable";
 import StatusBar from "./components/StatusBar";
 import TrayHint from "./components/TrayHint";
 import TextSnippetList from "./components/TextSnippetList";
@@ -28,13 +29,14 @@ import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./util
 import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
-import { collectHotkeyOwners, describeHotkeyIssues } from "./utils/hotkeys";
+import { collectHotkeyOwners, describeHotkeyIssues, type HotkeyOwner } from "./utils/hotkeys";
 import { duplicateAutomation, duplicateTextSnippet, duplicateVideoSnippet } from "./utils/duplicate";
 import { upsertToast } from "./utils/toasts";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
 const DEMO_HOTKEY_TOAST_ID = "demo-hotkey-issues";
+const DEMO_HOTKEY_SYNC_TOAST_ID = "demo-hotkey-sync";
 
 const backend = getBackend();
 
@@ -124,6 +126,23 @@ function App() {
       }),
     );
   }, [demoHotkeyIssues]);
+
+  const demoHotkeySyncError = useProjectStore((s) => s.demoHotkeySyncError);
+  useEffect(() => {
+    if (!demoHotkeySyncError) {
+      setToasts((current) => current.filter((toast) => toast.id !== DEMO_HOTKEY_SYNC_TOAST_ID));
+      return;
+    }
+    setToasts((current) =>
+      upsertToast(current, {
+        id: DEMO_HOTKEY_SYNC_TOAST_ID,
+        title: "Saved, but live demo hotkeys weren't updated",
+        detail: `${demoHotkeySyncError}. Stop and restart the demo to apply changes.`,
+        tone: "error",
+        sticky: true,
+      }),
+    );
+  }, [demoHotkeySyncError]);
 
   // Source video list, used to flag clips whose video was removed. Tagged with
   // the project and refreshed on every view change so imports show up.
@@ -401,6 +420,29 @@ function App() {
       handleScriptEdit(script);
     }),
     runAutomation: (script) => void handleRunScript(script.id),
+  };
+
+  const changeOwnerHotkey = async (owner: HotkeyOwner, hotkey: string) => {
+    if (owner.kind === "text") {
+      await setTextSnippets(textSnippets.map((snippet) => (snippet.id === owner.id ? { ...snippet, hotkey } : snippet)));
+    } else if (owner.kind === "video") {
+      await setVideoSnippets(videoSnippets.map((snippet) => (snippet.id === owner.id ? { ...snippet, hotkey } : snippet)));
+    } else {
+      const script = automations.find((candidate) => candidate.id === owner.id);
+      if (script) await saveAutomation({ ...script, hotkey: hotkey || undefined });
+    }
+  };
+  const openHotkeyOwner = (owner: HotkeyOwner) => {
+    if (owner.kind === "text") {
+      const snippet = textSnippets.find((candidate) => candidate.id === owner.id);
+      if (snippet) commandContext.editText(snippet);
+    } else if (owner.kind === "video") {
+      const snippet = videoSnippets.find((candidate) => candidate.id === owner.id);
+      if (snippet) commandContext.editClip(snippet);
+    } else {
+      const script = automations.find((candidate) => candidate.id === owner.id);
+      if (script) commandContext.editAutomation(script);
+    }
   };
 
   const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
@@ -716,6 +758,18 @@ function App() {
                 )}
               </>
             )}
+            {activeView === "hotkeys" && (
+              <HotkeysTable
+                textSnippets={textSnippets}
+                videoSnippets={videoSnippets}
+                automations={automations}
+                demoMode={demoMode}
+                issues={demoHotkeyIssues}
+                syncError={demoHotkeySyncError}
+                onChangeHotkey={changeOwnerHotkey}
+                onOpen={openHotkeyOwner}
+              />
+            )}
             {activeView === "stream-deck" && <StreamDeckEmulator embedded />}
 
 
@@ -761,6 +815,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   videos: "Source Videos",
   "video-snippets": "Clips",
   automations: "Automations",
+  hotkeys: "Hotkeys",
   "stream-deck": "Stream Deck",
 };
 

@@ -73,6 +73,8 @@ interface ProjectState {
 
   /** Hotkeys the last demo registration could not arm (duplicates, OS failures). */
   demoHotkeyIssues: HotkeyIssue[];
+  /** Set when live demo hotkeys could not be re-registered after an edit. */
+  demoHotkeySyncError: string | null;
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
   /** Re-register hotkeys from current state while demo mode is live. */
@@ -163,6 +165,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   automations: [],
   demoMode: false,
   demoHotkeyIssues: [],
+  demoHotkeySyncError: null,
   recentProjects: loadRecentProjects(),
 
   createProject: async (path, name, description) => {
@@ -284,7 +287,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await queueDemoHotkeySync(async () => {
       if (!get().demoMode) return;
       try {
-        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [] });
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [], demoHotkeySyncError: null });
       } catch (e) {
         console.error("enterDemoMode failed:", e);
       }
@@ -308,9 +311,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Read state inside the queued task so the latest snapshot wins.
       if (!get().demoMode) return;
       try {
-        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [] });
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [], demoHotkeySyncError: null });
       } catch (e) {
         console.error("Failed to sync demo hotkeys:", e);
+        set({ demoHotkeySyncError: String(e) });
       }
     }),
 
@@ -327,7 +331,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }),
 
   exitDemoMode: async () => {
-    set({ demoMode: false, demoHotkeyIssues: [] });
+    set({ demoMode: false, demoHotkeyIssues: [], demoHotkeySyncError: null });
     await queueDemoHotkeySync(async () => {
       if (get().demoMode) return;
       try {

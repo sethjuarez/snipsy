@@ -50,6 +50,7 @@ beforeEach(async () => {
     automations: [],
     demoMode: false,
     demoHotkeyIssues: [],
+    demoHotkeySyncError: null,
   });
   await useProjectStore.getState().syncDemoHotkeys(); // drain the queue between tests
 });
@@ -112,6 +113,23 @@ describe("demo hotkey sync", () => {
     await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
     expect(backend.enterDemoMode).toHaveBeenCalledTimes(2);
     expect(registeredIds()).toEqual(["t:Ctrl+1"]);
+  });
+
+  it("records a failed live re-sync and clears it on the next success or exit", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await useProjectStore.getState().enterDemoMode();
+    backend.enterDemoMode.mockRejectedValueOnce(new Error("boom"));
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
+    expect(backend.saveTextSnippets).toHaveBeenCalled();
+    expect(useProjectStore.getState().demoHotkeySyncError).toContain("boom");
+
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+2")]);
+    expect(useProjectStore.getState().demoHotkeySyncError).toBeNull();
+
+    backend.enterDemoMode.mockRejectedValueOnce(new Error("again"));
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+3")]);
+    await useProjectStore.getState().exitDemoMode();
+    expect(useProjectStore.getState().demoHotkeySyncError).toBeNull();
   });
 
   it("runs a quick enter then exit in order, ending with hotkeys cleared", async () => {
