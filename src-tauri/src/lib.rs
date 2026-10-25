@@ -99,7 +99,7 @@ pub fn run() {
             playback::close_playback_window,
             scripting::run_automation,
             stream_deck::list_stream_deck_buttons,
-            stream_deck::trigger_stream_deck_button,
+
             stream_deck_control::set_stream_deck_active_project,
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,

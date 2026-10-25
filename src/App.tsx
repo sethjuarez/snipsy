@@ -5,7 +5,7 @@ import { Plus, X as XIcon, Save, Upload } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
-import StreamDeckEmulator from "./components/StreamDeckEmulator";
+import StreamDeckPreview from "./components/StreamDeckPreview";
 import HotkeysTable from "./components/HotkeysTable";
 import StatusBar from "./components/StatusBar";
 import TrayHint from "./components/TrayHint";
@@ -821,7 +821,7 @@ function App() {
                 onOpen={openHotkeyOwner}
               />
             )}
-            {activeView === "stream-deck" && <StreamDeckEmulator embedded />}
+            {activeView === "stream-deck" && <StreamDeckPreview />}
 
 
             </>

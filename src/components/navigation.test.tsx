@@ -10,7 +10,7 @@ vi.mock("../services", () => ({
 }));
 vi.mock("../services/auditaur", () => ({ isTauriRuntime: () => false, tauriFileSrc: (file: string) => file }));
 
-const { default: StreamDeckEmulator } = await import("./StreamDeckEmulator");
+const { default: StreamDeckPreview } = await import("./StreamDeckPreview");
 Object.defineProperty(window, "matchMedia", {
   configurable: true,
   value: (query: string) => ({ matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
@@ -94,11 +94,11 @@ describe("ScriptForm steps", () => {
   });
 });
 
-describe("StreamDeckEmulator", () => {
-  it("drops the standalone heading when embedded", () => {
-    render(<StreamDeckEmulator embedded />);
-    expect(screen.queryByText("Stream Deck Emulator")).toBeNull();
-    expect(screen.getByTestId("streamdeck-help").textContent).toMatch(/triggers it for real/);
+describe("StreamDeckPreview", () => {
+  it("explains that keys run from the device", async () => {
+    render(<StreamDeckPreview />);
+    expect(screen.getByTestId("streamdeck-help").textContent).toMatch(/press the keys on the device/);
+    await waitFor(() => expect(screen.getByTestId("streamdeck-preview-empty")).toBeTruthy());
   });
 });
 

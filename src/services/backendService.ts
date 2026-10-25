@@ -5,7 +5,6 @@ import type {
   PauseStop,
   Script,
   StreamDeckButton,
-  StreamDeckTriggerResult,
   TextSnippet,
   TransitionAction,
   VideoSnippet,
@@ -101,9 +100,5 @@ export interface BackendService {
   captureMonitorPreview(monitorName: string): Promise<string>;
   setStreamDeckActiveProject(projectPath: string | null): Promise<void>;
   listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]>;
-  triggerStreamDeckButton(
-    projectPath: string,
-    snippetId: string,
-    snippetType: "text" | "video" | "automation",
-  ): Promise<StreamDeckTriggerResult>;
+
 }

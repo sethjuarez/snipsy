@@ -163,9 +163,3 @@ export interface StreamDeckButton {
   iconDataUrl: string;
 }
 
-export interface StreamDeckTriggerResult {
-  id: string;
-  title: string;
-  snippetType: "text" | "video" | "automation";
-  status: "started" | "stopped" | "completed";
-}
