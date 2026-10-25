@@ -18,7 +18,7 @@ A user can have multiple projects (e.g., one per talk or demo). **Export project
 
 ### Demo Mode
 
-When a user activates demo mode for a project, all of that project's hotkeys become globally registered at the OS level. Pressing a hotkey from any application will trigger the associated snippet action. Demo mode is exited explicitly by the user (or via a dedicated hotkey).
+When a user activates demo mode for a project, all of that project's hotkeys become globally registered at the OS level. Pressing a hotkey from any application will trigger the associated snippet action. Demo mode is exited explicitly by the user (or via a dedicated hotkey). **Keep awake** (a checkbox beside Start, on by default) keeps the machine from sleeping while live and, on Windows, nudges the mouse 1px and back after 50s idle so presence (e.g. Teams) stays Available.
 
 ## Features
 

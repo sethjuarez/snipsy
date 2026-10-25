@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import { getBackend, type BackendService } from "../services";
 import type { HotkeyIssue, SnippetHotkey } from "../services/backendService";
+import { useKeepAwakeStore } from "./keepAwakeStore";
 
 const backend: BackendService = getBackend();
 
@@ -287,7 +288,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await queueDemoHotkeySync(async () => {
       if (!get().demoMode) return;
       try {
-        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [], demoHotkeySyncError: null });
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()), { keepAwake: useKeepAwakeStore.getState().keepAwake })) ?? [], demoHotkeySyncError: null });
       } catch (e) {
         console.error("enterDemoMode failed:", e);
       }
@@ -311,7 +312,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Read state inside the queued task so the latest snapshot wins.
       if (!get().demoMode) return;
       try {
-        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [], demoHotkeySyncError: null });
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()), { keepAwake: useKeepAwakeStore.getState().keepAwake })) ?? [], demoHotkeySyncError: null });
       } catch (e) {
         console.error("Failed to sync demo hotkeys:", e);
         set({ demoHotkeySyncError: String(e) });

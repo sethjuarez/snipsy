@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent }
 import { useTheme } from "../hooks/useTheme";
 import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Search, Settings } from "lucide-react";
 import Kbd from "./ui/Kbd";
+import KeepAwakeToggle from "./KeepAwakeToggle";
 import { getBackend } from "../services";
 import { isMacPlatform, traySurfaceName } from "../utils/platform";
 import appIcon from "../assets/icon.png";
@@ -156,6 +157,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSe
       {/* Right: controls (no-drag so buttons are clickable) */}
       <div className="flex items-center shrink-0" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <div className="flex items-center gap-1 px-1">
+          {projectName && !demoMode && <KeepAwakeToggle testId="titlebar-keep-awake" />}
           {/* Demo mode toggle — labeled so the main action is obvious */}
           {projectName && (
             <button

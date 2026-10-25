@@ -144,6 +144,13 @@ describe("TitleBar", () => {
     expect(onOpenPalette).toHaveBeenCalled();
   });
 
+  it("shows Keep awake beside Start, but not while live", () => {
+    const { rerender } = render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} />);
+    expect(screen.getByTestId("titlebar-keep-awake")).toBeTruthy();
+    rerender(<TitleBar projectName="Demo" demoMode onToggleDemo={vi.fn()} />);
+    expect(screen.queryByTestId("titlebar-keep-awake")).toBeNull();
+  });
+
   it("labels the demo toggle with visible text", () => {
     const onToggleDemo = vi.fn();
     const { rerender } = render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={onToggleDemo} />);

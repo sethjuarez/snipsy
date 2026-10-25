@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DemoPreflightPanel, DemoStartDialog } from "./DemoPreflight";
 import { computePreflight, DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
 import type { TextSnippet } from "../types";
+import { useKeepAwakeStore } from "../stores/keepAwakeStore";
+import { KEEP_AWAKE_KEY } from "../utils/keepAwake";
 
 const snippet: TextSnippet = { id: "t", title: "Hello", description: "", text: "hi", hotkey: "CmdOrControl+Shift+1", delivery: "paste" };
 const ready = computePreflight({ textSnippets: [snippet], videoSnippets: [], automations: [], elevated: false });
@@ -22,6 +24,22 @@ describe("DemoPreflightPanel", () => {
     expect(start.textContent).toBe("Start");
     fireEvent.click(start);
     expect(onToggleDemo).toHaveBeenCalled();
+  });
+
+  it("offers a shared Keep awake checkbox beside Start", () => {
+    useKeepAwakeStore.setState({ keepAwake: true });
+    render(<DemoPreflightPanel preflight={ready} demoMode={false} projectName="Keynote" onToggleDemo={vi.fn()} />);
+    const box = screen.getByTestId("demo-panel-keep-awake") as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    expect(useKeepAwakeStore.getState().keepAwake).toBe(false);
+    expect(localStorage.getItem(KEEP_AWAKE_KEY)).toBe("false");
+    useKeepAwakeStore.setState({ keepAwake: true });
+  });
+
+  it("hides Keep awake while live", () => {
+    render(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" onToggleDemo={vi.fn()} />);
+    expect(screen.queryByTestId("demo-panel-keep-awake")).toBeNull();
   });
 
   it("shows live status and a stop button while demoing", () => {

@@ -23,6 +23,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 const { buildDemoHotkeys, useProjectStore } = await import("./projectStore");
+const { useKeepAwakeStore } = await import("./keepAwakeStore");
 
 const text = (id: string, hotkey: string): TextSnippet => ({
   id, title: id, description: "", text: `text ${id}`, hotkey, delivery: "paste",
@@ -71,6 +72,20 @@ describe("buildDemoHotkeys", () => {
 });
 
 describe("demo hotkey sync", () => {
+  it("passes the Keep awake choice to the backend", async () => {
+    const lastOptions = () => backend.enterDemoMode.mock.calls[backend.enterDemoMode.mock.calls.length - 1][1];
+    useKeepAwakeStore.setState({ keepAwake: true });
+    await useProjectStore.getState().enterDemoMode();
+    expect(lastOptions()).toEqual({ keepAwake: true });
+    await useProjectStore.getState().exitDemoMode();
+
+    useKeepAwakeStore.setState({ keepAwake: false });
+    await useProjectStore.getState().enterDemoMode();
+    expect(lastOptions()).toEqual({ keepAwake: false });
+    await useProjectStore.getState().exitDemoMode();
+    useKeepAwakeStore.setState({ keepAwake: true });
+  });
+
   it("does not touch backend hotkeys outside demo mode", async () => {
     await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
     expect(backend.saveTextSnippets).toHaveBeenCalled();

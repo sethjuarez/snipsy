@@ -3,6 +3,7 @@ mod delivery;
 mod demo;
 mod elevation;
 mod focus;
+mod keep_awake;
 mod keyboard_hook;
 mod models;
 mod playback;

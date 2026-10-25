@@ -4,6 +4,7 @@ import type { Preflight, PreflightCheck, PreflightState } from "../utils/preflig
 import { DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
 import { traySurfaceName } from "../utils/platform";
 import Button from "./ui/Button";
+import KeepAwakeToggle from "./KeepAwakeToggle";
 import Dialog from "./ui/Dialog";
 
 const STATE_ICON: Record<PreflightState, { icon: typeof CheckCircle; color: string; label: string }> = {
@@ -82,16 +83,18 @@ export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmed
               : `Start hides Snipsy to the ${traySurfaceName()} and listens for your hotkeys.`}
           </p>
         </div>
-        <Button
-          tone={demoMode ? "danger" : "primary"}
-          icon={demoMode ? <Square size={12} fill="currentColor" aria-hidden="true" /> : <Play size={12} fill="currentColor" aria-hidden="true" />}
-          onClick={onToggleDemo}
-          className="shrink-0"
-          aria-label={demoMode ? "Stop demo" : "Start demo"}
-          data-testid="demo-panel-toggle"
-        >
-          {demoMode ? "Stop" : "Start"}
-        </Button>
+        <div className="flex shrink-0 items-center gap-3">
+          {!demoMode && <KeepAwakeToggle testId="demo-panel-keep-awake" />}
+          <Button
+            tone={demoMode ? "danger" : "primary"}
+            icon={demoMode ? <Square size={12} fill="currentColor" aria-hidden="true" /> : <Play size={12} fill="currentColor" aria-hidden="true" />}
+            onClick={onToggleDemo}
+            aria-label={demoMode ? "Stop demo" : "Start demo"}
+            data-testid="demo-panel-toggle"
+          >
+            {demoMode ? "Stop" : "Start"}
+          </Button>
+        </div>
       </div>
       {!demoMode && (
         <div className="mt-4">

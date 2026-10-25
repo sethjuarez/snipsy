@@ -77,9 +77,16 @@ pub fn enter_demo_mode(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
     hotkeys: Vec<SnippetHotkey>,
+    keep_awake: Option<bool>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<Vec<HotkeyIssue>, String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
+
+    if keep_awake.unwrap_or(false) {
+        crate::keep_awake::start();
+    } else {
+        crate::keep_awake::stop();
+    }
 
     // Clean up any stale registrations from a previous session
     let gs = app.global_shortcut();
@@ -300,6 +307,7 @@ pub fn exit_demo_mode(
     demo.registered_hotkeys.clear();
 
     crate::keyboard_hook::clear_all_hooks();
+    crate::keep_awake::stop();
 
     Ok(())
 }

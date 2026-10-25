@@ -37,6 +37,11 @@ export interface SnippetHotkey {
 }
 
 /** A hotkey demo mode could not arm. For duplicates, `detail` is the snippet id that kept the combo. */
+export interface DemoModeOptions {
+  /** Prevent sleep and Away status while live. */
+  keepAwake?: boolean;
+}
+
 export interface HotkeyIssue {
   snippetId: string;
   hotkey: string;
@@ -59,7 +64,7 @@ export interface BackendService {
   selectArchiveSavePath(defaultName: string): Promise<string | null>;
   saveTextSnippets(path: string, snippets: TextSnippet[]): Promise<void>;
   saveVideoSnippets(path: string, snippets: VideoSnippet[]): Promise<void>;
-  enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]>;
+  enterDemoMode(hotkeys: SnippetHotkey[], options?: DemoModeOptions): Promise<HotkeyIssue[]>;
   exitDemoMode(): Promise<void>;
   isDemoMode(): Promise<boolean>;
   deliverText(

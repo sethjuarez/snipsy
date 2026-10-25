@@ -1,4 +1,4 @@
-import type { BackendService, HotkeyIssue, SnippetHotkey } from "./backendService";
+import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
 import type { ArchiveSummary, ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
@@ -77,6 +77,7 @@ const FIXTURE_PROJECT: ProjectData = {
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
+  private _keepAwake = false;
   private archives = new Map<string, ProjectData>();
   private _automations: Script[] = [
     {
@@ -143,8 +144,9 @@ export class MockBackendService implements BackendService {
     this.data.videoSnippets = structuredClone(snippets);
   }
 
-  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]> {
+  async enterDemoMode(hotkeys: SnippetHotkey[], options?: DemoModeOptions): Promise<HotkeyIssue[]> {
     this._demoMode = true;
+    this._keepAwake = options?.keepAwake ?? false;
     // Mirror the backend: the first snippet keeps a combo, later ones are skipped.
     const owners = new Map<string, string>();
     const issues: HotkeyIssue[] = [];
@@ -160,6 +162,12 @@ export class MockBackendService implements BackendService {
 
   async exitDemoMode(): Promise<void> {
     this._demoMode = false;
+    this._keepAwake = false;
+  }
+
+  /** Test helper: whether the last live session asked to keep the machine awake. */
+  get keepAwakeActive(): boolean {
+    return this._keepAwake;
   }
 
   async isDemoMode(): Promise<boolean> {
