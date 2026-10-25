@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useProjectStore } from "./stores/projectStore";
 import { useUpdateStore } from "./stores/updateStore";
-import { Plus, X as XIcon, CheckCircle, Circle, Radio, Save, Upload } from "lucide-react";
+import { Plus, X as XIcon, Save, Upload } from "lucide-react";
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
@@ -23,13 +23,14 @@ import ToastViewport, { type ToastMessage, type ToastTone } from "./components/T
 import ErrorBoundary from "./components/ErrorBoundary";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutsDialog from "./components/ShortcutsDialog";
+import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
+import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
 import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners, describeHotkeyIssues } from "./utils/hotkeys";
 import { duplicateAutomation, duplicateTextSnippet, duplicateVideoSnippet } from "./utils/duplicate";
 import { upsertToast } from "./utils/toasts";
-import { traySurfaceName } from "./utils/platform";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
 import type { AppView } from "./components/Sidebar";
 
@@ -125,10 +126,10 @@ function App() {
   }, [demoHotkeyIssues]);
 
   // Source video list, used to flag clips whose video was removed. Tagged with
-  // the project and cleared on leave so a stale set never flags a valid clip.
+  // the project and refreshed on every view change so imports show up.
   const [videoAvailability, setVideoAvailability] = useState<{ projectPath: string; files: ReadonlySet<string> } | null>(null);
   useEffect(() => {
-    if (!projectPath || activeView !== "video-snippets") return;
+    if (!projectPath) return;
     let cancelled = false;
     backend.getImportedVideos(projectPath)
       .then((videos) => {
@@ -137,7 +138,6 @@ function App() {
       .catch(() => {});
     return () => {
       cancelled = true;
-      setVideoAvailability(null);
     };
   }, [projectPath, activeView]);
   const availableVideoFiles = videoAvailability?.projectPath === projectPath ? videoAvailability.files : null;
@@ -349,7 +349,17 @@ function App() {
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const overlayOpen = paletteOpen || shortcutsOpen || confirmDialog !== null;
+  const [demoStartOpen, setDemoStartOpen] = useState(false);
+  const [elevated, setElevated] = useState<boolean | null>(null);
+  useEffect(() => {
+    backend.isElevated().then(setElevated).catch(() => setElevated(null));
+  }, []);
+  const preflight = useMemo(
+    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, elevated }),
+    [textSnippets, videoSnippets, automations, availableVideoFiles, elevated],
+  );
+  const blockingOverlay = confirmDialog !== null || demoStartOpen;
+  const overlayOpen = paletteOpen || shortcutsOpen || blockingOverlay;
 
   const commandContext: CommandContext = {
     demoMode,
@@ -398,14 +408,14 @@ function App() {
     if (!projectName || event.defaultPrevented || event.repeat) return;
     if (matchesShortcut(event, "CmdOrControl+K")) {
       event.preventDefault();
-      if (confirmDialog) return;
+      if (blockingOverlay) return;
       setShortcutsOpen(false);
       setPaletteOpen((open) => !open);
       return;
     }
     if (matchesShortcut(event, "CmdOrControl+/")) {
       event.preventDefault();
-      if (confirmDialog) return;
+      if (blockingOverlay) return;
       setPaletteOpen(false);
       setShortcutsOpen((open) => !open);
       return;
@@ -460,8 +470,12 @@ function App() {
   }, [projectPath, automations, showToast]);
 
   const handleToggleDemo = () => {
-    if (demoMode) exitDemoMode();
-    else enterDemoMode();
+    if (demoMode) void exitDemoMode();
+    else if (shouldConfirmDemoStart(preflight)) {
+      setPaletteOpen(false);
+      setShortcutsOpen(false);
+      setDemoStartOpen(true);
+    } else void enterDemoMode();
   };
 
   // ── Welcome screen (no project loaded) ──
@@ -481,7 +495,7 @@ function App() {
   // ── Main app layout ──
   return (
     <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!confirmDialog) { setShortcutsOpen(false); setPaletteOpen(true); } }} />
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setPaletteOpen(true); } }} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} />
@@ -590,12 +604,7 @@ function App() {
             <>
             {activeView === "home" && (
               <div className="space-y-4">
-                <DemoReadinessPanel
-                  textCount={textSnippets.length}
-                  videoCount={videoSnippets.length}
-                  automationCount={automations.length}
-                  demoMode={demoMode}
-                />
+                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} onToggleDemo={handleToggleDemo} />
                 <HotkeyOverview
                   textSnippets={textSnippets}
                   videoSnippets={videoSnippets}
@@ -739,73 +748,8 @@ function App() {
 
       {paletteOpen && <CommandPalette commands={buildCommands(commandContext)} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {demoStartOpen && <DemoStartDialog preflight={preflight} onStart={() => void enterDemoMode()} onClose={() => setDemoStartOpen(false)} />}
 
-    </div>
-  );
-}
-
-function DemoReadinessPanel({
-  textCount,
-  videoCount,
-  automationCount,
-  demoMode,
-}: {
-  textCount: number;
-  videoCount: number;
-  automationCount: number;
-  demoMode: boolean;
-}) {
-  const deliverableCount = textCount + videoCount;
-  const ready = deliverableCount > 0;
-
-  return (
-    <section
-      className="rounded-lg p-4"
-      style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}
-      data-testid="demo-readiness-panel"
-      aria-label="Demo readiness"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-md font-semibold flex items-center gap-2" style={{ color: "var(--color-text)" }}>
-            <Radio size={16} style={{ color: demoMode ? "var(--color-danger)" : "var(--color-accent)" }} />
-            {demoMode ? "Demo Mode is live" : "Demo readiness"}
-          </h3>
-          <p className="text-base mt-1" style={{ color: "var(--color-text-secondary)" }}>
-            Demo Mode hides Snipsy to the {traySurfaceName()} and listens for your configured hotkeys.
-          </p>
-        </div>
-        <span
-          className="text-sm px-2 py-1 rounded font-medium"
-          style={{
-            backgroundColor: demoMode ? "var(--color-danger)" : ready ? "var(--color-success)" : "var(--color-surface-inset)",
-            color: demoMode || ready ? "var(--color-text-on-accent)" : "var(--color-text-secondary)",
-          }}
-          data-testid="demo-readiness-status"
-        >
-          {demoMode ? "Live" : ready ? "Ready" : "Needs hotkeys"}
-        </span>
-      </div>
-      <div className="grid grid-cols-3 gap-2 mt-4">
-        <ReadinessItem ready={textCount > 0} label={`${textCount} text hotkey${textCount === 1 ? "" : "s"}`} />
-        <ReadinessItem ready={videoCount > 0} label={`${videoCount} clip hotkey${videoCount === 1 ? "" : "s"}`} />
-        <ReadinessItem ready={automationCount > 0} label={`${automationCount} automation${automationCount === 1 ? "" : "s"}`} />
-      </div>
-    </section>
-  );
-}
-
-function ReadinessItem({ ready, label }: { ready: boolean; label: string }) {
-  return (
-    <div
-      className="flex items-center gap-2 rounded px-3 py-2 text-base"
-      style={{ backgroundColor: "var(--color-surface-inset)", color: ready ? "var(--color-text)" : "var(--color-text-secondary)" }}
-    >
-      {ready
-        ? <CheckCircle size={14} style={{ color: "var(--color-success)" }} />
-        : <Circle size={10} style={{ color: "var(--color-text-secondary)" }} />
-      }
-      <span>{label}</span>
     </div>
   );
 }

@@ -87,6 +87,18 @@ describe("TitleBar", () => {
     expect(onOpenPalette).toHaveBeenCalled();
   });
 
+  it("labels the demo toggle with visible text", () => {
+    const onToggleDemo = vi.fn();
+    const { rerender } = render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={onToggleDemo} />);
+    const toggle = screen.getByTestId("demo-mode-toggle");
+    expect(toggle.textContent).toBe("Start demo");
+    expect(toggle.getAttribute("aria-label")).toBe("Start demo");
+    fireEvent.click(toggle);
+    expect(onToggleDemo).toHaveBeenCalled();
+    rerender(<TitleBar projectName="Demo" demoMode onToggleDemo={onToggleDemo} />);
+    expect(screen.getByTestId("demo-mode-toggle").textContent).toBe("Stop demo");
+  });
+
   it("hides the search button without a handler", () => {
     render(<TitleBar projectName={null} demoMode={false} onToggleDemo={vi.fn()} />);
     expect(screen.queryByTestId("command-palette-button")).toBeNull();
