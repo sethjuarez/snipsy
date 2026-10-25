@@ -1396,7 +1396,8 @@ click('[data-testid="nav-text-snippets"]');
 waitForAnySelector(['[data-testid="empty-state"]', '[data-testid="text-snippet-list"]']);
 runTextSnippetSaveTrackingDrill();
 
-click('[data-testid="nav-videos"]');
+click('[data-testid="nav-video-snippets"]');
+click('[data-testid="clips-tab-videos"]');
 waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);
 runVideoThumbnailDrill();
 

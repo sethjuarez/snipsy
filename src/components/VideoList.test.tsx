@@ -109,3 +109,23 @@ describe("VideoList thumbnails", () => {
     expect(capture).not.toHaveBeenCalled();
   });
 });
+
+describe("VideoList change reporting", () => {
+  it("reports video paths after load and import, but not for thumbnail updates", async () => {
+    backend.getImportedVideos.mockResolvedValue([video("a.mp4")]);
+    const onVideosChange = vi.fn();
+    const ref = { current: null as { importVideo: () => void } | null };
+    render(
+      <VideoList ref={ref} projectPath="C:/p" videoSnippets={[]} onCreateClip={vi.fn()} onDeleteVideo={vi.fn()} onVideosChange={onVideosChange} />,
+    );
+    await waitFor(() => expect(backend.saveVideoThumbnail).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByAltText("a.mp4").getAttribute("src")).toContain("thumbnails"));
+    expect(onVideosChange.mock.calls).toEqual([[["videos/a.mp4"]]]);
+
+    backend.selectVideoFile.mockResolvedValue("D:/b.mp4");
+    backend.importVideo.mockResolvedValue("videos/b.mp4");
+    backend.getImportedVideos.mockResolvedValue([video("a.mp4", "C:/p/videos/thumbnails/a.jpg"), video("b.mp4")]);
+    ref.current?.importVideo();
+    await waitFor(() => expect(onVideosChange).toHaveBeenLastCalledWith(["videos/a.mp4", "videos/b.mp4"]));
+  });
+});

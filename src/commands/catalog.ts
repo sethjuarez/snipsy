@@ -1,5 +1,5 @@
 import type { AppView } from "../components/Sidebar";
-import { NAV_SECTIONS } from "../components/Sidebar";
+import { isNavItemActive, NAV_SECTIONS } from "../components/Sidebar";
 import type { Script, TextSnippet, VideoSnippet } from "../types";
 import { displayHotkey } from "../utils/hotkeys";
 
@@ -26,9 +26,12 @@ export interface ShortcutInfo {
 
 const NAV_ITEMS = NAV_SECTIONS.flatMap((navSection) => navSection.items);
 
+/** Every view the palette can jump to, including tabs nested under a sidebar item. */
+const NAV_DESTINATIONS = NAV_ITEMS.flatMap((item) => [item, ...(item.subviews ?? [])]);
+
 export const NAV_SHORTCUTS = Object.fromEntries(
   NAV_ITEMS.map((item, index) => [item.id, `CmdOrControl+${index + 1}`]),
-) as Record<AppView, string>;
+) as Partial<Record<AppView, string>>;
 
 /** App-wide shortcuts that are handled outside the command list. */
 export const STATIC_SHORTCUTS: ShortcutInfo[] = [
@@ -42,7 +45,7 @@ export const STATIC_SHORTCUTS: ShortcutInfo[] = [
 /** Every in-app shortcut, used by the help dialog and conflict checks. */
 export const ALL_SHORTCUTS: ShortcutInfo[] = [
   ...STATIC_SHORTCUTS,
-  ...NAV_ITEMS.map((item) => ({ id: `nav.${item.id}`, title: `Go to ${item.label}`, shortcut: NAV_SHORTCUTS[item.id] })),
+  ...NAV_ITEMS.map((item) => ({ id: `nav.${item.id}`, title: `Go to ${item.label}`, shortcut: NAV_SHORTCUTS[item.id]! })),
 ];
 
 export interface CommandContext {
@@ -68,7 +71,7 @@ export interface CommandContext {
 }
 
 export function buildCommands(ctx: CommandContext): AppCommand[] {
-  const navigation: AppCommand[] = NAV_ITEMS.map((item) => ({
+  const navigation: AppCommand[] = NAV_DESTINATIONS.map((item) => ({
     id: `nav.${item.id}`,
     title: `Go to ${item.label}`,
     group: "Navigation",
@@ -142,8 +145,9 @@ export function buildCommands(ctx: CommandContext): AppCommand[] {
 }
 
 function sectionKeywords(view: AppView): string[] {
-  const match = NAV_SECTIONS.find((navSection) => navSection.items.some((item) => item.id === view));
-  return match?.label ? [match.label] : [];
+  const section = NAV_SECTIONS.find((navSection) => navSection.items.some((item) => isNavItemActive(item, view)));
+  const parent = section?.items.find((item) => item.id !== view && isNavItemActive(item, view));
+  return [section?.label, parent?.label].filter((keyword): keyword is string => Boolean(keyword));
 }
 
 type ShortcutEvent = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">;

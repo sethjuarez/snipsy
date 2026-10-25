@@ -14,6 +14,7 @@ import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList, { type VideoListHandle, type VideoListToolbarState } from "./components/VideoList";
 import ClipEditor, { type ClipEditorHandle, type ClipEditorSaveState } from "./components/ClipEditor";
 import VideoSnippetList from "./components/VideoSnippetList";
+import ClipsTabs from "./components/ClipsTabs";
 import HotkeyOverview from "./components/HotkeyOverview";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList, { type AutomationRunHistoryItem } from "./components/ScriptList";
@@ -162,6 +163,9 @@ function App() {
     };
   }, [projectPath, activeView]);
   const availableVideoFiles = videoAvailability?.projectPath === projectPath ? videoAvailability.files : null;
+  const handleVideosChange = useCallback((relativePaths: string[]) => {
+    if (projectPath) setVideoAvailability({ projectPath, files: new Set(relativePaths) });
+  }, [projectPath]);
 
   // Auto-open last project on startup
   useEffect(() => {
@@ -482,7 +486,7 @@ function App() {
       return;
     }
     if (overlayOpen) return;
-    const view = (Object.keys(NAV_SHORTCUTS) as AppView[]).find((candidate) => matchesShortcut(event, NAV_SHORTCUTS[candidate]));
+    const view = (Object.keys(NAV_SHORTCUTS) as AppView[]).find((candidate) => matchesShortcut(event, NAV_SHORTCUTS[candidate] ?? ""));
     if (view) {
       event.preventDefault();
       changeView(view);
@@ -729,12 +733,21 @@ function App() {
               )
             )}
 
+            {(activeView === "videos" || (activeView === "video-snippets" && !showVideoForm)) && (
+              <ClipsTabs
+                active={activeView}
+                clipCount={videoSnippets.length}
+                videoCount={availableVideoFiles?.size}
+                onChange={changeView}
+              />
+            )}
             {activeView === "videos" && projectPath && (
               <VideoList
                 ref={videoListRef}
                 projectPath={projectPath}
                 videoSnippets={videoSnippets}
                 onToolbarStateChange={setVideoListToolbarState}
+                onVideosChange={handleVideosChange}
                 onCreateClip={(video) => setClipEditingVideo(video)}
                 onDeleteVideo={(video) => {
                   // Remove all clips associated with this video
@@ -851,7 +864,7 @@ function App() {
 const VIEW_LABELS: Record<AppView, string> = {
   home: "Overview",
   "text-snippets": "Text Snippets",
-  videos: "Source Videos",
+  videos: "Clips",
   "video-snippets": "Clips",
   automations: "Automations",
   hotkeys: "Hotkeys",

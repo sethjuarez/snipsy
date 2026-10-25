@@ -1,11 +1,18 @@
-import { LayoutDashboard, FileText, Film, Video, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Keyboard, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Keyboard, type LucideIcon } from "lucide-react";
 
 export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck";
+
+interface NavSubview {
+  id: AppView;
+  label: string;
+}
 
 interface NavItem {
   id: AppView;
   label: string;
   Icon: LucideIcon;
+  /** Views reached through tabs inside this item; the item stays highlighted on them. */
+  subviews?: NavSubview[];
 }
 
 interface NavSection {
@@ -19,26 +26,36 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "main",
     items: [
       { id: "home", label: "Overview", Icon: LayoutDashboard },
-      { id: "text-snippets", label: "Text", Icon: FileText },
     ],
   },
   {
-    id: "media",
-    label: "Media",
+    id: "content",
+    label: "Content",
     items: [
-      { id: "videos", label: "Source videos", Icon: Video },
-      { id: "video-snippets", label: "Clips", Icon: Film },
+      { id: "text-snippets", label: "Text snippets", Icon: FileText },
+      { id: "video-snippets", label: "Clips", Icon: Film, subviews: [{ id: "videos", label: "Source videos" }] },
     ],
   },
   {
-    id: "run",
+    id: "setup",
+    label: "Demo setup",
     items: [
       { id: "automations", label: "Automations", Icon: ScrollText },
+    ],
+  },
+  {
+    id: "controls",
+    label: "Controls",
+    items: [
       { id: "hotkeys", label: "Hotkeys", Icon: Keyboard },
       { id: "stream-deck", label: "Stream Deck", Icon: LayoutGrid },
     ],
   },
 ];
+
+export function isNavItemActive(item: NavItem, view: AppView): boolean {
+  return item.id === view || Boolean(item.subviews?.some((subview) => subview.id === view));
+}
 
 interface SidebarProps {
   activeView: AppView;
@@ -91,7 +108,7 @@ function Sidebar({ activeView, onViewChange, onCloseProject, collapsed = false, 
               </div>
             )}
             {section.items.map((item) => {
-              const isActive = activeView === item.id;
+              const isActive = isNavItemActive(item, activeView);
               return (
                 <button
                   key={item.id}

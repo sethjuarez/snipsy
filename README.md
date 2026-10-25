@@ -69,7 +69,7 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 ### Command Palette & Shortcuts
 
 - Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
-- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–7** switch sidebar views, **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
+- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–6** switch sidebar views, **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
 - These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
 
 ### Settings

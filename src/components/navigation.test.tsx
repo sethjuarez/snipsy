@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Sidebar from "./Sidebar";
 import ScriptForm from "./ScriptForm";
+import ClipsTabs from "./ClipsTabs";
 
 const elevation = vi.hoisted(() => ({ value: true }));
 vi.mock("../services", () => ({
@@ -22,12 +23,18 @@ afterEach(() => {
 });
 
 describe("Sidebar", () => {
-  it("groups source videos and clips under Media", () => {
+  it("groups content, demo setup, and controls", () => {
+    render(<Sidebar activeView="home" onViewChange={vi.fn()} />);
+    const content = screen.getByRole("group", { name: "Content" });
+    expect(content.textContent).toBe("ContentText snippetsClips");
+    expect(screen.getByRole("group", { name: "Demo setup" }).textContent).toBe("Demo setupAutomations");
+    expect(screen.getByRole("group", { name: "Controls" }).textContent).toBe("ControlsHotkeysStream Deck");
+    expect(screen.queryByTestId("nav-videos")).toBeNull();
+  });
+
+  it("keeps Clips highlighted on the Source videos tab", () => {
     render(<Sidebar activeView="videos" onViewChange={vi.fn()} />);
-    const media = screen.getByRole("group", { name: "Media" });
-    expect(media.textContent).toContain("Source videos");
-    expect(media.textContent).toContain("Clips");
-    expect(screen.getByTestId("nav-videos").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("nav-video-snippets").getAttribute("aria-current")).toBe("page");
   });
 
   it("navigates to the Stream Deck view", () => {
@@ -48,8 +55,20 @@ describe("Sidebar", () => {
   it("keeps accessible names when collapsed", () => {
     render(<Sidebar activeView="home" onViewChange={vi.fn()} onCloseProject={vi.fn()} collapsed />);
     expect(screen.getByRole("button", { name: "Clips" }).textContent).toBe("");
-    expect(screen.queryByText("Media")).toBeNull();
+    expect(screen.queryByText("Content")).toBeNull();
     expect(screen.getByRole("button", { name: "Close project" })).toBeTruthy();
+  });
+});
+
+describe("ClipsTabs", () => {
+  it("marks the active tab and switches to source videos", () => {
+    const onChange = vi.fn();
+    render(<ClipsTabs active="video-snippets" clipCount={3} videoCount={2} onChange={onChange} />);
+    expect(screen.getByTestId("clips-tab-video-snippets").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("clips-tab-video-snippets").textContent).toBe("Clips3");
+    expect(screen.getByTestId("clips-tab-videos").getAttribute("aria-current")).toBeNull();
+    fireEvent.click(screen.getByTestId("clips-tab-videos"));
+    expect(onChange).toHaveBeenCalledWith("videos");
   });
 });
 

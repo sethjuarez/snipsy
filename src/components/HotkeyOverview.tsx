@@ -354,8 +354,8 @@ function HotkeyOverview({
     return (
       <EmptyState
         icon={Keyboard}
-        title="No hotkeys configured yet"
-        description="Create text snippets or video clips to assign hotkeys."
+        title="Your run sheet is empty"
+        description="Text snippets and clips you create show up here, in the order you'll present them."
         tip={<>Tip: press <Kbd hotkey="CmdOrControl+K" /> to create anything.</>}
         data-testid="hotkey-overview-empty"
       />
@@ -363,23 +363,31 @@ function HotkeyOverview({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={sortedItems.map((i) => i.id)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 300px))" }} data-testid="hotkey-overview">
-          {sortedItems.map((item) => (
-            <SortableCard
-              key={item.id}
-              item={item}
-              onPlay={item.kind === "video" ? onPlayVideo : undefined}
-              onEditText={item.kind === "text" ? onEditText : undefined}
-              onEditVideo={item.kind === "video" ? onEditVideo : undefined}
-              onDeleteText={item.kind === "text" ? onDeleteText : undefined}
-              onDeleteVideo={item.kind === "video" ? onDeleteVideo : undefined}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+    <section aria-labelledby="run-sheet-heading" data-testid="run-sheet">
+      <div className="mb-2 flex items-baseline gap-2">
+        <h2 id="run-sheet-heading" className="text-base font-semibold">Run sheet</h2>
+        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }} data-testid="run-sheet-help">
+          Drag cards into the order you'll present them.
+        </p>
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={sortedItems.map((i) => i.id)} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 300px))" }} data-testid="hotkey-overview">
+            {sortedItems.map((item) => (
+              <SortableCard
+                key={item.id}
+                item={item}
+                onPlay={item.kind === "video" ? onPlayVideo : undefined}
+                onEditText={item.kind === "text" ? onEditText : undefined}
+                onEditVideo={item.kind === "video" ? onEditVideo : undefined}
+                onDeleteText={item.kind === "text" ? onDeleteText : undefined}
+                onDeleteVideo={item.kind === "video" ? onDeleteVideo : undefined}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </section>
   );
 }
 

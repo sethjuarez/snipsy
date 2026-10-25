@@ -64,6 +64,16 @@ describe("buildCommands", () => {
     expect(ctx.newClip).toHaveBeenCalled();
   });
 
+  it("reaches the Source videos tab from the palette without a number shortcut", () => {
+    const ctx = makeContext();
+    const command = find(ctx, "nav.videos");
+    expect(command.title).toBe("Go to Source videos");
+    expect(command.shortcut).toBeUndefined();
+    expect(command.keywords).toEqual(["Content", "Clips"]);
+    command.run();
+    expect(ctx.navigate).toHaveBeenCalledWith("videos");
+  });
+
   it("labels the demo toggle by state", () => {
     expect(find(makeContext(), "demo.toggle").title).toBe("Start demo");
     expect(find(makeContext({ demoMode: true }), "demo.toggle").title).toBe("Stop demo");

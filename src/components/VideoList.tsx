@@ -20,6 +20,8 @@ interface VideoListProps {
   onCreateClip: (video: ImportedVideo) => void;
   onDeleteVideo: (video: ImportedVideo) => void;
   onToolbarStateChange?: (state: VideoListToolbarState) => void;
+  /** Called with the project's video paths whenever the list loads or changes. */
+  onVideosChange?: (relativePaths: string[]) => void;
 }
 
 export interface VideoListHandle {
@@ -31,7 +33,7 @@ export interface VideoListToolbarState {
 }
 
 const VideoList = forwardRef<VideoListHandle, VideoListProps>(function VideoList(
-  { projectPath, videoSnippets, onCreateClip, onDeleteVideo, onToolbarStateChange },
+  { projectPath, videoSnippets, onCreateClip, onDeleteVideo, onToolbarStateChange, onVideosChange },
   ref,
 ) {
   // Tagged with its project so a late load can't be mixed with another project's videos.
@@ -121,6 +123,12 @@ const VideoList = forwardRef<VideoListHandle, VideoListProps>(function VideoList
   useEffect(() => {
     onToolbarStateChange?.({ importing });
   }, [importing, onToolbarStateChange]);
+
+  // Keyed on paths so thumbnail updates don't re-notify.
+  const videoPathsKey = loaded.project === projectPath ? JSON.stringify(loaded.videos.map((video) => video.relativePath)) : null;
+  useEffect(() => {
+    if (videoPathsKey !== null) onVideosChange?.(JSON.parse(videoPathsKey) as string[]);
+  }, [videoPathsKey, onVideosChange]);
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
