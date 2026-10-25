@@ -76,6 +76,7 @@ interface ProjectState {
   demoHotkeyIssues: HotkeyIssue[];
   /** Set when live demo hotkeys could not be re-registered after an edit. */
   demoHotkeySyncError: string | null;
+  /** Rejects (and leaves demo mode off) when the backend can't go live. */
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
   /** Re-register hotkeys from current state while demo mode is live. */
@@ -284,13 +285,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   enterDemoMode: async () => {
     // Mark live first so edits made while registering are re-synced afterwards.
     set({ demoMode: true });
+    let startError: unknown;
     // The whole transition is queued so a quick enter/exit can't interleave.
     await queueDemoHotkeySync(async () => {
       if (!get().demoMode) return;
       try {
         set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()), { keepAwake: useKeepAwakeStore.getState().keepAwake })) ?? [], demoHotkeySyncError: null });
       } catch (e) {
+        // Staying "Live" with nothing registered would mislead the presenter.
         console.error("enterDemoMode failed:", e);
+        set({ demoMode: false, demoHotkeyIssues: [], demoHotkeySyncError: null });
+        startError = e;
+        return;
       }
       try {
         await backend.activateDemoTray();
@@ -305,6 +311,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // Not in Tauri (browser/test) — no-op
       }
     });
+    if (startError !== undefined) throw startError;
   },
 
   syncDemoHotkeys: () =>

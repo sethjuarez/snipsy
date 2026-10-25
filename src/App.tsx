@@ -556,6 +556,10 @@ function App() {
     }
   }, [projectPath, automations, showToast]);
 
+  const startDemo = () => {
+    enterDemoMode().catch((error) => showToast("Couldn't start the demo", String(error), "error", "demo-start"));
+  };
+
   const handleToggleDemo = () => {
     if (demoMode) void exitDemoMode();
     else if (shouldConfirmDemoStart(preflight)) {
@@ -563,7 +567,7 @@ function App() {
       setShortcutsOpen(false);
       setSettingsSection(null);
       setDemoStartOpen(true);
-    } else void enterDemoMode();
+    } else startDemo();
   };
 
   const settingsDialog = settingsSection !== null && (
@@ -856,7 +860,7 @@ function App() {
       {paletteOpen && <CommandPalette commands={buildCommands(commandContext)} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {settingsDialog}
-      {demoStartOpen && <DemoStartDialog preflight={preflight} onStart={() => void enterDemoMode()} onClose={() => setDemoStartOpen(false)} />}
+      {demoStartOpen && <DemoStartDialog preflight={preflight} onStart={startDemo} onClose={() => setDemoStartOpen(false)} />}
 
     </div>
   );

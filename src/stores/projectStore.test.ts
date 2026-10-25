@@ -86,6 +86,17 @@ describe("demo hotkey sync", () => {
     useKeepAwakeStore.setState({ keepAwake: true });
   });
 
+  it("stays off and rejects when the backend can't go live", async () => {
+    backend.enterDemoMode.mockRejectedValueOnce("keep-awake failed");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(useProjectStore.getState().enterDemoMode()).rejects.toBe("keep-awake failed");
+    expect(useProjectStore.getState().demoMode).toBe(false);
+    expect(backend.activateDemoTray).not.toHaveBeenCalled();
+
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
+    expect(backend.enterDemoMode).toHaveBeenCalledTimes(1);
+  });
+
   it("does not touch backend hotkeys outside demo mode", async () => {
     await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
     expect(backend.saveTextSnippets).toHaveBeenCalled();
@@ -119,15 +130,6 @@ describe("demo hotkey sync", () => {
 
     await useProjectStore.getState().exitDemoMode();
     expect(useProjectStore.getState().demoHotkeyIssues).toEqual([]);
-  });
-
-  it("keeps syncing after a failed registration", async () => {
-    backend.enterDemoMode.mockRejectedValueOnce(new Error("boom"));
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    await useProjectStore.getState().enterDemoMode();
-    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
-    expect(backend.enterDemoMode).toHaveBeenCalledTimes(2);
-    expect(registeredIds()).toEqual(["t:Ctrl+1"]);
   });
 
   it("records a failed live re-sync and clears it on the next success or exit", async () => {
