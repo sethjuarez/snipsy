@@ -1,4 +1,5 @@
-import { Pencil, Trash2, Keyboard, Clipboard, GripVertical } from "lucide-react";
+import { AlertTriangle, Copy, Pencil, Plus, Trash2, Keyboard, Clipboard, GripVertical } from "lucide-react";
+import { useState } from "react";
 import EmptyState from "./EmptyState";
 import {
   DndContext,
@@ -18,24 +19,35 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { TextSnippet } from "../types";
-import { displayHotkey } from "../utils/hotkeys";
+import { displayHotkey, hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { matchesQuery } from "../utils/search";
+import ListFilter, { NoMatches } from "./ui/ListFilter";
+import Button from "./ui/Button";
+import Kbd from "./ui/Kbd";
+import ListRow from "./ui/ListRow";
+import StatusBadge from "./ui/StatusBadge";
+import type { MenuItem } from "./ui/Menu";
 
 interface TextSnippetListProps {
   snippets: TextSnippet[];
   onEdit: (snippet: TextSnippet) => void;
   onDelete: (id: string) => void;
   onReorder: (snippets: TextSnippet[]) => void;
+  onDuplicate?: (snippet: TextSnippet) => void;
+  onAdd?: () => void;
+  hotkeyOwners?: HotkeyOwner[];
 }
 
-function SortableSnippetItem({
-  snippet,
-  onEdit,
-  onDelete,
-}: {
+interface ItemProps {
   snippet: TextSnippet;
   onEdit: (snippet: TextSnippet) => void;
   onDelete: (id: string) => void;
-}) {
+  onDuplicate?: (snippet: TextSnippet) => void;
+  hotkeyOwners?: HotkeyOwner[];
+  dragDisabled?: boolean;
+}
+
+function SortableSnippetItem({ snippet, onEdit, onDelete, onDuplicate, hotkeyOwners, dragDisabled }: ItemProps) {
   const {
     attributes,
     listeners,
@@ -43,93 +55,84 @@ function SortableSnippetItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: snippet.id });
+  } = useSortable({ id: snippet.id, disabled: dragDisabled });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    backgroundColor: "var(--color-surface-alt)",
-    border: "1px solid var(--color-border)",
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const problem = hotkeyOwners ? hotkeyProblem(snippet.hotkey, hotkeyOwners, snippet.id) : null;
+  const menuItems: MenuItem[] = [
+    { id: "edit", label: "Edit", icon: <Pencil size={12} />, onSelect: () => onEdit(snippet) },
+    ...(onDuplicate ? [{ id: "duplicate", label: "Duplicate", icon: <Copy size={12} />, onSelect: () => onDuplicate(snippet) }] : []),
+    { id: "delete", label: "Delete", icon: <Trash2 size={12} />, onSelect: () => onDelete(snippet.id), danger: true, separated: true },
+  ];
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center justify-between rounded-lg px-4 py-3"
+    <ListRow
+      rowRef={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      menuItems={menuItems}
+      menuLabel={`More actions for ${snippet.title}`}
       data-testid={`snippet-${snippet.id}`}
-    >
-      <div
-        {...attributes}
-        {...listeners}
-        className="flex items-center cursor-grab active:cursor-grabbing mr-2 touch-none"
-        style={{ color: "var(--color-text-secondary)" }}
-        data-testid={`drag-handle-${snippet.id}`}
-      >
-        <GripVertical size={14} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3">
-          <h3 className="font-medium truncate text-md" style={{ color: "var(--color-text)" }}>
-            {snippet.title}
-          </h3>
-          <span className="flex items-center gap-1 text-sm px-2 py-0.5 rounded font-mono" style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-text-secondary)" }}>
-            <Keyboard size={10} />
-            {displayHotkey(snippet.hotkey)}
-          </span>
-          <span
-            className="text-sm px-2 py-0.5 rounded"
-            style={snippet.delivery === "fast-type"
-              ? { backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)" }
-              : { backgroundColor: "var(--color-surface-inset)", color: "var(--color-success)" }}
-          >
-            {snippet.delivery === "fast-type" ? (
-              <span className="flex items-center gap-1"><Keyboard size={10} /> fast-type</span>
-            ) : (
-              <span className="flex items-center gap-1"><Clipboard size={10} /> paste</span>
-            )}
-          </span>
+      leading={dragDisabled ? undefined : (
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex items-center cursor-grab active:cursor-grabbing touch-none"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label={`Reorder ${snippet.title}`}
+          data-testid={`drag-handle-${snippet.id}`}
+        >
+          <GripVertical size={14} />
         </div>
-        {snippet.description && (
-          <p className="text-base mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
-            {snippet.description}
-          </p>
+      )}
+      actions={
+        <>
+          <Button tone="ghost" icon={<Pencil size={12} />} onClick={() => onEdit(snippet)} title="Edit text snippet" data-testid={`edit-${snippet.id}`}>
+            Edit
+          </Button>
+          <Button tone="danger" icon={<Trash2 size={12} />} onClick={() => onDelete(snippet.id)} title="Delete text snippet" data-testid={`delete-${snippet.id}`}>
+            Delete
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <h3 className="font-medium truncate text-md" style={{ color: "var(--color-text)" }}>
+          {snippet.title}
+        </h3>
+        <Kbd hotkey={snippet.hotkey} />
+        <StatusBadge tone={snippet.delivery === "fast-type" ? "accent" : "success"} icon={snippet.delivery === "fast-type" ? <Keyboard size={10} /> : <Clipboard size={10} />}>
+          {snippet.delivery === "fast-type" ? "fast-type" : "paste"}
+        </StatusBadge>
+        {problem && (
+          <StatusBadge tone={problem.tone} icon={<AlertTriangle size={10} />} title={problem.detail} data-testid={`snippet-status-${snippet.id}`}>
+            {problem.label}
+          </StatusBadge>
         )}
       </div>
-      <div className="flex items-center gap-2 ml-4">
-        <button
-          onClick={() => onEdit(snippet)}
-          className="flex items-center gap-1 rounded px-2 py-1 text-base"
-          data-testid={`edit-${snippet.id}`}
-          style={{ color: "var(--color-accent)", backgroundColor: "var(--color-surface-inset)" }}
-          title="Edit text snippet"
-        >
-          <Pencil size={12} /> Edit
-        </button>
-        <button
-          onClick={() => onDelete(snippet.id)}
-          className="flex items-center gap-1 rounded px-2 py-1 text-base"
-          data-testid={`delete-${snippet.id}`}
-          style={{ color: "var(--color-danger)", backgroundColor: "var(--color-surface-inset)" }}
-          title="Delete text snippet"
-        >
-          <Trash2 size={12} /> Delete
-        </button>
-      </div>
-    </div>
+      {snippet.description && (
+        <p className="text-base mt-0.5 truncate" style={{ color: "var(--color-text-secondary)" }}>
+          {snippet.description}
+        </p>
+      )}
+    </ListRow>
   );
 }
-
-function TextSnippetList({ snippets, onEdit, onDelete, onReorder }: TextSnippetListProps) {
+function TextSnippetList({ snippets, onEdit, onDelete, onReorder, onDuplicate, onAdd, hotkeyOwners }: TextSnippetListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  const [query, setQuery] = useState("");
 
   if (snippets.length === 0) {
     return (
-      <EmptyState title="No text snippets yet" description="Create one to get started." data-testid="empty-state" />
+      <EmptyState
+        icon={Keyboard}
+        title="No text snippets yet"
+        description="Text snippets type or paste prepared text when you press their hotkey."
+        action={onAdd ? { label: "Add text snippet", icon: <Plus size={12} />, onClick: onAdd, testId: "empty-add-snippet" } : undefined}
+        tip="Tip: use fast-type for code so the audience sees it being typed."
+        data-testid="empty-state"
+      />
     );
   }
 
@@ -142,16 +145,26 @@ function TextSnippetList({ snippets, onEdit, onDelete, onReorder }: TextSnippetL
     }
   };
 
+  const filtering = query.trim().length > 0;
+  const visible = filtering
+    ? snippets.filter((s) => matchesQuery(query, s.title, s.description, s.text, displayHotkey(s.hotkey), s.delivery))
+    : snippets;
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={snippets.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+      <ListFilter value={query} onChange={setQuery} label="snippets" total={snippets.length} shown={visible.length} />
+      {visible.length === 0 && <NoMatches query={query} onClear={() => setQuery("")} />}
+      <SortableContext items={visible.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-2" data-testid="text-snippet-list">
-          {snippets.map((snippet) => (
+          {visible.map((snippet) => (
             <SortableSnippetItem
               key={snippet.id}
               snippet={snippet}
               onEdit={onEdit}
               onDelete={onDelete}
+              onDuplicate={onDuplicate}
+              hotkeyOwners={hotkeyOwners}
+              dragDisabled={filtering}
             />
           ))}
         </div>

@@ -12,18 +12,27 @@ Video clips let you play pre-recorded content as fullscreen overlays during your
 
 ## Importing Videos
 
-Navigate to the **Videos** view in the sidebar. Click **+** to import a video file (`.mp4`, `.webm`, `.mov`). The file is copied into your project's `videos/` directory.
+Open **Clips** in the sidebar and switch to the **Source videos** tab. Click **Import Video** to import a video file (`.mp4`, `.webm`, `.mov`). The file is copied into your project's `videos/` directory.
 
 <Screenshot src="/images/video-list.png" alt="Imported videos list" caption="The video library showing imported files" />
 
 ## Creating Video Clips
 
-From the **Clips** view, click **+** to create a new video snippet. The clip editor lets you:
+From **Clips**, click **Add** to create a new clip. The clip editor lets you:
 
 - **Select a source video** from your imported library
 - **Set start and end times** using the visual timeline
 - **Assign a hotkey** for triggering playback
 - **Configure playback settings** (speed, mute, cursor, etc.)
+
+The inspector beside the timeline groups settings into tabs. Use **←** / **→**, **Home**, or **End** to move between them:
+
+| Tab | Contains |
+|-----|----------|
+| **Basics** | Name, description, and hotkey. A **!** badge means the name is missing or the hotkey needs attention |
+| **Playback** | Audio, cursor, end behavior, and display (speed sits under the timeline) |
+| **Moments** | Pause stops, spotlights, and zooms |
+| **Stream Deck** | How the clip's key looks on a Stream Deck |
 
 ### Clip Editor Timeline
 
@@ -31,7 +40,7 @@ The clip editor displays a visual timeline with a **draggable playhead** marked 
 
 Use **Preview** to rehearse the trimmed range without leaving the editor. If your clip has pause stops, preview will pause at those moments and show any spotlight highlights you configured. While previewing, use **Previous stop** / **Next stop** or the **Left** / **Right** arrow keys to jump between the clip start, pause stops, and clip end.
 
-The editor stays focused on your clip — editing or creating a clip won't navigate you away from the current view. Press **Ctrl+S** (**Cmd+S** on macOS) to save in place and watch the save status update.
+The editor stays focused on your clip — editing or creating a clip won't navigate you away from the current view. Press **Ctrl+S** (**Cmd+S** on macOS) to save in place; a toast confirms the save.
 
 <Screenshot src="/images/video-snippet-list.png" alt="Video snippet list" caption="Video clips with hotkey assignments and playback indicators" />
 

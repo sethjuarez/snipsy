@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import { getBackend, type BackendService } from "../services";
 import type { HotkeyIssue, SnippetHotkey } from "../services/backendService";
+import { useKeepAwakeStore } from "./keepAwakeStore";
 
 const backend: BackendService = getBackend();
 
@@ -51,7 +52,6 @@ interface ProjectState {
   videoSnippets: VideoSnippet[];
   automations: Script[];
   demoMode: boolean;
-  ffmpegAvailable: boolean | null;
   recentProjects: RecentProject[];
 
   createProject: (
@@ -60,6 +60,8 @@ interface ProjectState {
     description: string,
   ) => Promise<void>;
   openProject: (path: string) => Promise<void>;
+  /** Rename the open project or change its description. */
+  updateProject: (name: string, description: string) => Promise<void>;
   closeProject: () => void;
   autoOpenLastProject: () => Promise<boolean>;
   loadRecentProjects: () => void;
@@ -71,10 +73,12 @@ interface ProjectState {
   loadAutomations: () => Promise<void>;
   saveAutomation: (script: Script) => Promise<void>;
   deleteAutomation: (id: string) => Promise<void>;
-  checkFfmpeg: () => Promise<void>;
 
   /** Hotkeys the last demo registration could not arm (duplicates, OS failures). */
   demoHotkeyIssues: HotkeyIssue[];
+  /** Set when live demo hotkeys could not be re-registered after an edit. */
+  demoHotkeySyncError: string | null;
+  /** Rejects (and leaves demo mode off) when the backend can't go live. */
   enterDemoMode: () => Promise<void>;
   exitDemoMode: () => Promise<void>;
   /** Re-register hotkeys from current state while demo mode is live. */
@@ -165,7 +169,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   automations: [],
   demoMode: false,
   demoHotkeyIssues: [],
-  ffmpegAvailable: null,
+  demoHotkeySyncError: null,
   recentProjects: loadRecentProjects(),
 
   createProject: async (path, name, description) => {
@@ -184,18 +188,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     saveRecentProject(path, data.project.name);
     set({ recentProjects: loadRecentProjects() });
 
-    // Load automations and check FFmpeg in parallel (non-blocking)
-    const [automations, ffmpegStatus] = await Promise.allSettled([
-      backend.loadAutomations(path),
-      backend.checkFfmpeg(),
-    ]);
+    const [automations] = await Promise.allSettled([backend.loadAutomations(path)]);
     set({ automations: automations.status === "fulfilled" ? automations.value : [] });
-    if (ffmpegStatus.status === "fulfilled") {
-      set({ ffmpegAvailable: ffmpegStatus.value.available });
-    }
     // Swap the live demo hotkeys to this project even if a side load failed.
     await get().syncDemoHotkeys();
     if (automations.status === "rejected") throw automations.reason;
+  },
+
+  updateProject: async (name, description) => {
+    const path = get().projectPath;
+    if (!path) throw new Error("No project is open.");
+    const project = await backend.saveProject(path, name, description);
+    set({ projectName: project.name, projectDescription: project.description });
+    if (loadRecentProjects().some((recent) => recent.path === path)) {
+      saveRecentProject(path, project.name);
+      set({ recentProjects: loadRecentProjects() });
+    }
   },
 
   closeProject: () => {
@@ -287,21 +295,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await get().syncDemoHotkeys();
   },
 
-  checkFfmpeg: async () => {
-    const status = await backend.checkFfmpeg();
-    set({ ffmpegAvailable: status.available });
-  },
-
   enterDemoMode: async () => {
     // Mark live first so edits made while registering are re-synced afterwards.
     set({ demoMode: true });
+    let startError: unknown;
     // The whole transition is queued so a quick enter/exit can't interleave.
     await queueDemoHotkeySync(async () => {
       if (!get().demoMode) return;
       try {
-        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [] });
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()), { keepAwake: useKeepAwakeStore.getState().keepAwake })) ?? [], demoHotkeySyncError: null });
       } catch (e) {
+        // Staying "Live" with nothing registered would mislead the presenter.
         console.error("enterDemoMode failed:", e);
+        set({ demoMode: false, demoHotkeyIssues: [], demoHotkeySyncError: null });
+        startError = e;
+        return;
       }
       try {
         await backend.activateDemoTray();
@@ -316,6 +324,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // Not in Tauri (browser/test) — no-op
       }
     });
+    if (startError !== undefined) throw startError;
   },
 
   syncDemoHotkeys: () =>
@@ -323,9 +332,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Read state inside the queued task so the latest snapshot wins.
       if (!get().demoMode) return;
       try {
-        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()))) ?? [] });
+        set({ demoHotkeyIssues: (await backend.enterDemoMode(buildDemoHotkeys(get()), { keepAwake: useKeepAwakeStore.getState().keepAwake })) ?? [], demoHotkeySyncError: null });
       } catch (e) {
         console.error("Failed to sync demo hotkeys:", e);
+        set({ demoHotkeySyncError: String(e) });
       }
     }),
 
@@ -342,7 +352,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }),
 
   exitDemoMode: async () => {
-    set({ demoMode: false, demoHotkeyIssues: [] });
+    set({ demoMode: false, demoHotkeyIssues: [], demoHotkeySyncError: null });
     await queueDemoHotkeySync(async () => {
       if (get().demoMode) return;
       try {

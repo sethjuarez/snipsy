@@ -14,11 +14,11 @@ A **Project** is the top-level organizational unit in Snipsy. A project is store
 - **Video Snippets** — pre-recorded screen capture clips with assigned hotkeys, playback speeds, and optional transition actions.
 - **Automations** (Advanced mode) — ordered, reusable actions that can prepare a demo or open sites programmatically.
 
-A user can have multiple projects (e.g., one per talk or demo). All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
+A user can have multiple projects (e.g., one per talk or demo). **Export project** (sidebar footer or command palette) zips the whole folder, videos included, into a .snipsy.zip; **Import Project** on the welcome screen unzips one into an empty folder and opens it. All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
 
 ### Demo Mode
 
-When a user activates demo mode for a project, all of that project's hotkeys become globally registered at the OS level. Pressing a hotkey from any application will trigger the associated snippet action. Demo mode is exited explicitly by the user (or via a dedicated hotkey).
+When a user activates demo mode for a project, all of that project's hotkeys become globally registered at the OS level. Pressing a hotkey from any application will trigger the associated snippet action. Demo mode is exited explicitly by the user (or via a dedicated hotkey). **Keep awake** (a checkbox beside Start, on by default) keeps the machine from sleeping while live and, on Windows, nudges the mouse 1px and back after 50s idle so presence (e.g. Teams) stays Available.
 
 ## Features
 
@@ -52,14 +52,31 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 
 ### Automations
 
-- A project can contain **automations** — ordered contribution groups that run repeatable setup actions.
+- A project can contain **automations** — ordered steps (stored as contribution groups) that run repeatable setup actions.
 - A contribution is an extensible action someone can add to an automation. Contributions run in group order, and each contribution is idempotent within a run.
 - The first built-in contribution is `openSite`, which opens an `http://` or `https://` URL in the default browser.
 - When an automation is executed, Snipsy:
   1. Runs each contribution group in order.
-  2. Skips duplicate contribution idempotency keys that already ran in the same automation execution.
+  2. Skips sites whose URL already opened in the same automation execution.
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
 - Automations are stored as human-editable JSON files within the project folder.
+
+### Hotkeys View
+
+- **Hotkeys** in the sidebar lists every text snippet, clip, and automation with its hotkey and what demo mode will do with it: **Ready**/**Armed**, **Duplicate** (the first item listed wins), **Invalid**, **No hotkey** (or **Optional** for automations), or **Not registered** when the OS refused it during a live demo.
+- **Change** captures a new hotkey in place (conflicts are rejected), **Remove** clears an automation's optional hotkey, and **Open** jumps to the item's editor. **Problems only** filters the list.
+
+### Command Palette & Shortcuts
+
+- Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
+- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–6** switch sidebar views, **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
+- These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
+
+### Settings
+
+- The title-bar gear (or **Ctrl/Cmd+,**) opens Settings, with or without a project. Search filters its sections.
+- **Project** (rename the open project or edit its description; also **Rename project** in the palette), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
+- The title-bar shield, shown when Snipsy isn't elevated, opens Permissions.
 
 ## Data Model
 
@@ -182,8 +199,9 @@ Open-site contributions are idempotent by URL within one automation run. If the 
 | Desktop shell | `tauri` | Window management, IPC, system tray, bundling |
 | Global hotkeys | `global-hotkey` (or Tauri's built-in global shortcut API) | Register/unregister system-wide hotkeys |
 | Input simulation | `enigo` | Simulate keyboard and mouse input for fast-type delivery and transition actions |
-| Video playback | HTML `<video>` element + FFmpeg for transcoding | Fullscreen chromeless playback of video snippets |
+| Video playback | HTML `<video>` element; thumbnails captured in the webview, FPS read from MP4/MOV metadata (no FFmpeg) | Fullscreen chromeless playback of video snippets |
 | File system | `std::fs` + `serde_json` | Read/write project JSON files and manage video assets |
+| Project archives | `zip` | Export/import a project folder as a `.zip` (videos stored, JSON deflated, zip-slip guarded) |
 | Async runtime | `tokio` | Async operations for automation execution and file I/O |
 | Observability | Auditaur | Local-first telemetry for frontend errors, console logs, Tauri events, IPC, traces, and full-app drive/smoke workflows |
 
@@ -228,12 +246,12 @@ The automation engine runs entirely on the Rust backend:
 1. The user triggers an automation run from the UI, a hotkey, or a Stream Deck button.
 2. The backend runs contribution groups in stored order.
 3. Contributions inside each group run in stored order.
-4. Duplicate contribution idempotency keys are skipped within the same automation execution.
+4. Duplicate site URLs are skipped within the same automation execution.
 
 ### Cross-Platform
 
 - Tauri + React supports Windows, macOS, and Linux.
 - `enigo` supports input simulation on all three platforms.
-- FFmpeg is cross-platform.
+- Video features need no external tools; FFmpeg is not required.
 - Global hotkey registration uses platform-native APIs (abstracted by Tauri/`global-hotkey`).
 - Project folders are plain files on disk — fully portable across operating systems.

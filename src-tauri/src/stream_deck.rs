@@ -889,6 +889,29 @@ mod tests {
     }
 
     #[test]
+    fn automation_buttons_use_their_custom_icon() {
+        let script = Script {
+            id: "automation-1".into(),
+            title: "Open Docs".into(),
+            description: "".into(),
+            hotkey: None,
+            contribution_groups: vec![],
+            stream_deck_icon: Some(crate::models::StreamDeckIcon::Emoji {
+                value: "🎯".into(),
+                background: Some("#052e16".into()),
+                foreground: Some("#86efac".into()),
+            }),
+        };
+
+        let buttons = buttons_for_project(&[], &[], &[script]);
+        let icon_svg = decode_icon_data_url(&buttons[0].icon_data_url);
+
+        assert!(icon_svg.contains("🎯"));
+        assert!(!icon_svg.contains("🚀"));
+        assert!(icon_svg.contains("#052e16"));
+    }
+
+    #[test]
     fn resolve_action_finds_text_snippet_by_id_and_type() {
         let text = TextSnippet {
             id: "text-1".into(),

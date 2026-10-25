@@ -1,11 +1,12 @@
 import type {
+  ArchiveSummary,
+  Project,
   ProjectData,
   ImportedVideo,
   MonitorInfo,
   PauseStop,
   Script,
   StreamDeckButton,
-  StreamDeckTriggerResult,
   TextSnippet,
   TransitionAction,
   VideoSnippet,
@@ -37,24 +38,16 @@ export interface SnippetHotkey {
 }
 
 /** A hotkey demo mode could not arm. For duplicates, `detail` is the snippet id that kept the combo. */
+export interface DemoModeOptions {
+  /** Prevent sleep and Away status while live. */
+  keepAwake?: boolean;
+}
+
 export interface HotkeyIssue {
   snippetId: string;
   hotkey: string;
   kind: "duplicate" | "failed";
   detail: string;
-}
-
-export interface FfmpegToolStatus {
-  available: boolean;
-  path: string | null;
-  version: string | null;
-  error: string | null;
-}
-
-export interface FfmpegStatus {
-  available: boolean;
-  ffmpeg: FfmpegToolStatus;
-  ffprobe: FfmpegToolStatus;
 }
 
 export interface BackendService {
@@ -64,9 +57,17 @@ export interface BackendService {
     description: string,
   ): Promise<ProjectData>;
   openProject(path: string): Promise<ProjectData>;
+  /** Rename the project or change its description; returns the saved values. */
+  saveProject(path: string, name: string, description: string): Promise<Project>;
+  /** Zip the project folder (videos included) into a single archive. */
+  exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary>;
+  /** Unzip a project archive into an empty folder. */
+  importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary>;
+  /** Ask where to save a project archive; null when cancelled. */
+  selectArchiveSavePath(defaultName: string): Promise<string | null>;
   saveTextSnippets(path: string, snippets: TextSnippet[]): Promise<void>;
   saveVideoSnippets(path: string, snippets: VideoSnippet[]): Promise<void>;
-  enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]>;
+  enterDemoMode(hotkeys: SnippetHotkey[], options?: DemoModeOptions): Promise<HotkeyIssue[]>;
   exitDemoMode(): Promise<void>;
   isDemoMode(): Promise<boolean>;
   deliverText(
@@ -76,6 +77,12 @@ export interface BackendService {
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;
+  /** Persist a JPEG thumbnail for an imported video; returns its absolute path. */
+  saveVideoThumbnail(
+    projectPath: string,
+    relativePath: string,
+    jpegBase64: string,
+  ): Promise<string>;
   playVideo(
     projectPath: string | null,
     videoFile: string,
@@ -97,11 +104,6 @@ export interface BackendService {
   loadAutomations(projectPath: string): Promise<Script[]>;
   deleteAutomation(projectPath: string, id: string): Promise<void>;
   runAutomation(projectPath: string, scriptId: string): Promise<string>;
-  checkFfmpeg(): Promise<FfmpegStatus>;
-  setFfmpegPaths(
-    ffmpegExecutablePath: string | null,
-    ffprobeExecutablePath: string | null,
-  ): Promise<FfmpegStatus>;
   activateDemoTray(): Promise<void>;
   deactivateDemoTray(): Promise<void>;
   isElevated(): Promise<boolean>;
@@ -113,9 +115,5 @@ export interface BackendService {
   captureMonitorPreview(monitorName: string): Promise<string>;
   setStreamDeckActiveProject(projectPath: string | null): Promise<void>;
   listStreamDeckButtons(projectPath: string): Promise<StreamDeckButton[]>;
-  triggerStreamDeckButton(
-    projectPath: string,
-    snippetId: string,
-    snippetType: "text" | "video" | "automation",
-  ): Promise<StreamDeckTriggerResult>;
+
 }

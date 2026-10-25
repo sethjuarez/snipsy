@@ -1,6 +1,6 @@
-import type { BackendService, FfmpegStatus, HotkeyIssue, SnippetHotkey } from "./backendService";
+import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
-import type { ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, Project, ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const FIXTURE_PROJECT: ProjectData = {
@@ -77,6 +77,8 @@ const FIXTURE_PROJECT: ProjectData = {
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
+  private _keepAwake = false;
+  private archives = new Map<string, ProjectData>();
   private _automations: Script[] = [
     {
       id: "sc-1",
@@ -112,6 +114,29 @@ export class MockBackendService implements BackendService {
     return structuredClone(this.data);
   }
 
+  async saveProject(_path: string, name: string, description: string): Promise<Project> {
+    const project = { name: name.trim(), description: description.trim() };
+    if (!project.name) throw new Error("Project name cannot be empty.");
+    this.data = { ...this.data, project };
+    return { ...project };
+  }
+
+  async exportProject(_projectPath: string, archivePath: string): Promise<ArchiveSummary> {
+    const fileCount = 3 + this._automations.length + this._importedVideos.length;
+    this.archives.set(archivePath, structuredClone(this.data));
+    return { path: archivePath, fileCount };
+  }
+
+  async importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary> {
+    const archived = this.archives.get(archivePath);
+    if (archived) this.data = structuredClone(archived);
+    return { path: destinationPath, fileCount: 3 };
+  }
+
+  async selectArchiveSavePath(defaultName: string): Promise<string | null> {
+    return `/mock/exports/${defaultName}`;
+  }
+
   async saveTextSnippets(
     _path: string,
     snippets: TextSnippet[],
@@ -126,8 +151,9 @@ export class MockBackendService implements BackendService {
     this.data.videoSnippets = structuredClone(snippets);
   }
 
-  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]> {
+  async enterDemoMode(hotkeys: SnippetHotkey[], options?: DemoModeOptions): Promise<HotkeyIssue[]> {
     this._demoMode = true;
+    this._keepAwake = options?.keepAwake ?? false;
     // Mirror the backend: the first snippet keeps a combo, later ones are skipped.
     const owners = new Map<string, string>();
     const issues: HotkeyIssue[] = [];
@@ -143,6 +169,12 @@ export class MockBackendService implements BackendService {
 
   async exitDemoMode(): Promise<void> {
     this._demoMode = false;
+    this._keepAwake = false;
+  }
+
+  /** Test helper: whether the last live session asked to keep the machine awake. */
+  get keepAwakeActive(): boolean {
+    return this._keepAwake;
   }
 
   async isDemoMode(): Promise<boolean> {
@@ -178,6 +210,18 @@ export class MockBackendService implements BackendService {
 
   async getImportedVideos(_projectPath: string): Promise<import("../types").ImportedVideo[]> {
     return structuredClone(this._importedVideos);
+  }
+
+  async saveVideoThumbnail(
+    _projectPath: string,
+    relativePath: string,
+    _jpegBase64: string,
+  ): Promise<string> {
+    const video = this._importedVideos.find((v) => v.relativePath === relativePath);
+    if (!video) throw new Error(`Video not found: ${relativePath}`);
+    const stem = video.name.replace(/\.[^.]+$/, "");
+    video.thumbnailPath = `/mock/project/videos/thumbnails/${stem}.jpg`;
+    return video.thumbnailPath;
   }
 
   async playVideo(
@@ -225,31 +269,6 @@ export class MockBackendService implements BackendService {
 
   async runAutomation(_projectPath: string, _scriptId: string): Promise<string> {
     return "Automation completed";
-  }
-
-  async checkFfmpeg(): Promise<FfmpegStatus> {
-    return {
-      available: false,
-      ffmpeg: {
-        available: false,
-        path: null,
-        version: null,
-        error: "FFmpeg is unavailable in frontend-only mode.",
-      },
-      ffprobe: {
-        available: false,
-        path: null,
-        version: null,
-        error: "FFprobe is unavailable in frontend-only mode.",
-      },
-    };
-  }
-
-  async setFfmpegPaths(
-    _ffmpegExecutablePath: string | null,
-    _ffprobeExecutablePath: string | null,
-  ): Promise<FfmpegStatus> {
-    return this.checkFfmpeg();
   }
 
   async activateDemoTray(): Promise<void> {
@@ -323,52 +342,4 @@ export class MockBackendService implements BackendService {
       })),
     ];
   }
-
-  async triggerStreamDeckButton(
-    _projectPath: string,
-    snippetId: string,
-    snippetType: "text" | "video" | "automation",
-  ) {
-    if (snippetType === "automation") {
-      const script = this._automations.find((candidate) => candidate.id === snippetId);
-      if (!script) throw new Error(`automation not found: ${snippetId}`);
-      await this.runAutomation(_projectPath, snippetId);
-      return {
-        id: script.id,
-        title: script.title,
-        snippetType,
-        status: "completed" as const,
-      };
-    }
-    const snippets = snippetType === "text" ? this.data.textSnippets : this.data.videoSnippets;
-    const snippet = snippets.find((candidate) => candidate.id === snippetId);
-    if (!snippet) throw new Error(`${snippetType} snippet not found: ${snippetId}`);
-    if (snippetType === "text") {
-      const textSnippet = snippet as TextSnippet;
-      await this.deliverText(textSnippet.text, textSnippet.delivery, textSnippet.typeDelay);
-    } else {
-      await this.playVideo(
-        _projectPath,
-        (snippet as VideoSnippet).videoFile,
-        (snippet as VideoSnippet).startTime,
-        (snippet as VideoSnippet).endTime,
-        (snippet as VideoSnippet).speed,
-        (snippet as VideoSnippet).transitionActions,
-        (snippet as VideoSnippet).targetMonitor,
-        (snippet as VideoSnippet).endBehavior,
-        (snippet as VideoSnippet).hideCursor,
-        (snippet as VideoSnippet).backgroundColor,
-        (snippet as VideoSnippet).clickToPlay,
-        (snippet as VideoSnippet).muted,
-        (snippet as VideoSnippet).pauseStops,
-      );
-    }
-    return {
-      id: snippet.id,
-      title: snippet.title,
-      snippetType,
-      status: "completed" as const,
-    };
-  }
-
 }

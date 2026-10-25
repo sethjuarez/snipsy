@@ -1,27 +1,14 @@
-import { useEffect, useState } from "react";
-import { Folder, AlertTriangle, Radio } from "lucide-react";
+import { useAppVersion } from "../hooks/useAppVersion";
+import { Folder, Radio } from "lucide-react";
 import UpdateIndicator from "./UpdateIndicator";
 
 interface StatusBarProps {
   projectPath: string | null;
-  ffmpegAvailable: boolean | null;
   demoMode: boolean;
-  onFfmpegClick?: () => void;
 }
 
-function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: StatusBarProps) {
-  const [version, setVersion] = useState("");
-
-  useEffect(() => {
-    if ((window as any).__TAURI_INTERNALS__) {
-      import("@tauri-apps/api/app")
-        .then(({ getVersion }) => getVersion())
-        .then((v) => setVersion(import.meta.env.DEV ? `${v}-dev` : v))
-        .catch(() => setVersion("dev"));
-    } else {
-      setVersion("dev");
-    }
-  }, []);
+function StatusBar({ projectPath, demoMode }: StatusBarProps) {
+  const version = useAppVersion();
 
   return (
     <div
@@ -49,15 +36,6 @@ function StatusBar({ projectPath, ffmpegAvailable, demoMode, onFfmpegClick }: St
         )}
       </div>
       <div className="flex items-center gap-3">
-        {ffmpegAvailable === false && (
-          <button
-            onClick={onFfmpegClick}
-            className="flex items-center gap-1 cursor-pointer hover:underline"
-            style={{ color: demoMode ? "var(--color-text-on-accent)" : "var(--color-warning)" }}
-          >
-            <AlertTriangle size={11} /> FFmpeg missing — click to fix
-          </button>
-        )}
         {version && (
           <span className="opacity-60" data-testid="version-badge">v{version}</span>
         )}

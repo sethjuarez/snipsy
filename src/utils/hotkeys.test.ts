@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { collectHotkeyOwners, describeHotkeyIssues, displayHotkey, normalizeHotkey, validateHotkey, type HotkeyOwner } from "./hotkeys";
+import { assignHotkeys, collectHotkeyOwners, formatKeyCombo, describeHotkeyIssues, displayHotkey, hotkeyProblem, normalizeHotkey, validateHotkey, type HotkeyOwner } from "./hotkeys";
 
 const owner = (id: string, hotkey: string, title = id): HotkeyOwner => ({ id, title, hotkey, kind: "text" });
 
@@ -60,6 +60,8 @@ describe("validateHotkey", () => {
     expect(validateHotkey("", []).state).toBe("empty");
     expect(validateHotkey("Ctrl+Shift", []).state).toBe("invalid");
     expect(validateHotkey("A", []).state).toBe("invalid");
+    expect(validateHotkey("Ctrl+A+B", []).state).toBe("invalid");
+    expect(validateHotkey("Ctrl+Shift+F5", []).state).toBe("available");
   });
 });
 
@@ -100,5 +102,73 @@ describe("displayHotkey", () => {
     expect(displayHotkey("CmdOrControl+Shift+1")).toBe("Ctrl+Shift+1");
     setPlatform("MacIntel");
     expect(displayHotkey("CmdOrControl+Alt+1")).toBe("Command+Option+1");
+  });
+});
+
+describe("hotkeyProblem", () => {
+  const owners = [owner("a", "CmdOrControl+1"), owner("b", "Ctrl+1"), owner("c", "CmdOrControl+2")];
+
+  it("returns null for an available hotkey", () => {
+    expect(hotkeyProblem("CmdOrControl+2", owners, "c")).toBeNull();
+  });
+
+  it("reports conflicts and invalid combos as danger", () => {
+    setPlatform("Win32");
+    expect(hotkeyProblem("CmdOrControl+1", owners, "a")).toMatchObject({ tone: "danger", label: "Hotkey conflict" });
+    expect(hotkeyProblem("A", owners, "x")).toMatchObject({ tone: "danger", label: "Invalid hotkey" });
+  });
+
+  it("warns about missing required hotkeys but not optional ones", () => {
+    expect(hotkeyProblem("", owners, "x")).toMatchObject({ tone: "warning", label: "No hotkey" });
+    expect(hotkeyProblem(undefined, owners, "x", true)).toBeNull();
+  });
+});
+
+describe("assignHotkeys", () => {
+  it("arms the first owner and flags later duplicates, invalid, and unassigned", () => {
+    const result = assignHotkeys([owner("a", "CmdOrControl+Shift+1"), owner("b", "Ctrl+Shift+1"), owner("c", "A"), owner("d", "")]);
+    expect(result.map((item) => item.state)).toEqual(["armed", "duplicate", "invalid", "unassigned"]);
+    expect(result[1].keptBy?.id).toBe("a");
+    expect(result[1].detail).toContain("a");
+    expect(result[2].detail).toBeTruthy();
+  });
+
+  it("marks armed owners with failed registrations", () => {
+    const result = assignHotkeys([owner("a", "CmdOrControl+Shift+1"), owner("b", "CmdOrControl+Shift+2")], [
+      { snippetId: "b", hotkey: "CmdOrControl+Shift+2", kind: "failed", detail: "in use" },
+      { snippetId: "a", hotkey: "CmdOrControl+Shift+1", kind: "duplicate", detail: "x" },
+    ]);
+    expect(result.map((item) => item.state)).toEqual(["armed", "failed"]);
+    expect(result[1].detail).toBe("in use");
+  });
+});
+
+describe("assignHotkeys backend parity", () => {
+  it("treats lowercase accelerators as valid so they reserve the hotkey", () => {
+    const result = assignHotkeys([owner("a", "cmdorcontrol+shift+1"), owner("b", "CmdOrControl+Shift+1")]);
+    expect(result.map((item) => item.state)).toEqual(["armed", "duplicate"]);
+  });
+
+  it("ignores a failure reported for a hotkey the owner no longer uses", () => {
+    const result = assignHotkeys([owner("a", "CmdOrControl+Shift+3")], [
+      { snippetId: "a", hotkey: "CmdOrControl+Shift+2", kind: "failed", detail: "in use" },
+    ]);
+    expect(result[0].state).toBe("armed");
+  });
+});
+
+describe("formatKeyCombo", () => {
+  const press = (init: KeyboardEventInit) => formatKeyCombo(new KeyboardEvent("keydown", init));
+
+  it("maps Ctrl to CmdOrControl off macOS", () => {
+    setPlatform("Win32");
+    expect(press({ code: "KeyK", ctrlKey: true, shiftKey: true })).toBe("CmdOrControl+Shift+K");
+  });
+
+  it("keeps Command and physical Control distinct on macOS", () => {
+    setPlatform("MacIntel");
+    expect(press({ code: "KeyK", metaKey: true })).toBe("CmdOrControl+K");
+    expect(press({ code: "KeyK", ctrlKey: true })).toBe("Control+K");
+    expect(press({ code: "KeyK", ctrlKey: true, metaKey: true })).toBe("CmdOrControl+Control+K");
   });
 });

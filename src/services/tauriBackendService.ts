@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke } from "./auditaur";
-import type { BackendService, FfmpegStatus, HotkeyIssue, SnippetHotkey } from "./backendService";
-import type { ProjectData, MonitorInfo, StreamDeckButton, StreamDeckTriggerResult, TextSnippet, VideoSnippet } from "../types";
+import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
+import type { ArchiveSummary, Project, ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -13,6 +13,27 @@ export class TauriBackendService implements BackendService {
 
   async openProject(path: string): Promise<ProjectData> {
     return invoke<ProjectData>("open_project", { path });
+  }
+
+  async saveProject(path: string, name: string, description: string): Promise<Project> {
+    return invoke<Project>("save_project", { path, name, description });
+  }
+
+  async exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary> {
+    return invoke<ArchiveSummary>("export_project", { projectPath, archivePath });
+  }
+
+  async importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary> {
+    return invoke<ArchiveSummary>("import_project", { archivePath, destinationPath });
+  }
+
+  async selectArchiveSavePath(defaultName: string): Promise<string | null> {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    return save({
+      title: "Export project",
+      defaultPath: defaultName,
+      filters: [{ name: "Snipsy project", extensions: ["zip"] }],
+    });
   }
 
   async saveTextSnippets(
@@ -29,8 +50,8 @@ export class TauriBackendService implements BackendService {
     return invoke("save_video_snippets", { path, snippets });
   }
 
-  async enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]> {
-    return invoke("enter_demo_mode", { hotkeys });
+  async enterDemoMode(hotkeys: SnippetHotkey[], options?: DemoModeOptions): Promise<HotkeyIssue[]> {
+    return invoke("enter_demo_mode", { hotkeys, keepAwake: options?.keepAwake ?? false });
   }
 
   async exitDemoMode(): Promise<void> {
@@ -58,6 +79,14 @@ export class TauriBackendService implements BackendService {
 
   async getImportedVideos(projectPath: string): Promise<import("../types").ImportedVideo[]> {
     return invoke<import("../types").ImportedVideo[]>("list_imported_videos", { projectPath });
+  }
+
+  async saveVideoThumbnail(
+    projectPath: string,
+    relativePath: string,
+    jpegBase64: string,
+  ): Promise<string> {
+    return invoke<string>("save_video_thumbnail", { projectPath, relativePath, jpegBase64 });
   }
 
   async playVideo(
@@ -121,20 +150,6 @@ export class TauriBackendService implements BackendService {
     return invoke("run_automation", { projectPath, scriptId });
   }
 
-  async checkFfmpeg(): Promise<FfmpegStatus> {
-    return invoke<FfmpegStatus>("check_ffmpeg");
-  }
-
-  async setFfmpegPaths(
-    ffmpegExecutablePath: string | null,
-    ffprobeExecutablePath: string | null,
-  ): Promise<FfmpegStatus> {
-    return invoke<FfmpegStatus>("set_ffmpeg_paths", {
-      ffmpegExecutablePath,
-      ffprobeExecutablePath,
-    });
-  }
-
   async activateDemoTray(): Promise<void> {
     return invoke("activate_demo_tray");
   }
@@ -187,15 +202,4 @@ export class TauriBackendService implements BackendService {
     return invoke<StreamDeckButton[]>("list_stream_deck_buttons", { projectPath });
   }
 
-  async triggerStreamDeckButton(
-    projectPath: string,
-    snippetId: string,
-    snippetType: "text" | "video" | "automation",
-  ): Promise<StreamDeckTriggerResult> {
-    return invoke<StreamDeckTriggerResult>("trigger_stream_deck_button", {
-      projectPath,
-      snippetId,
-      snippetType,
-    });
-  }
 }

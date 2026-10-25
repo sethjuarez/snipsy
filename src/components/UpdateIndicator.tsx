@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { Download } from "lucide-react";
 import { useUpdateStore } from "../stores/updateStore";
-import type { DownloadEvent } from "@tauri-apps/plugin-updater";
 
 export default function UpdateIndicator() {
   const update = useUpdateStore((s) => s.update);
   const [open, setOpen] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [progress, setProgress] = useState("");
+  const installing = useUpdateStore((s) => s.installing);
+  const progress = useUpdateStore((s) => s.progress);
+  const installError = useUpdateStore((s) => s.installError);
+  const handleInstall = useUpdateStore((s) => s.install);
   const ref = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click or Escape
@@ -29,32 +30,6 @@ export default function UpdateIndicator() {
   }, [open]);
 
   if (!update) return null;
-
-  const handleInstall = async () => {
-    setInstalling(true);
-    try {
-      let downloaded = 0;
-      await update.downloadAndInstall((event: DownloadEvent) => {
-        switch (event.event) {
-          case "Started":
-            setProgress("Downloading...");
-            break;
-          case "Progress":
-            downloaded += event.data.chunkLength ?? 0;
-            setProgress(`${(downloaded / 1024 / 1024).toFixed(1)} MB`);
-            break;
-          case "Finished":
-            setProgress("Installing...");
-            break;
-        }
-      });
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
-    } catch {
-      setProgress("Failed");
-      setInstalling(false);
-    }
-  };
 
   return (
     <div
@@ -112,14 +87,21 @@ export default function UpdateIndicator() {
               {progress}
             </div>
           ) : (
-            <button
-              onClick={handleInstall}
-              className="w-full h-[26px] rounded text-sm font-medium text-white transition-colors"
-              style={{ backgroundColor: "var(--color-accent, #6366f1)" }}
-              data-testid="update-install-btn"
-            >
-              Download &amp; Install
-            </button>
+            <>
+              {installError && (
+                <div className="text-sm mb-1.5" style={{ color: "var(--color-danger)" }} data-testid="update-error">
+                  Install failed. Try again.
+                </div>
+              )}
+              <button
+                onClick={handleInstall}
+                className="w-full h-[26px] rounded text-sm font-medium text-white transition-colors"
+                style={{ backgroundColor: "var(--color-accent, #6366f1)" }}
+                data-testid="update-install-btn"
+              >
+                Download &amp; Install
+              </button>
+            </>
           )}
         </div>
       )}

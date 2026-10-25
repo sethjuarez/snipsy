@@ -2,15 +2,17 @@ mod commands;
 mod delivery;
 mod demo;
 mod elevation;
-mod ffmpeg;
 mod focus;
+mod keep_awake;
 mod keyboard_hook;
 mod models;
 mod playback;
+mod project_archive;
 mod scripting;
 mod stream_deck;
 mod stream_deck_control;
 mod tray;
+mod video_meta;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -76,16 +78,18 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::create_project,
             commands::open_project,
+            commands::save_project,
+            project_archive::export_project,
+            project_archive::import_project,
             commands::save_text_snippets,
             commands::save_video_snippets,
             commands::import_video,
             commands::list_imported_videos,
             commands::delete_video,
             commands::get_video_fps,
+            commands::save_video_thumbnail,
             commands::list_monitors,
             commands::capture_monitor_preview,
-            commands::check_ffmpeg,
-            commands::set_ffmpeg_paths,
             commands::save_automation,
             commands::load_automations,
             commands::delete_automation,
@@ -100,7 +104,7 @@ pub fn run() {
             playback::close_playback_window,
             scripting::run_automation,
             stream_deck::list_stream_deck_buttons,
-            stream_deck::trigger_stream_deck_button,
+
             stream_deck_control::set_stream_deck_active_project,
             tray::activate_demo_tray,
             tray::deactivate_demo_tray,

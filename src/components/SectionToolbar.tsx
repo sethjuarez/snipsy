@@ -21,6 +21,7 @@ interface SectionToolbarProps {
   actions?: ToolbarAction[];
 }
 
+
 function getActionStyle(action: ToolbarAction): React.CSSProperties {
   if (action.tone === "danger") {
     return { backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" };

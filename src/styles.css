@@ -230,6 +230,16 @@ summary:focus-visible,
   animation: demoPulse 1.5s ease-in-out infinite;
 }
 
+/* ── Toast entrance ─────────────────────────────────────────── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-in {
+  animation: toastIn 160ms var(--easing-default, ease-out);
+}
+
 /* ── Reduced motion ─────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .demo-pulse,

@@ -7,7 +7,7 @@ import IconEditor from "./IconEditor";
 
 interface TextSnippetFormProps {
   snippet?: TextSnippet;
-  onSave: (snippet: TextSnippet) => void;
+  onSave: (snippet: TextSnippet) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: EditorSaveState) => void;
 }
@@ -25,7 +25,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   );
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
-  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+  const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     text,
@@ -59,7 +59,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   const saveSnippet = () => {
     if (!canSave) return;
 
-    onSave({
+    void runSave(() => onSave({
       id: snippet?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),
@@ -68,8 +68,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       delivery,
       typeDelay: delivery === "fast-type" ? typeDelay : undefined,
       streamDeckIcon,
-    });
-    markSaved();
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -78,7 +77,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   };
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+    onSaveStateChange?.({ canSave, readinessText, saveStatus, hasUnsavedChanges });
   }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   useEffect(() => {

@@ -70,7 +70,7 @@ const video: ImportedVideo = {
   thumbnailPath: null,
 };
 
-function renderEditor(pauseStops: PauseStop[]) {
+function renderEditor(pauseStops: PauseStop[], extra: Partial<VideoSnippet> = {}) {
   const clip: VideoSnippet = {
     id: "clip-1",
     title: "Zoom clip",
@@ -81,6 +81,7 @@ function renderEditor(pauseStops: PauseStop[]) {
     hotkey: "CmdOrControl+Shift+9",
     speed: 1,
     pauseStops,
+    ...extra,
   };
   const onSave = vi.fn();
   const saveStates: ClipEditorSaveState[] = [];
@@ -106,6 +107,44 @@ const spotlightStop: PauseStop = {
   label: "Login",
   spotlight: { regions: [{ type: "rectangle", x: 60, y: 20, width: 20, height: 10 }] },
 };
+
+describe("ClipEditor saving", () => {
+  it("keeps transition actions it does not edit", () => {
+    const transitionActions = [{ trigger: "end", action: "nextSnippet" }] as unknown as VideoSnippet["transitionActions"];
+    const { onSave, save } = renderEditor([], { transitionActions });
+    save();
+    expect((onSave.mock.lastCall?.[0] as VideoSnippet).transitionActions).toEqual(transitionActions);
+  });
+
+  it("saves every field it was given unchanged", () => {
+    const extra: Partial<VideoSnippet> = {
+      description: "Walkthrough",
+      targetMonitor: "\\\\.\\DISPLAY2",
+      endBehavior: "freeze",
+      hideCursor: true,
+      backgroundColor: "#112233",
+      clickToPlay: true,
+      muted: true,
+      transitionActions: [{ trigger: "end", action: "nextSnippet" }] as unknown as VideoSnippet["transitionActions"],
+      streamDeckIcon: { kind: "emoji", value: "🎬", background: "#000000", foreground: "#ffffff" },
+    };
+    const { onSave, save } = renderEditor([spotlightStop], extra);
+    save();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const saved = onSave.mock.lastCall?.[0] as VideoSnippet;
+    // The editor saves everything but the id; App supplies the existing id.
+    expect(saved).toEqual({
+      title: "Zoom clip",
+      videoFile: video.relativePath,
+      startTime: 0,
+      endTime: 8,
+      hotkey: "CmdOrControl+Shift+9",
+      speed: 1,
+      ...extra,
+      pauseStops: [spotlightStop],
+    });
+  });
+});
 
 describe("ClipEditor zoom editing", () => {
   it("adds a ZoomIt-style zoom centered on the spotlight and saves it", async () => {
@@ -436,5 +475,64 @@ describe("ClipEditor moment import", () => {
     fireEvent.keyDown(screen.getByTestId("moment-import-text"), { key: "Enter", ctrlKey: true });
     expect(screen.queryByTestId("moment-import-dialog")).toBeNull();
     expect(screen.getByTestId("pause-stops-panel").textContent).toContain("2 moments");
+  });
+});
+
+describe("ClipEditor inspector tabs", () => {
+  it("moves between tabs with arrow, Home, and End keys", () => {
+    renderEditor([]);
+    const moments = screen.getByTestId("clip-inspector-tab-moments");
+    expect(moments.getAttribute("aria-selected")).toBe("true");
+    expect(moments.tabIndex).toBe(0);
+
+    fireEvent.keyDown(moments, { key: "ArrowRight" });
+    const streamDeck = screen.getByTestId("clip-inspector-tab-stream-deck");
+    expect(streamDeck.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(streamDeck);
+    expect(moments.tabIndex).toBe(-1);
+
+    fireEvent.keyDown(streamDeck, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(screen.getByTestId("clip-inspector-tab-clip"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(streamDeck);
+    fireEvent.keyDown(streamDeck, { key: "Home" });
+    expect(document.activeElement).toBe(screen.getByTestId("clip-inspector-tab-clip"));
+    fireEvent.keyDown(document.activeElement!, { key: "End" });
+    expect(document.activeElement).toBe(streamDeck);
+  });
+
+  it("links each tab to its panel", () => {
+    renderEditor([]);
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-clip"));
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.id).toBe("clip-inspector-panel-clip");
+    expect(panel.getAttribute("aria-labelledby")).toBe("clip-inspector-tab-clip");
+    expect(screen.getByTestId("clip-inspector-tab-clip").getAttribute("aria-controls")).toBe(panel.id);
+    expect(screen.getByTestId("clip-inspector-tab-moments").getAttribute("aria-controls")).toBeNull();
+  });
+
+  it("uses a short Deck label with the full Stream Deck name for assistive tech", () => {
+    renderEditor([]);
+    expect(screen.getByRole("tab", { name: "Stream Deck" }).textContent).toBe("Deck");
+  });
+
+  it("keeps the Stream Deck icon on its own tab", () => {
+    renderEditor([]);
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-clip"));
+    expect(screen.getByTestId("clip-details-section").textContent).toContain("Basics");
+    expect(screen.queryByTestId("clip-icon-preview")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("clip-inspector-tab-stream-deck"));
+    expect(screen.getByTestId("clip-stream-deck-section")).toBeTruthy();
+    expect(screen.getByTestId("clip-icon-preview")).toBeTruthy();
+  });
+
+  it("flags Basics when the clip has no name", () => {
+    renderEditor([]);
+    const basics = screen.getByTestId("clip-inspector-tab-clip");
+    fireEvent.click(basics);
+    expect(basics.textContent).not.toContain("needs attention");
+    fireEvent.change(screen.getByTestId("clip-title"), { target: { value: "" } });
+    expect(basics.textContent).toContain("needs attention");
   });
 });

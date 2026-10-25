@@ -5,7 +5,8 @@ import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff, Pencil, Trash2 } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
-import { displayHotkey } from "../utils/hotkeys";
+import EmptyState from "./EmptyState";
+import Kbd from "./ui/Kbd";
 
 interface HotkeyOverviewProps {
   textSnippets: TextSnippet[];
@@ -149,13 +150,7 @@ function TextCardInner({
       </div>
       {/* Footer: hotkey + delivery method */}
       <div className="px-3 py-2 flex items-center gap-2">
-        <span
-          className="flex items-center gap-1.5 text-base px-2.5 py-1 rounded font-mono shrink-0"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
-        >
-          <Keyboard size={11} />
-          {displayHotkey(snippet.hotkey)}
-        </span>
+        <Kbd hotkey={snippet.hotkey} />
         <span
           className="text-xs ml-auto shrink-0 px-1.5 py-0.5 rounded flex items-center gap-1"
           style={snippet.delivery === "fast-type"
@@ -260,13 +255,7 @@ function VideoCardInner({
       </div>
       {/* Footer: hotkey + extras */}
       <div className="px-3 py-2 flex items-center gap-2">
-        <span
-          className="flex items-center gap-1.5 text-base px-2.5 py-1 rounded font-mono shrink-0"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
-        >
-          <Keyboard size={11} />
-          {displayHotkey(snippet.hotkey)}
-        </span>
+        <Kbd hotkey={snippet.hotkey} />
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <span
             className="inline-block w-3.5 h-3.5 rounded-sm border"
@@ -363,32 +352,42 @@ function HotkeyOverview({
 
   if (allItems.length === 0) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--color-text-secondary)" }} data-testid="hotkey-overview-empty">
-        <Keyboard size={32} className="mx-auto mb-3 opacity-40" />
-        <p className="text-md">No hotkeys configured yet</p>
-        <p className="text-base mt-1">Create text snippets or video clips to assign hotkeys.</p>
-      </div>
+      <EmptyState
+        icon={Keyboard}
+        title="Your run sheet is empty"
+        description="Text snippets and clips you create show up here, in the order you'll present them."
+        tip={<>Tip: press <Kbd hotkey="CmdOrControl+K" /> to create anything.</>}
+        data-testid="hotkey-overview-empty"
+      />
     );
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={sortedItems.map((i) => i.id)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 300px))" }} data-testid="hotkey-overview">
-          {sortedItems.map((item) => (
-            <SortableCard
-              key={item.id}
-              item={item}
-              onPlay={item.kind === "video" ? onPlayVideo : undefined}
-              onEditText={item.kind === "text" ? onEditText : undefined}
-              onEditVideo={item.kind === "video" ? onEditVideo : undefined}
-              onDeleteText={item.kind === "text" ? onDeleteText : undefined}
-              onDeleteVideo={item.kind === "video" ? onDeleteVideo : undefined}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+    <section aria-labelledby="run-sheet-heading" data-testid="run-sheet">
+      <div className="mb-2 flex items-baseline gap-2">
+        <h2 id="run-sheet-heading" className="text-base font-semibold">Run sheet</h2>
+        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }} data-testid="run-sheet-help">
+          Drag cards into the order you'll present them.
+        </p>
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={sortedItems.map((i) => i.id)} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 300px))" }} data-testid="hotkey-overview">
+            {sortedItems.map((item) => (
+              <SortableCard
+                key={item.id}
+                item={item}
+                onPlay={item.kind === "video" ? onPlayVideo : undefined}
+                onEditText={item.kind === "text" ? onEditText : undefined}
+                onEditVideo={item.kind === "video" ? onEditVideo : undefined}
+                onDeleteText={item.kind === "text" ? onDeleteText : undefined}
+                onDeleteVideo={item.kind === "video" ? onDeleteVideo : undefined}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </section>
   );
 }
 

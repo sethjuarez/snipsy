@@ -11,11 +11,14 @@ Demo mode is where Snipsy shines — it activates all your configured hotkeys as
 
 ## Entering Demo Mode
 
-Click the **green play button** in the title bar. Snipsy will:
+Check the **Demo preflight** card on the Overview first. It shows how many hotkeys will be armed and flags duplicate or invalid hotkeys, snippets or clips without a hotkey, clips missing a source video, and (on Windows) missing admin rights.
 
-1. Register all snippet hotkeys as global shortcuts
-2. Minimize the app to the **system tray**
+Then click **Start** in the title bar or the preflight card (or press **Ctrl/Cmd+K** and run "Start demo"). The first time, and whenever no hotkeys would be armed, Snipsy explains what will happen before starting. Snipsy will:
+
+1. Register eligible snippet, clip, and automation hotkeys as global shortcuts (the first item using a hotkey wins)
+2. Minimize the app to the **system tray** (menu bar on macOS)
 3. Switch the tray icon to a bright green indicator
+4. Keep the computer awake, if **Keep awake** (beside Start, on by default) is checked
 
 Your audience never sees Snipsy — they just see text appearing and videos playing as if by magic.
 
@@ -25,6 +28,7 @@ Your audience never sees Snipsy — they just see text appearing and videos play
 - **Text snippets** deliver to the currently focused window
 - **Video clips** open as fullscreen overlays (press **Escape** to dismiss early)
 - Snipsy is invisible — only the tray icon shows it's active
+- With **Keep awake**, the computer won't sleep or turn off the screen. On Windows, once you've been idle for 50 seconds Snipsy nudges the mouse 1px and back, so Teams and the screensaver see activity; it never moves the pointer while you're using it. On macOS it uses `caffeinate`. It stops when you exit demo mode.
 
 ## Video Clips During Demo Mode
 
@@ -46,7 +50,7 @@ Playback stops are the clip start, each pause stop, and the clip end. If the cli
 Three ways to exit:
 
 1. **Right-click the tray icon** → "Exit Demo Mode"
-2. **Click the tray icon** to show Snipsy, then click the **red stop button**
+2. **Click the tray icon** to show Snipsy, then click **Stop demo** in the title bar or on the Overview
 3. The `exit-demo-mode` event from the tray menu
 
 All global hotkeys are unregistered and the tray icon returns to its idle (purple) state.

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert } from "lucide-react";
+import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Search, Settings } from "lucide-react";
+import Kbd from "./ui/Kbd";
+import KeepAwakeToggle from "./KeepAwakeToggle";
 import { getBackend } from "../services";
-import { isMacPlatform } from "../utils/platform";
+import { isMacPlatform, traySurfaceName } from "../utils/platform";
 import appIcon from "../assets/icon.png";
 
 
@@ -10,6 +12,10 @@ interface TitleBarProps {
   projectName: string | null;
   demoMode: boolean;
   onToggleDemo: () => void;
+  /** Opens the command palette; the search button is hidden when omitted. */
+  onOpenPalette?: () => void;
+  /** Opens Settings, optionally at a section; the gear is hidden when omitted. */
+  onOpenSettings?: (section?: "permissions") => void;
 }
 
 function isInteractiveTitlebarTarget(target: EventTarget | null) {
@@ -17,7 +23,7 @@ function isInteractiveTitlebarTarget(target: EventTarget | null) {
   return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [data-titlebar-interactive='true']"));
 }
 
-function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
+function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSettings }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
   const isMac = isMacPlatform();
   const [maximized, setMaximized] = useState(false);
@@ -128,35 +134,54 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
         )}
       </div>
 
-      {/* Center spacer (draggable) */}
-      <div data-tauri-drag-region className="flex-1" />
+      {/* Center: command palette launcher, flanked by draggable space */}
+      <div data-tauri-drag-region className="flex flex-1 min-w-0 items-center justify-center px-3">
+        {onOpenPalette && (
+          <button
+            type="button"
+            onClick={onOpenPalette}
+            className="inline-flex min-w-0 items-center gap-2 rounded-md px-2 transition-colors hover:bg-[var(--color-surface-inset)]"
+            style={{ height: 24, width: "100%", maxWidth: 360, border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", fontSize: "var(--font-size-sm)" }}
+            title="Search snippets and commands"
+            aria-label="Search snippets and commands"
+            aria-keyshortcuts="Control+K Meta+K"
+            data-testid="command-palette-button"
+          >
+            <Search size={13} aria-hidden="true" />
+            <span className="flex-1 truncate text-left">Search or run a command</span>
+            <Kbd hotkey="CmdOrControl+K" />
+          </button>
+        )}
+      </div>
 
       {/* Right: controls (no-drag so buttons are clickable) */}
       <div className="flex items-center shrink-0" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <div className="flex items-center gap-1 px-1">
-          {/* Demo mode toggle — green play button / red stop */}
+          {projectName && !demoMode && <KeepAwakeToggle testId="titlebar-keep-awake" />}
+          {/* Demo mode toggle — labeled so the main action is obvious */}
           {projectName && (
             <button
               onClick={onToggleDemo}
-              className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md px-2 font-medium transition-colors hover:bg-[var(--color-surface-inset)]"
               data-testid="demo-mode-toggle"
-              title={demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
-              aria-label={demoMode ? "Exit Demo Mode" : "Enter Demo Mode"}
-              style={{ ...titlebarButtonStyle, color: demoMode ? "var(--color-danger)" : "var(--color-success)" }}
+              title={demoMode ? "Stop demo and unregister hotkeys" : `Start demo: hide to the ${traySurfaceName()} and arm hotkeys`}
+              aria-label={demoMode ? "Stop demo" : "Start demo"}
+              style={{ ...titlebarButtonStyle, color: demoMode ? "var(--color-danger)" : "var(--color-success)", fontSize: "var(--font-size-sm)" }}
             >
               {demoMode
-                ? <CircleStop size={16} className="demo-pulse" />
-                : <Play size={14} fill="currentColor" />}
+                ? <CircleStop size={14} className="demo-pulse" aria-hidden="true" />
+                : <Play size={12} fill="currentColor" aria-hidden="true" />}
+              <span>{demoMode ? "Stop" : "Start"}</span>
             </button>
           )}
 
           {/* Elevation warning — show when not running as admin */}
           {projectName && !elevated && (
             <button
-              onClick={handleRelaunchAsAdmin}
+              onClick={onOpenSettings ? () => onOpenSettings("permissions") : handleRelaunchAsAdmin}
               className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
-              title="Input protection requires Admin. Click to restart as Administrator."
-              aria-label="Restart as Administrator"
+              title={onOpenSettings ? "Not running as administrator. Open permission settings." : "Input protection requires Admin. Click to restart as Administrator."}
+              aria-label={onOpenSettings ? "Permission settings" : "Restart as Administrator"}
               data-testid="elevation-warning"
               style={{ ...titlebarButtonStyle, color: "var(--color-warning, #f59e0b)" }}
             >
@@ -175,10 +200,22 @@ function TitleBar({ projectName, demoMode, onToggleDemo }: TitleBarProps) {
           >
             {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
           </button>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings()}
+              className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
+              title={isMac ? "Settings (⌘,)" : "Settings (Ctrl+,)"}
+              aria-label="Settings"
+              aria-keyshortcuts="Control+Comma Meta+Comma"
+              data-testid="settings-button"
+              style={titlebarButtonStyle}
+            >
+              <Settings size={14} />
+            </button>
+          )}
 
 
         </div>
-
         {!isMac && (
           <>
             {/* Separator */}

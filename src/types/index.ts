@@ -139,7 +139,6 @@ export interface OpenSiteContribution {
   kind: "openSite";
   title?: string;
   url: string;
-  idempotencyKey?: string;
 }
 
 export interface ImportedVideo {
@@ -147,6 +146,12 @@ export interface ImportedVideo {
   relativePath: string;
   absolutePath: string;
   thumbnailPath: string | null;
+}
+
+/** Result of exporting or importing a project archive. */
+export interface ArchiveSummary {
+  path: string;
+  fileCount: number;
 }
 
 export interface ProjectData {
@@ -163,9 +168,3 @@ export interface StreamDeckButton {
   iconDataUrl: string;
 }
 
-export interface StreamDeckTriggerResult {
-  id: string;
-  title: string;
-  snippetType: "text" | "video" | "automation";
-  status: "started" | "stopped" | "completed";
-}

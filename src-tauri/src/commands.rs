@@ -13,6 +13,9 @@ pub fn create_project(
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<ProjectData, String> {
     let project_dir = PathBuf::from(&path);
+    if project_dir.join("project.json").exists() {
+        return Err("This folder already has a Snipsy project. Use Open Project instead.".into());
+    }
     fs::create_dir_all(&project_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let project = Project { name, description };
@@ -56,8 +59,11 @@ pub fn open_project(
     path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<ProjectData, String> {
-    let project_dir = PathBuf::from(&path);
+    load_project_data(&PathBuf::from(&path))
+}
 
+/// Reads and parses a project folder exactly as opening it does.
+pub fn load_project_data(project_dir: &std::path::Path) -> Result<ProjectData, String> {
     let project_json = fs::read_to_string(project_dir.join("project.json"))
         .map_err(|e| format!("Failed to read project.json: {e}"))?;
     let project: Project = serde_json::from_str(&project_json)
@@ -78,6 +84,33 @@ pub fn open_project(
         text_snippets,
         video_snippets,
     })
+}
+
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_project(
+    path: String,
+    name: String,
+    description: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Project, String> {
+    let project_dir = PathBuf::from(&path);
+    if !project_dir.join("project.json").is_file() {
+        return Err("No Snipsy project found in this folder.".into());
+    }
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Project name cannot be empty.".into());
+    }
+    let project = Project {
+        name,
+        description: description.trim().to_string(),
+    };
+    let json = serde_json::to_string_pretty(&project)
+        .map_err(|e| format!("Failed to serialize project: {e}"))?;
+    fs::write(project_dir.join("project.json"), json)
+        .map_err(|e| format!("Failed to write project.json: {e}"))?;
+    Ok(project)
 }
 
 #[tauri::command]
@@ -113,19 +146,14 @@ pub fn save_video_snippets(
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
 pub fn import_video(
-    app: tauri::AppHandle,
     project_path: String,
     source_file_path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<String, String> {
-    let (file_name, dest, videos_dir) = import_video_file(
+    let (file_name, _, _) = import_video_file(
         &PathBuf::from(&project_path),
         &PathBuf::from(&source_file_path),
     )?;
-
-    // Generate thumbnail (best-effort — don't fail import if ffmpeg missing)
-    let _ = generate_thumbnail(&app, &dest, &videos_dir);
-
     Ok(format!("videos/{file_name}"))
 }
 
@@ -147,114 +175,91 @@ fn import_video_file(
         .to_string();
     let dest = videos_dir.join(&file_name);
     fs::copy(source, &dest).map_err(|e| format!("Failed to copy video file: {e}"))?;
+    // A re-import replaces the video, so drop its old thumbnail for regeneration.
+    if let Ok(thumb) = thumbnail_path_for(project_dir, &format!("videos/{file_name}")) {
+        let _ = fs::remove_file(thumb);
+    }
     Ok((file_name, dest, videos_dir))
 }
 
-/// Generate a thumbnail for a video using ffmpeg (first frame at 1s).
-fn generate_thumbnail(
-    app: &tauri::AppHandle,
-    video_path: &std::path::Path,
-    videos_dir: &std::path::Path,
-) -> Result<(), String> {
-    let thumbs_dir = videos_dir.join("thumbnails");
-    fs::create_dir_all(&thumbs_dir).map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
+/// Largest thumbnail payload accepted from the frontend.
+const MAX_THUMBNAIL_BYTES: usize = 5 * 1024 * 1024;
 
+/// Path of the thumbnail JPEG for a video stored under `<project>/videos/`.
+fn thumbnail_path_for(project_dir: &std::path::Path, relative_path: &str) -> Result<PathBuf, String> {
+    let relative = std::path::Path::new(relative_path);
+    let mut components = relative.components();
+    let in_videos_dir = matches!(
+        (components.next(), components.next(), components.next()),
+        (
+            Some(std::path::Component::Normal(dir)),
+            Some(std::path::Component::Normal(_)),
+            None
+        ) if dir == "videos"
+    );
+    if !in_videos_dir {
+        return Err(format!("Not an imported video path: {relative_path}"));
+    }
+    let video_path = project_dir.join(relative);
+    if !video_path.is_file() {
+        return Err(format!("Video file not found: {relative_path}"));
+    }
     let stem = video_path
         .file_stem()
-        .ok_or("No file stem")?
-        .to_string_lossy();
-    let thumb_path = thumbs_dir.join(format!("{stem}.jpg"));
-
-    let mut cmd = crate::ffmpeg::command_for_ffmpeg(app)?;
-    cmd.args([
-        "-i",
-        &video_path.to_string_lossy(),
-        "-ss",
-        "00:00:01",
-        "-vframes",
-        "1",
-        "-q:v",
-        "2",
-        "-y",
-        &thumb_path.to_string_lossy(),
-    ]);
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run FFmpeg for thumbnail generation: {e}"))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "FFmpeg thumbnail generation failed: {}",
-            error.trim()
-        ));
-    }
-    Ok(())
+        .ok_or("Video file has no name")?
+        .to_string_lossy()
+        .to_string();
+    Ok(project_dir
+        .join("videos")
+        .join("thumbnails")
+        .join(format!("{stem}.jpg")))
 }
 
-/// Get the frame rate (FPS) of a video using ffprobe.
-/// Returns the FPS as a float, or an error if ffprobe is unavailable.
+fn write_video_thumbnail(
+    project_dir: &std::path::Path,
+    relative_path: &str,
+    jpeg: &[u8],
+) -> Result<PathBuf, String> {
+    if jpeg.len() > MAX_THUMBNAIL_BYTES {
+        return Err("Thumbnail image is too large".into());
+    }
+    if !jpeg.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Err("Thumbnail must be a JPEG image".into());
+    }
+    let thumb_path = thumbnail_path_for(project_dir, relative_path)?;
+    if let Some(dir) = thumb_path.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("Failed to create thumbnails dir: {e}"))?;
+    }
+    fs::write(&thumb_path, jpeg).map_err(|e| format!("Failed to save thumbnail: {e}"))?;
+    Ok(thumb_path)
+}
+
+/// Save a JPEG thumbnail captured by the webview for an imported video.
+/// Returns the absolute path of the saved thumbnail.
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_video_thumbnail(
+    project_path: String,
+    relative_path: String,
+    jpeg_base64: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<String, String> {
+    use base64::Engine;
+    let jpeg = base64::engine::general_purpose::STANDARD
+        .decode(jpeg_base64.as_bytes())
+        .map_err(|e| format!("Invalid thumbnail data: {e}"))?;
+    let path = write_video_thumbnail(&PathBuf::from(&project_path), &relative_path, &jpeg)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Get the average frame rate (FPS) of an MP4/MOV video from its container metadata.
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
 pub fn get_video_fps(
-    app: tauri::AppHandle,
     video_path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<f64, String> {
-    let mut cmd = crate::ffmpeg::command_for_ffprobe(&app)?;
-    cmd.args([
-        "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "stream=r_frame_rate",
-        "-of",
-        "csv=p=0",
-        &video_path,
-    ]);
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run FFprobe: {e}"))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("FFprobe failed to read video: {}", error.trim()));
-    }
-
-    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    // r_frame_rate is typically "30/1" or "30000/1001"
-    if let Some((num, den)) = raw.split_once('/') {
-        let n: f64 = num.parse().unwrap_or(30.0);
-        let d: f64 = den.parse().unwrap_or(1.0);
-        if d > 0.0 {
-            Ok(n / d)
-        } else {
-            Ok(30.0)
-        }
-    } else {
-        raw.parse::<f64>().or(Ok(30.0))
-    }
-}
-
-#[tauri::command]
-#[tauri_plugin_auditaur::instrument_ipc]
-pub fn check_ffmpeg(
-    app: tauri::AppHandle,
-    auditaur_trace_context: Option<IpcTraceContext>,
-) -> crate::ffmpeg::FfmpegStatus {
-    crate::ffmpeg::check_status(&app)
-}
-
-#[tauri::command]
-#[tauri_plugin_auditaur::instrument_ipc(err)]
-pub fn set_ffmpeg_paths(
-    app: tauri::AppHandle,
-    ffmpeg_executable_path: Option<String>,
-    ffprobe_executable_path: Option<String>,
-    auditaur_trace_context: Option<IpcTraceContext>,
-) -> Result<crate::ffmpeg::FfmpegStatus, String> {
-    crate::ffmpeg::set_paths(&app, ffmpeg_executable_path, ffprobe_executable_path)
+    crate::video_meta::read_video_fps(std::path::Path::new(&video_path))
 }
 
 /// Imported video metadata returned to the frontend.
@@ -549,6 +554,48 @@ mod tests {
     }
 
     #[test]
+    fn save_project_updates_name_and_description() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        create_project(path.clone(), "Old".into(), "old".into(), None).unwrap();
+
+        let saved = save_project(path.clone(), "  New name ".into(), " new desc ".into(), None).unwrap();
+        assert_eq!(saved.name, "New name");
+        assert_eq!(saved.description, "new desc");
+        let opened = open_project(path, None).unwrap();
+        assert_eq!(opened.project, saved);
+    }
+
+    #[test]
+    fn save_project_rejects_empty_name_and_missing_project() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        assert!(save_project(path.clone(), "Name".into(), String::new(), None)
+            .unwrap_err()
+            .contains("No Snipsy project"));
+
+        create_project(path.clone(), "Keep".into(), String::new(), None).unwrap();
+        assert!(save_project(path.clone(), "   ".into(), String::new(), None)
+            .unwrap_err()
+            .contains("cannot be empty"));
+        assert_eq!(open_project(path, None).unwrap().project.name, "Keep");
+    }
+
+    #[test]
+    fn create_project_refuses_to_overwrite_an_existing_project() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        create_project(path.clone(), "Original".into(), String::new(), None).unwrap();
+        fs::write(tmp.path().join("text-snippets.json"), "[\"keep\"]").unwrap();
+
+        let err = create_project(path, "Sample".into(), String::new(), None).unwrap_err();
+        assert!(err.contains("already has a Snipsy project"));
+        let project = fs::read_to_string(tmp.path().join("project.json")).unwrap();
+        assert!(project.contains("Original"));
+        assert_eq!(fs::read_to_string(tmp.path().join("text-snippets.json")).unwrap(), "[\"keep\"]");
+    }
+
+    #[test]
     fn save_and_load_text_snippets() {
         let tmp = TempDir::new().unwrap();
         let project_path = tmp.path().join("test-project");
@@ -740,6 +787,88 @@ mod tests {
         assert!(result.is_ok());
         assert!(!video_file.exists());
         assert!(!thumb_file.exists());
+    }
+
+    const FAKE_JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0xFF, 0xD9];
+
+    fn project_with_video(name: &str) -> (TempDir, PathBuf) {
+        let tmp = TempDir::new().unwrap();
+        let project_path = tmp.path().join("test-project");
+        create_project(
+            project_path.to_string_lossy().into_owned(),
+            "Test".into(),
+            "Test".into(),
+            None,
+        )
+        .unwrap();
+        fs::write(project_path.join("videos").join(name), b"fake video").unwrap();
+        (tmp, project_path)
+    }
+
+    #[test]
+    fn save_video_thumbnail_writes_jpeg_listed_by_imports() {
+        use base64::Engine;
+        let (_tmp, project_path) = project_with_video("demo.mp4");
+
+        let saved = save_video_thumbnail(
+            project_path.to_string_lossy().into_owned(),
+            "videos/demo.mp4".into(),
+            base64::engine::general_purpose::STANDARD.encode(FAKE_JPEG),
+            None,
+        )
+        .unwrap();
+
+        let expected = project_path.join("videos").join("thumbnails").join("demo.jpg");
+        assert_eq!(PathBuf::from(&saved), expected);
+        assert_eq!(fs::read(&expected).unwrap(), FAKE_JPEG);
+
+        let videos =
+            list_imported_videos(project_path.to_string_lossy().into_owned(), None).unwrap();
+        assert_eq!(videos[0].thumbnail_path.as_deref(), Some(saved.as_str()));
+    }
+
+    #[test]
+    fn save_video_thumbnail_rejects_non_jpeg() {
+        let (_tmp, project_path) = project_with_video("demo.mp4");
+        let err = write_video_thumbnail(&project_path, "videos/demo.mp4", b"\x89PNG....").unwrap_err();
+        assert!(err.contains("JPEG"));
+    }
+
+    #[test]
+    fn save_video_thumbnail_rejects_paths_outside_videos_dir() {
+        let (_tmp, project_path) = project_with_video("demo.mp4");
+        fs::write(project_path.join("project-video.mp4"), b"fake").unwrap();
+        for path in [
+            "../demo.mp4",
+            "videos/../project-video.mp4",
+            "project-video.mp4",
+            "videos/thumbnails/demo.mp4",
+        ] {
+            assert!(
+                write_video_thumbnail(&project_path, path, FAKE_JPEG).is_err(),
+                "{path} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn save_video_thumbnail_requires_existing_video() {
+        let (_tmp, project_path) = project_with_video("demo.mp4");
+        let err = write_video_thumbnail(&project_path, "videos/missing.mp4", FAKE_JPEG).unwrap_err();
+        assert!(err.contains("not found"));
+    }
+
+    #[test]
+    fn reimport_clears_stale_thumbnail() {
+        let (tmp, project_path) = project_with_video("demo.mp4");
+        let thumb = write_video_thumbnail(&project_path, "videos/demo.mp4", FAKE_JPEG).unwrap();
+        let source = tmp.path().join("demo.mp4");
+        fs::write(&source, b"new video").unwrap();
+
+        import_video_file(&project_path, &source).unwrap();
+
+        assert!(!thumb.exists());
+        assert_eq!(fs::read(project_path.join("videos").join("demo.mp4")).unwrap(), b"new video");
     }
 
     #[test]

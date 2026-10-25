@@ -1,8 +1,9 @@
-import { forwardRef, useState, useEffect, useMemo, useCallback, useImperativeHandle } from "react";
+import { forwardRef, useState, useEffect, useMemo, useCallback, useImperativeHandle, useRef } from "react";
 import { getBackend } from "../services";
 import { isTauriRuntime, tauriFileSrc } from "../services/auditaur";
 import { FileVideo, Scissors, Film, Trash2 } from "lucide-react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { captureVideoThumbnail } from "../utils/videoThumbnail";
 import type { ImportedVideo, VideoSnippet } from "../types";
 
 const backend = getBackend();
@@ -19,6 +20,8 @@ interface VideoListProps {
   onCreateClip: (video: ImportedVideo) => void;
   onDeleteVideo: (video: ImportedVideo) => void;
   onToolbarStateChange?: (state: VideoListToolbarState) => void;
+  /** Called with the project's video paths whenever the list loads or changes. */
+  onVideosChange?: (relativePaths: string[]) => void;
 }
 
 export interface VideoListHandle {
@@ -30,16 +33,67 @@ export interface VideoListToolbarState {
 }
 
 const VideoList = forwardRef<VideoListHandle, VideoListProps>(function VideoList(
-  { projectPath, videoSnippets, onCreateClip, onDeleteVideo, onToolbarStateChange },
+  { projectPath, videoSnippets, onCreateClip, onDeleteVideo, onToolbarStateChange, onVideosChange },
   ref,
 ) {
-  const [videos, setVideos] = useState<ImportedVideo[]>([]);
+  // Tagged with its project so a late load can't be mixed with another project's videos.
+  const [loaded, setLoaded] = useState<{ project: string; videos: ImportedVideo[] }>({ project: "", videos: [] });
+  const videos = loaded.project === projectPath ? loaded.videos : [];
   const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<ImportedVideo | null>(null);
 
+  const thumbnailAttempts = useRef(new Set<string>());
+  const thumbnailQueue = useRef<Promise<void>>(Promise.resolve());
+  // The project this component is currently mounted for; null after unmount.
+  const activeProject = useRef<string | null>(null);
+
+  const refreshVideos = useCallback(async (project: string) => {
+    const list = await backend.getImportedVideos(project);
+    if (activeProject.current === project) setLoaded({ project, videos: list });
+  }, []);
+
   useEffect(() => {
-    backend.getImportedVideos(projectPath).then(setVideos);
-  }, [projectPath]);
+    activeProject.current = projectPath;
+    void refreshVideos(projectPath);
+    return () => { activeProject.current = null; };
+  }, [projectPath, refreshVideos]);
+
+  // Generate missing thumbnails in the webview, one video at a time.
+  useEffect(() => {
+    const toSrc = convertFileSrc;
+    if (!toSrc || loaded.project !== projectPath) return;
+    const project = projectPath;
+    const isActive = () => activeProject.current === project;
+    for (const video of loaded.videos) {
+      const key = `${project}|${video.relativePath}`;
+      if (video.thumbnailPath || thumbnailAttempts.current.has(key)) continue;
+      thumbnailAttempts.current.add(key);
+      thumbnailQueue.current = thumbnailQueue.current.then(async () => {
+        if (!isActive()) {
+          thumbnailAttempts.current.delete(key);
+          return;
+        }
+        try {
+          const jpeg = await captureVideoThumbnail(toSrc(video.absolutePath));
+          if (!isActive()) {
+            thumbnailAttempts.current.delete(key);
+            return;
+          }
+          const thumbnailPath = await backend.saveVideoThumbnail(project, video.relativePath, jpeg);
+          if (!isActive()) return;
+          setLoaded((current) => current.project !== project ? current : {
+            project,
+            videos: current.videos.map((v) =>
+              v.relativePath === video.relativePath ? { ...v, thumbnailPath } : v),
+          });
+        } catch (error) {
+          // Allow a retry on the next list refresh.
+          thumbnailAttempts.current.delete(key);
+          console.warn(`Could not create thumbnail for ${video.relativePath}:`, error);
+        }
+      });
+    }
+  }, [loaded, projectPath]);
 
   // Count clips per video
   const clipCounts = useMemo(() => {
@@ -56,13 +110,13 @@ const VideoList = forwardRef<VideoListHandle, VideoListProps>(function VideoList
 
     setImporting(true);
     try {
-      await backend.importVideo(projectPath, filePath);
-      const updated = await backend.getImportedVideos(projectPath);
-      setVideos(updated);
+      const relativePath = await backend.importVideo(projectPath, filePath);
+      thumbnailAttempts.current.delete(`${projectPath}|${relativePath}`);
+      await refreshVideos(projectPath);
     } finally {
       setImporting(false);
     }
-  }, [projectPath]);
+  }, [projectPath, refreshVideos]);
 
   useImperativeHandle(ref, () => ({ importVideo: handleImport }), [handleImport]);
 
@@ -70,12 +124,17 @@ const VideoList = forwardRef<VideoListHandle, VideoListProps>(function VideoList
     onToolbarStateChange?.({ importing });
   }, [importing, onToolbarStateChange]);
 
+  // Keyed on paths so thumbnail updates don't re-notify.
+  const videoPathsKey = loaded.project === projectPath ? JSON.stringify(loaded.videos.map((video) => video.relativePath)) : null;
+  useEffect(() => {
+    if (videoPathsKey !== null) onVideosChange?.(JSON.parse(videoPathsKey) as string[]);
+  }, [videoPathsKey, onVideosChange]);
+
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
     await backend.deleteVideo(projectPath, confirmDelete.relativePath);
     onDeleteVideo(confirmDelete);
-    const updated = await backend.getImportedVideos(projectPath);
-    setVideos(updated);
+    await refreshVideos(projectPath);
     setConfirmDelete(null);
   };
 

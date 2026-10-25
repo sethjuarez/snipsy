@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import type { AutomationContributionGroup, Script } from "../types";
+import type { AutomationContributionGroup, Script, StreamDeckIcon } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
+import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
+import IconEditor from "./IconEditor";
 
 interface ScriptFormProps {
   script?: Script;
-  onSave: (script: Script) => void;
+  onSave: (script: Script) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: EditorSaveState) => void;
 }
@@ -20,11 +22,13 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const [hotkey, setHotkey] = useState(script?.hotkey ?? "");
   const [contributionGroups, setContributionGroups] = useState<AutomationContributionGroup[]>(() => defaultContributionGroups(script));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
-  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+  const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(script?.streamDeckIcon ?? defaultStreamDeckIcon("automation"));
+  const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     hotkey: hotkey.trim(),
     contributionGroups,
+    streamDeckIcon,
   });
   const hotkeyStatus = hotkey.trim() ? validateHotkey(hotkey, hotkeyOwners, script?.id) : { state: "available" as const, message: "Optional. Capture a hotkey to run this automation in demo mode." };
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available";
@@ -38,7 +42,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const addContributionGroup = () => {
     setContributionGroups([
       ...contributionGroups,
-      { id: crypto.randomUUID(), title: `Group ${contributionGroups.length + 1}`, contributions: [] },
+      { id: crypto.randomUUID(), title: `Step ${contributionGroups.length + 1}`, contributions: [] },
     ]);
   };
 
@@ -79,20 +83,33 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
       : group));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveScript = () => {
     if (!canSave) return;
 
-    onSave({
+    void runSave(() => onSave({
       id: script?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),
       hotkey: hotkey.trim() || undefined,
       contributionGroups,
-      streamDeckIcon: script?.streamDeckIcon,
-    });
-    markSaved();
+      streamDeckIcon,
+    }));
   };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveScript();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || capturingHotkey) return;
+      event.preventDefault();
+      saveScript();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -105,7 +122,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   };
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+    onSaveStateChange?.({ canSave, readinessText, saveStatus, hasUnsavedChanges });
   }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   return (
@@ -176,9 +193,14 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
 
       <div data-testid="automation-contributions-section">
         <div className="flex items-center justify-between mb-2">
-          <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Contribution Groups
-          </label>
+          <div>
+            <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
+              Steps
+            </label>
+            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }} data-testid="automation-steps-help">
+              Steps run in order. Actions inside a step run top to bottom.
+            </p>
+          </div>
           <button
             type="button"
             onClick={addContributionGroup}
@@ -186,12 +208,12 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
             style={{ color: "var(--color-accent)" }}
             data-testid="add-contribution-group"
           >
-            + Add Group
+            + Add step
           </button>
         </div>
         {contributionGroups.length === 0 && (
           <p className="text-base" style={{ color: "var(--color-text-secondary)" }} data-testid="no-contributions">
-            No contribution groups yet. Add a group, then add ordered contributions.
+            No steps yet. Add a step, then add the actions it should run.
           </p>
         )}
         {contributionGroups.map((group, groupIndex) => (
@@ -203,10 +225,11 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                 onChange={(e) => updateContributionGroupTitle(group.id, e.target.value)}
                 className="flex-1 px-2 py-1 rounded text-base"
                 style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                aria-label={`Step ${groupIndex + 1} name`}
                 data-testid={`contribution-group-title-${groupIndex}`}
               />
-              <button type="button" onClick={() => addOpenSiteContribution(group.id)} className="text-base font-medium" style={{ color: "var(--color-accent)" }} data-testid={`add-open-site-${groupIndex}`}>
-                + Open Site
+              <button type="button" onClick={() => addOpenSiteContribution(group.id)} className="text-base font-medium" style={{ color: "var(--color-accent)" }} title="Add an Open site action" data-testid={`add-open-site-${groupIndex}`}>
+                + Add action
               </button>
               <button type="button" onClick={() => removeContributionGroup(group.id)} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-group-${groupIndex}`}>
                 Remove
@@ -241,6 +264,13 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
         ))}
       </div>
 
+      <IconEditor
+        icon={streamDeckIcon}
+        title={title || "Automation"}
+        snippetType="automation"
+        onChange={setStreamDeckIcon}
+        testIdPrefix="automation-streamdeck-icon"
+      />
     </form>
   );
 }

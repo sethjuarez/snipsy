@@ -190,8 +190,6 @@ pub enum AutomationContribution {
         #[serde(skip_serializing_if = "Option::is_none")]
         title: Option<String>,
         url: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        idempotency_key: Option<String>,
     },
 }
 
@@ -439,6 +437,7 @@ mod tests {
         assert!(script.contribution_groups.is_empty());
 
         let re_json = serde_json::to_string(&script).unwrap();
+        assert!(!re_json.contains("idempotencyKey"));
         let re_script: Script = serde_json::from_str(&re_json).unwrap();
         assert_eq!(script, re_script);
     }
@@ -472,7 +471,7 @@ mod tests {
                             "kind": "openSite",
                             "title": "Docs",
                             "url": "https://snipsy.dev",
-                            "idempotencyKey": "openSite:https://snipsy.dev"
+                            "idempotencyKey": "legacy-ignored"
                         }
                     ]
                 }
@@ -484,6 +483,7 @@ mod tests {
         assert_eq!(script.contribution_groups[0].contributions.len(), 1);
 
         let re_json = serde_json::to_string(&script).unwrap();
+        assert!(!re_json.contains("idempotencyKey"));
         let re_script: Script = serde_json::from_str(&re_json).unwrap();
         assert_eq!(script, re_script);
     }

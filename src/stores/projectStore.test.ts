@@ -4,12 +4,12 @@ import type { Script, TextSnippet, VideoSnippet } from "../types";
 const backend = vi.hoisted(() => ({
   createProject: vi.fn(),
   openProject: vi.fn(),
+  saveProject: vi.fn(),
   saveTextSnippets: vi.fn(),
   saveVideoSnippets: vi.fn(),
   loadAutomations: vi.fn(),
   saveAutomation: vi.fn(),
   deleteAutomation: vi.fn(),
-  checkFfmpeg: vi.fn(),
   enterDemoMode: vi.fn(),
   exitDemoMode: vi.fn(),
   isDemoMode: vi.fn(),
@@ -24,6 +24,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 const { buildDemoHotkeys, useProjectStore } = await import("./projectStore");
+const { useKeepAwakeStore } = await import("./keepAwakeStore");
 
 const text = (id: string, hotkey: string): TextSnippet => ({
   id, title: id, description: "", text: `text ${id}`, hotkey, delivery: "paste",
@@ -42,7 +43,6 @@ beforeEach(async () => {
   for (const fn of Object.values(backend)) fn.mockReset().mockResolvedValue(undefined);
   backend.enterDemoMode.mockResolvedValue([]);
   backend.loadAutomations.mockResolvedValue([]);
-  backend.checkFfmpeg.mockResolvedValue({ available: true });
   backend.isDemoMode.mockResolvedValue(false);
   useProjectStore.setState({
     projectPath: "C:/project",
@@ -52,8 +52,33 @@ beforeEach(async () => {
     automations: [],
     demoMode: false,
     demoHotkeyIssues: [],
+    demoHotkeySyncError: null,
   });
   await useProjectStore.getState().syncDemoHotkeys(); // drain the queue between tests
+});
+
+describe("updateProject", () => {
+  it("saves the name and description and renames the recent entry", async () => {
+    localStorage.setItem("snipsy:recentProjects", JSON.stringify([
+      { path: "C:/project", name: "Project", lastOpened: "2024-01-01T00:00:00.000Z" },
+      { path: "C:/other", name: "Other", lastOpened: "2024-01-01T00:00:00.000Z" },
+    ]));
+    backend.saveProject.mockResolvedValue({ name: "Renamed", description: "Notes" });
+
+    await useProjectStore.getState().updateProject(" Renamed ", " Notes ");
+
+    expect(backend.saveProject).toHaveBeenCalledWith("C:/project", " Renamed ", " Notes ");
+    const state = useProjectStore.getState();
+    expect(state.projectName).toBe("Renamed");
+    expect(state.projectDescription).toBe("Notes");
+    expect(state.recentProjects.map((r) => `${r.path}:${r.name}`)).toEqual(["C:/project:Renamed", "C:/other:Other"]);
+  });
+
+  it("keeps the old name when the backend rejects", async () => {
+    backend.saveProject.mockRejectedValue("Project name cannot be empty.");
+    await expect(useProjectStore.getState().updateProject("", "")).rejects.toBe("Project name cannot be empty.");
+    expect(useProjectStore.getState().projectName).toBe("Project");
+  });
 });
 
 describe("buildDemoHotkeys", () => {
@@ -72,6 +97,31 @@ describe("buildDemoHotkeys", () => {
 });
 
 describe("demo hotkey sync", () => {
+  it("passes the Keep awake choice to the backend", async () => {
+    const lastOptions = () => backend.enterDemoMode.mock.calls[backend.enterDemoMode.mock.calls.length - 1][1];
+    useKeepAwakeStore.setState({ keepAwake: true });
+    await useProjectStore.getState().enterDemoMode();
+    expect(lastOptions()).toEqual({ keepAwake: true });
+    await useProjectStore.getState().exitDemoMode();
+
+    useKeepAwakeStore.setState({ keepAwake: false });
+    await useProjectStore.getState().enterDemoMode();
+    expect(lastOptions()).toEqual({ keepAwake: false });
+    await useProjectStore.getState().exitDemoMode();
+    useKeepAwakeStore.setState({ keepAwake: true });
+  });
+
+  it("stays off and rejects when the backend can't go live", async () => {
+    backend.enterDemoMode.mockRejectedValueOnce("keep-awake failed");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(useProjectStore.getState().enterDemoMode()).rejects.toBe("keep-awake failed");
+    expect(useProjectStore.getState().demoMode).toBe(false);
+    expect(backend.activateDemoTray).not.toHaveBeenCalled();
+
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
+    expect(backend.enterDemoMode).toHaveBeenCalledTimes(1);
+  });
+
   it("does not touch backend hotkeys outside demo mode", async () => {
     await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
     expect(backend.saveTextSnippets).toHaveBeenCalled();
@@ -107,13 +157,21 @@ describe("demo hotkey sync", () => {
     expect(useProjectStore.getState().demoHotkeyIssues).toEqual([]);
   });
 
-  it("keeps syncing after a failed registration", async () => {
-    backend.enterDemoMode.mockRejectedValueOnce(new Error("boom"));
+  it("records a failed live re-sync and clears it on the next success or exit", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await useProjectStore.getState().enterDemoMode();
+    backend.enterDemoMode.mockRejectedValueOnce(new Error("boom"));
     await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+1")]);
-    expect(backend.enterDemoMode).toHaveBeenCalledTimes(2);
-    expect(registeredIds()).toEqual(["t:Ctrl+1"]);
+    expect(backend.saveTextSnippets).toHaveBeenCalled();
+    expect(useProjectStore.getState().demoHotkeySyncError).toContain("boom");
+
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+2")]);
+    expect(useProjectStore.getState().demoHotkeySyncError).toBeNull();
+
+    backend.enterDemoMode.mockRejectedValueOnce(new Error("again"));
+    await useProjectStore.getState().setTextSnippets([text("t", "Ctrl+3")]);
+    await useProjectStore.getState().exitDemoMode();
+    expect(useProjectStore.getState().demoHotkeySyncError).toBeNull();
   });
 
   it("runs a quick enter then exit in order, ending with hotkeys cleared", async () => {
@@ -141,15 +199,15 @@ describe("demo hotkey sync", () => {
     expect(useProjectStore.getState().demoMode).toBe(false);
   });
 
-  it("re-syncs hotkeys on project open even if FFmpeg checks fail", async () => {
+  it("re-syncs hotkeys on project open even if automations fail to load", async () => {
     await useProjectStore.getState().enterDemoMode();
     backend.openProject.mockResolvedValue({
       project: { name: "Other", description: "" },
       textSnippets: [text("o", "Ctrl+5")],
       videoSnippets: [],
     });
-    backend.checkFfmpeg.mockRejectedValue(new Error("no ffmpeg"));
-    await useProjectStore.getState().openProject("C:/other");
+    backend.loadAutomations.mockRejectedValue(new Error("bad automations"));
+    await expect(useProjectStore.getState().openProject("C:/other")).rejects.toThrow("bad automations");
     expect(registeredIds()).toEqual(["o:Ctrl+5"]);
   });
 

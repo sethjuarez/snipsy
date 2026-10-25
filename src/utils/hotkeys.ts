@@ -27,11 +27,33 @@ const MODIFIER_CODES = new Set([
   "MetaRight",
 ]);
 
-const MODIFIER_NAMES = new Set(["CmdOrControl", "Control", "Ctrl", "Command", "Cmd", "Meta", "Shift", "Alt", "Option"]);
+// Lowercase modifier names accepted by the backend parser (case-insensitive).
+const MODIFIER_NAMES = new Set([
+  "cmdorcontrol",
+  "commandorcontrol",
+  "cmdorctrl",
+  "commandorctrl",
+  "control",
+  "ctrl",
+  "command",
+  "cmd",
+  "meta",
+  "super",
+  "shift",
+  "alt",
+  "option",
+]);
+const isModifierName = (part: string) => MODIFIER_NAMES.has(part.toLowerCase());
 
 export function formatKeyCombo(event: KeyboardEvent): string {
   const parts: string[] = [];
-  if (event.ctrlKey || event.metaKey) parts.push("CmdOrControl");
+  if (isMacPlatform()) {
+    // On macOS, Command and the physical Control key are different modifiers.
+    if (event.metaKey) parts.push("CmdOrControl");
+    if (event.ctrlKey) parts.push("Control");
+  } else if (event.ctrlKey || event.metaKey) {
+    parts.push("CmdOrControl");
+  }
   if (event.shiftKey) parts.push("Shift");
   if (event.altKey) parts.push("Alt");
 
@@ -151,10 +173,10 @@ export function validateHotkey(
   }
 
   const parts = hotkey.split("+").map((part) => part.trim()).filter(Boolean);
-  const hasModifier = parts.some((part) => MODIFIER_NAMES.has(part));
-  const hasKey = parts.some((part) => !MODIFIER_NAMES.has(part));
-  if (!hasModifier || !hasKey) {
-    return { state: "invalid", message: `Use at least one modifier plus one key, like ${displayHotkey("CmdOrControl+Shift+1")}.` };
+  const hasModifier = parts.some(isModifierName);
+  const keyCount = parts.filter((part) => !isModifierName(part)).length;
+  if (!hasModifier || keyCount !== 1) {
+    return { state: "invalid", message: `Use at least one modifier plus exactly one key, like ${displayHotkey("CmdOrControl+Shift+1")}.` };
   }
 
   const conflict = owners.find((owner) => owner.id !== currentId && normalizeHotkey(owner.hotkey) === normalized);
@@ -198,6 +220,32 @@ export function collectHotkeyOwners(
   ];
 }
 
+export interface HotkeyProblem {
+  tone: "warning" | "danger";
+  label: string;
+  detail: string;
+}
+
+/** Problem worth flagging on a list row, or null when the hotkey is fine (or optional and unset). */
+export function hotkeyProblem(
+  hotkey: string | undefined,
+  owners: HotkeyOwner[],
+  ownerId: string,
+  optional = false,
+): HotkeyProblem | null {
+  const status = validateHotkey(hotkey ?? "", owners, ownerId);
+  switch (status.state) {
+    case "available":
+      return null;
+    case "empty":
+      return optional ? null : { tone: "warning", label: "No hotkey", detail: "Assign a hotkey so this works in demo mode." };
+    case "invalid":
+      return { tone: "danger", label: "Invalid hotkey", detail: status.message };
+    case "conflict":
+      return { tone: "danger", label: "Hotkey conflict", detail: status.message };
+  }
+}
+
 /** One line per hotkey demo mode could not arm, using snippet titles where known. */
 export function describeHotkeyIssues(issues: HotkeyIssue[], owners: HotkeyOwner[]): string {
   const title = (id: string) => owners.find((owner) => owner.id === id)?.title ?? "Unknown snippet";
@@ -208,4 +256,38 @@ export function describeHotkeyIssues(issues: HotkeyIssue[], owners: HotkeyOwner[
         : `${displayHotkey(issue.hotkey)}: ${title(issue.snippetId)} could not be registered (${issue.detail})`,
     )
     .join("\n");
+}
+
+export type HotkeyAssignmentState = "armed" | "duplicate" | "invalid" | "unassigned" | "failed";
+
+export interface HotkeyAssignment {
+  owner: HotkeyOwner;
+  state: HotkeyAssignmentState;
+  /** Owner that keeps the hotkey when this one is a duplicate. */
+  keptBy?: HotkeyOwner;
+  detail?: string;
+}
+
+/**
+ * What demo mode does with each owner, in the order the store sends hotkeys
+ * to the backend: the first owner of a hotkey is armed and later ones are
+ * skipped. Pass the last demo's issues to mark hotkeys the OS refused.
+ */
+export function assignHotkeys(owners: HotkeyOwner[], issues: ReadonlyArray<HotkeyIssue> = []): HotkeyAssignment[] {
+  // Key by owner and hotkey so a stale failure doesn't follow a changed hotkey.
+  const failed = new Map(
+    issues.filter((issue) => issue.kind === "failed").map((issue) => [`${issue.snippetId}\n${normalizeHotkey(issue.hotkey)}`, issue.detail]),
+  );
+  const keptBy = new Map<string, HotkeyOwner>();
+  return owners.map((owner) => {
+    const status = validateHotkey(owner.hotkey, []);
+    if (status.state === "empty") return { owner, state: "unassigned" };
+    if (status.state !== "available") return { owner, state: "invalid", detail: status.message };
+    const key = normalizeHotkey(owner.hotkey);
+    const kept = keptBy.get(key);
+    if (kept) return { owner, state: "duplicate", keptBy: kept, detail: `Also used by ${kept.title}, which wins.` };
+    keptBy.set(key, owner);
+    const failure = failed.get(`${owner.id}\n${key}`);
+    return failure !== undefined ? { owner, state: "failed", detail: failure } : { owner, state: "armed" };
+  });
 }

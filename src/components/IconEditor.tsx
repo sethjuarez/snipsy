@@ -5,22 +5,19 @@ import { STREAM_DECK_PRESETS, defaultStreamDeckIcon, isSafeImageDataUrl, streamD
 interface IconEditorProps {
   icon: StreamDeckIcon;
   title: string;
-  snippetType: "text" | "video";
+  snippetType: "text" | "video" | "automation";
   onChange: (icon: StreamDeckIcon) => void;
   compact?: boolean;
   testIdPrefix: string;
 }
 
 const MAX_IMAGE_BYTES = 750 * 1024;
-const DEFAULT_PRESET = {
-  text: "text",
-  video: "play",
-} as const;
 
 function IconEditor({ icon, title, snippetType, onChange, compact = false, testIdPrefix }: IconEditorProps) {
   const fallback = defaultStreamDeckIcon(snippetType);
-  const fallbackBackground = fallback.background ?? (snippetType === "video" ? "#1e1b4b" : "#111827");
-  const fallbackForeground = fallback.kind !== "image" ? fallback.foreground ?? (snippetType === "video" ? "#a78bfa" : "#38bdf8") : snippetType === "video" ? "#a78bfa" : "#38bdf8";
+  const fallbackPreset = fallback.kind === "preset" ? fallback.value : "text";
+  const fallbackBackground = fallback.background ?? "#111827";
+  const fallbackForeground = (fallback.kind !== "image" ? fallback.foreground : undefined) ?? "#38bdf8";
   const background = icon.background ?? fallbackBackground;
   const foreground = icon.kind !== "image" ? icon.foreground ?? fallbackForeground : fallbackForeground;
   const preview = streamDeckIconToDataUrl(icon, title, snippetType);
@@ -28,13 +25,13 @@ function IconEditor({ icon, title, snippetType, onChange, compact = false, testI
 
   function updateKind(kind: StreamDeckIcon["kind"]) {
     if (kind === "emoji") {
-      onChange({ kind, value: snippetType === "video" ? "▶" : "✨", background, foreground });
+      onChange({ kind, value: snippetType === "video" ? "▶" : snippetType === "automation" ? "🚀" : "✨", background, foreground });
     } else if (kind === "generated") {
       onChange({ kind, background, foreground });
     } else if (kind === "image") {
       onChange({ kind, value: "", background });
     } else {
-      onChange({ kind, value: snippetType === "video" ? "play" : "text", background, foreground });
+      onChange({ kind, value: fallbackPreset, background, foreground });
     }
   }
 
@@ -49,7 +46,7 @@ function IconEditor({ icon, title, snippetType, onChange, compact = false, testI
   }
 
   function updatePreset(value: string) {
-    onChange({ kind: "preset", value: STREAM_DECK_PRESETS.includes(value as (typeof STREAM_DECK_PRESETS)[number]) ? value as (typeof STREAM_DECK_PRESETS)[number] : DEFAULT_PRESET[snippetType], background, foreground });
+    onChange({ kind: "preset", value: STREAM_DECK_PRESETS.includes(value as (typeof STREAM_DECK_PRESETS)[number]) ? value as (typeof STREAM_DECK_PRESETS)[number] : fallbackPreset, background, foreground });
   }
 
   function updateEmoji(value: string) {
