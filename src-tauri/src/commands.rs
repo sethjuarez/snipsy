@@ -59,8 +59,11 @@ pub fn open_project(
     path: String,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<ProjectData, String> {
-    let project_dir = PathBuf::from(&path);
+    load_project_data(&PathBuf::from(&path))
+}
 
+/// Reads and parses a project folder exactly as opening it does.
+pub fn load_project_data(project_dir: &std::path::Path) -> Result<ProjectData, String> {
     let project_json = fs::read_to_string(project_dir.join("project.json"))
         .map_err(|e| format!("Failed to read project.json: {e}"))?;
     let project: Project = serde_json::from_str(&project_json)

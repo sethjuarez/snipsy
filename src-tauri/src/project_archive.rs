@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufReader, BufWriter, Read};
 use std::path::{Component, Path, PathBuf};
 
 use tauri_plugin_auditaur::IpcTraceContext;
@@ -11,6 +11,9 @@ const SKIPPED_DIRS: &[&str] = &[".git"];
 const COMPRESSED_EXTENSIONS: &[&str] = &["json", "txt", "md"];
 /// macOS Finder adds resource-fork metadata here when zipping.
 const IGNORED_ARCHIVE_ROOTS: &[&str] = &["__MACOSX"];
+/// Guards against zip bombs while leaving room for long recorded demos.
+const MAX_ARCHIVE_ENTRIES: usize = 20_000;
+const MAX_EXTRACTED_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,10 +87,7 @@ pub fn write_project_archive(project_dir: &Path, archive_path: &Path) -> Result<
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
-    if archive_path.exists() {
-        fs::remove_file(archive_path).map_err(|e| format!("Failed to replace existing archive: {e}"))?;
-    }
-    fs::rename(&temp_path, archive_path).map_err(|e| format!("Failed to save archive: {e}"))?;
+    replace_file(&temp_path, archive_path)?;
 
     Ok(ArchiveSummary {
         path: archive_path.to_string_lossy().into_owned(),
@@ -106,9 +106,17 @@ pub fn extract_project_archive(archive_path: &Path, destination: &Path) -> Resul
     let file = File::open(archive_path).map_err(|e| format!("Failed to open archive: {e}"))?;
     let mut archive = ZipArchive::new(BufReader::new(file)).map_err(|e| format!("Not a valid zip archive: {e}"))?;
 
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        return Err(format!("This archive has too many files ({}).", archive.len()));
+    }
     let mut names = Vec::with_capacity(archive.len());
+    let mut declared_bytes: u64 = 0;
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(|e| format!("Failed to read archive: {e}"))?;
+        declared_bytes = declared_bytes.saturating_add(entry.size());
+        if declared_bytes > MAX_EXTRACTED_BYTES {
+            return Err("This archive is too large to import.".into());
+        }
         let name = entry
             .enclosed_name()
             .ok_or_else(|| format!("Archive entry has an unsafe path: {}", entry.name().unwrap_or_default()))?;
@@ -119,6 +127,7 @@ pub fn extract_project_archive(archive_path: &Path, destination: &Path) -> Resul
 
     fs::create_dir_all(destination).map_err(|e| format!("Failed to create destination: {e}"))?;
     let mut file_count = 0;
+    let mut extracted_bytes: u64 = 0;
     let result = (|| {
         for (index, (name, is_dir)) in names.iter().enumerate() {
             let Ok(relative) = name.strip_prefix(&root) else { continue };
@@ -138,10 +147,18 @@ pub fn extract_project_archive(archive_path: &Path, destination: &Path) -> Resul
             let mut output = BufWriter::new(
                 File::create(&target).map_err(|e| format!("Failed to create {}: {e}", relative.display()))?,
             );
-            io::copy(&mut entry, &mut output)
+            // Declared sizes are untrusted, so cap the bytes actually written too.
+            let budget = MAX_EXTRACTED_BYTES - extracted_bytes;
+            let written = io::copy(&mut (&mut entry).take(budget + 1), &mut output)
                 .map_err(|e| format!("Failed to extract {}: {e}", relative.display()))?;
+            if written > budget {
+                return Err("This archive is too large to import.".into());
+            }
+            extracted_bytes += written;
             file_count += 1;
         }
+        crate::commands::load_project_data(destination)
+            .map_err(|e| format!("This archive is not a valid Snipsy project. {e}"))?;
         Ok::<(), String>(())
     })();
     if let Err(error) = result {
@@ -153,6 +170,29 @@ pub fn extract_project_archive(archive_path: &Path, destination: &Path) -> Resul
         path: destination.to_string_lossy().into_owned(),
         file_count,
     })
+}
+
+/// Swaps in the new archive, restoring the previous one if the swap fails.
+fn replace_file(new_file: &Path, target: &Path) -> Result<(), String> {
+    if !target.exists() {
+        return fs::rename(new_file, target).map_err(|e| {
+            let _ = fs::remove_file(new_file);
+            format!("Failed to save archive: {e}")
+        });
+    }
+    let backup = target.with_extension("zip.bak");
+    let _ = fs::remove_file(&backup);
+    if let Err(e) = fs::rename(target, &backup) {
+        let _ = fs::remove_file(new_file);
+        return Err(format!("Failed to replace existing archive: {e}"));
+    }
+    if let Err(e) = fs::rename(new_file, target) {
+        let _ = fs::rename(&backup, target);
+        let _ = fs::remove_file(new_file);
+        return Err(format!("Failed to save archive: {e}"));
+    }
+    let _ = fs::remove_file(&backup);
+    Ok(())
 }
 
 /// Projects may be zipped at the root or inside a single wrapper folder.
@@ -262,6 +302,8 @@ mod tests {
         fs::write(dir.join(".git").join("HEAD"), "ref").unwrap();
     }
 
+    const PROJECT: &[u8] = br#"{"name":"Demo","description":""}"#;
+
     fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
         let mut writer = ZipWriter::new(File::create(path).unwrap());
         for (name, data) in entries {
@@ -326,7 +368,13 @@ mod tests {
         let archive = out.path().join("wrapped.zip");
         write_zip(
             &archive,
-            &[("Demo/project.json", b"{}"), ("Demo/videos/a.mp4", b"v"), ("__MACOSX/Demo/._project.json", b"x")],
+            &[
+                ("Demo/project.json", PROJECT),
+                ("Demo/text-snippets.json", b"[]"),
+                ("Demo/video-snippets.json", b"[]"),
+                ("Demo/videos/a.mp4", b"v"),
+                ("__MACOSX/Demo/._project.json", b"x"),
+            ],
         );
 
         let dest = out.path().join("dest");
@@ -349,7 +397,7 @@ mod tests {
     fn rejects_non_empty_destination() {
         let out = tempfile::tempdir().unwrap();
         let archive = out.path().join("ok.zip");
-        write_zip(&archive, &[("project.json", b"{}")]);
+        write_zip(&archive, &[("project.json", PROJECT)]);
         let dest = out.path().join("dest");
         fs::create_dir_all(&dest).unwrap();
         fs::write(dest.join("existing.txt"), "x").unwrap();
@@ -361,10 +409,53 @@ mod tests {
     fn rejects_zip_slip_entries() {
         let out = tempfile::tempdir().unwrap();
         let archive = out.path().join("evil.zip");
-        write_zip(&archive, &[("project.json", b"{}"), ("../escape.txt", b"x")]);
+        write_zip(&archive, &[("project.json", PROJECT), ("../escape.txt", b"x")]);
         let dest = out.path().join("dest");
         let error = extract_project_archive(&archive, &dest).unwrap_err();
         assert!(error.contains("unsafe path"));
         assert!(!out.path().join("escape.txt").exists());
+    }
+
+    #[test]
+    fn invalid_project_import_leaves_destination_empty_for_retry() {
+        let out = tempfile::tempdir().unwrap();
+        let archive = out.path().join("broken.zip");
+        write_zip(&archive, &[("project.json", PROJECT), ("text-snippets.json", b"not json")]);
+        let dest = out.path().join("dest");
+        let error = extract_project_archive(&archive, &dest).unwrap_err();
+        assert!(error.contains("not a valid Snipsy project"), "{error}");
+        assert_eq!(fs::read_dir(&dest).unwrap().count(), 0);
+
+        let good = out.path().join("good.zip");
+        write_zip(&good, &[("project.json", PROJECT), ("text-snippets.json", b"[]"), ("video-snippets.json", b"[]")]);
+        extract_project_archive(&good, &dest).unwrap();
+        assert!(dest.join("project.json").is_file());
+    }
+
+    #[test]
+    fn re_export_replaces_existing_archive_without_leftovers() {
+        let source = tempfile::tempdir().unwrap();
+        sample_project(source.path());
+        let out = tempfile::tempdir().unwrap();
+        let archive = out.path().join("demo.zip");
+        fs::write(&archive, b"old").unwrap();
+        write_project_archive(source.path(), &archive).unwrap();
+        assert!(ZipArchive::new(File::open(&archive).unwrap()).is_ok());
+        assert!(!archive.with_extension("zip.bak").exists());
+        assert!(!archive.with_extension("zip.partial").exists());
+    }
+    #[test]
+    fn rejects_archives_with_too_many_entries() {
+        let out = tempfile::tempdir().unwrap();
+        let archive = out.path().join("many.zip");
+        let mut writer = ZipWriter::new(File::create(&archive).unwrap());
+        for index in 0..=MAX_ARCHIVE_ENTRIES {
+            writer.start_file(format!("f{index}"), SimpleFileOptions::default()).unwrap();
+        }
+        writer.finish().unwrap();
+        let dest = out.path().join("dest");
+        let error = extract_project_archive(&archive, &dest).unwrap_err();
+        assert!(error.contains("too many files"), "{error}");
+        assert!(!dest.exists() || fs::read_dir(&dest).unwrap().count() == 0);
     }
 }
