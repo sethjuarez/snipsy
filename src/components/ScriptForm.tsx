@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import type { AutomationContributionGroup, Script } from "../types";
+import type { AutomationContributionGroup, Script, StreamDeckIcon } from "../types";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
+import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
+import IconEditor from "./IconEditor";
 
 interface ScriptFormProps {
   script?: Script;
@@ -20,11 +22,13 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const [hotkey, setHotkey] = useState(script?.hotkey ?? "");
   const [contributionGroups, setContributionGroups] = useState<AutomationContributionGroup[]>(() => defaultContributionGroups(script));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(script?.streamDeckIcon ?? defaultStreamDeckIcon("automation"));
   const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     hotkey: hotkey.trim(),
     contributionGroups,
+    streamDeckIcon,
   });
   const hotkeyStatus = hotkey.trim() ? validateHotkey(hotkey, hotkeyOwners, script?.id) : { state: "available" as const, message: "Optional. Capture a hotkey to run this automation in demo mode." };
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available";
@@ -88,7 +92,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
       description: description.trim(),
       hotkey: hotkey.trim() || undefined,
       contributionGroups,
-      streamDeckIcon: script?.streamDeckIcon,
+      streamDeckIcon,
     }));
   };
 
@@ -260,6 +264,13 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
         ))}
       </div>
 
+      <IconEditor
+        icon={streamDeckIcon}
+        title={title || "Automation"}
+        snippetType="automation"
+        onChange={setStreamDeckIcon}
+        testIdPrefix="automation-streamdeck-icon"
+      />
     </form>
   );
 }
