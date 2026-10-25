@@ -52,7 +52,7 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 
 ### Automations
 
-- A project can contain **automations** — ordered contribution groups that run repeatable setup actions.
+- A project can contain **automations** — ordered steps (stored as contribution groups) that run repeatable setup actions.
 - A contribution is an extensible action someone can add to an automation. Contributions run in group order, and each contribution is idempotent within a run.
 - The first built-in contribution is `openSite`, which opens an `http://` or `https://` URL in the default browser.
 - When an automation is executed, Snipsy:

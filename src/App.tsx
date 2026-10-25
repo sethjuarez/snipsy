@@ -5,6 +5,7 @@ import { Plus, X as XIcon, CheckCircle, Circle, Radio, Save, Upload } from "luci
 import Welcome from "./components/Welcome";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
+import StreamDeckEmulator from "./components/StreamDeckEmulator";
 import StatusBar from "./components/StatusBar";
 import TrayHint from "./components/TrayHint";
 import TextSnippetList from "./components/TextSnippetList";
@@ -401,7 +402,7 @@ function App() {
             setEditingVideoSnippet(undefined);
           }
           setActiveView(view);
-        }} onGoHome={closeProject} />
+        }} onCloseProject={closeProject} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -624,6 +625,8 @@ function App() {
                 )}
               </>
             )}
+            {activeView === "stream-deck" && <StreamDeckEmulator embedded />}
+
 
             </>
             )}
@@ -724,11 +727,12 @@ function ReadinessItem({ ready, label }: { ready: boolean; label: string }) {
 
 /* ── Content header with title + add button ── */
 const VIEW_LABELS: Record<AppView, string> = {
-  home: "Hotkey Overview",
+  home: "Overview",
   "text-snippets": "Text Snippets",
-  videos: "Videos",
-  "video-snippets": "Video Clips",
+  videos: "Source Videos",
+  "video-snippets": "Clips",
   automations: "Automations",
+  "stream-deck": "Stream Deck",
 };
 
 function ContentHeader({
@@ -757,7 +761,7 @@ function ContentHeader({
     form?: string;
   };
 }) {
-  const canAdd = view !== "videos" && view !== "home";
+  const canAdd = view === "text-snippets" || view === "video-snippets" || view === "automations";
 
   const primaryAction: ToolbarAction | undefined = showForm && saveAction
     ? {

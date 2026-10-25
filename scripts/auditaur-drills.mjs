@@ -401,7 +401,7 @@ function seedDrillProjectFiles() {
 function createSeededDrillProject() {
   rmSync(drillProjectPath, { recursive: true, force: true });
 
-  optionalClick('button[data-testid="nav-home"][title="Home"]');
+  optionalClick('button[data-testid="nav-close-project"]');
   waitForSelector('[data-testid="new-project"]');
   click('[data-testid="new-project"]');
   waitForSelector("#welcome-path");
@@ -413,7 +413,7 @@ function createSeededDrillProject() {
 
   seedDrillProjectFiles();
 
-  optionalClick('button[data-testid="nav-home"][title="Home"]');
+  optionalClick('button[data-testid="nav-close-project"]');
   waitForSelector('[data-testid="recent-project"]');
   const openResult = evaluate(`(() => {
     const expectedPath = ${JSON.stringify(drillProjectPath)};

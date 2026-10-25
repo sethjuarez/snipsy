@@ -38,7 +38,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const addContributionGroup = () => {
     setContributionGroups([
       ...contributionGroups,
-      { id: crypto.randomUUID(), title: `Group ${contributionGroups.length + 1}`, contributions: [] },
+      { id: crypto.randomUUID(), title: `Step ${contributionGroups.length + 1}`, contributions: [] },
     ]);
   };
 
@@ -176,9 +176,14 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
 
       <div data-testid="automation-contributions-section">
         <div className="flex items-center justify-between mb-2">
-          <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Contribution Groups
-          </label>
+          <div>
+            <label className="block font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
+              Steps
+            </label>
+            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }} data-testid="automation-steps-help">
+              Steps run in order. Actions inside a step run top to bottom.
+            </p>
+          </div>
           <button
             type="button"
             onClick={addContributionGroup}
@@ -186,12 +191,12 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
             style={{ color: "var(--color-accent)" }}
             data-testid="add-contribution-group"
           >
-            + Add Group
+            + Add step
           </button>
         </div>
         {contributionGroups.length === 0 && (
           <p className="text-base" style={{ color: "var(--color-text-secondary)" }} data-testid="no-contributions">
-            No contribution groups yet. Add a group, then add ordered contributions.
+            No steps yet. Add a step, then add the actions it should run.
           </p>
         )}
         {contributionGroups.map((group, groupIndex) => (
@@ -203,10 +208,11 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                 onChange={(e) => updateContributionGroupTitle(group.id, e.target.value)}
                 className="flex-1 px-2 py-1 rounded text-base"
                 style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                aria-label={`Step ${groupIndex + 1} name`}
                 data-testid={`contribution-group-title-${groupIndex}`}
               />
-              <button type="button" onClick={() => addOpenSiteContribution(group.id)} className="text-base font-medium" style={{ color: "var(--color-accent)" }} data-testid={`add-open-site-${groupIndex}`}>
-                + Open Site
+              <button type="button" onClick={() => addOpenSiteContribution(group.id)} className="text-base font-medium" style={{ color: "var(--color-accent)" }} title="Add an Open site action" data-testid={`add-open-site-${groupIndex}`}>
+                + Add action
               </button>
               <button type="button" onClick={() => removeContributionGroup(group.id)} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-group-${groupIndex}`}>
                 Remove

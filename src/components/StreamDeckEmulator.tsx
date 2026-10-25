@@ -6,7 +6,7 @@ import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const backend = getBackend();
 
-function StreamDeckEmulator() {
+function StreamDeckEmulator({ embedded = false }: { embedded?: boolean }) {
   const projectName = useProjectStore((s) => s.projectName);
   const projectPath = useProjectStore((s) => s.projectPath);
   const autoOpenLastProject = useProjectStore((s) => s.autoOpenLastProject);
@@ -83,13 +83,23 @@ function StreamDeckEmulator() {
     <div className="space-y-5">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-wide" style={{ color: "var(--color-text-secondary)" }}>Snipsy lab</p>
-          <h1 className="text-heading font-semibold">Stream Deck Emulator</h1>
+          {!embedded && (
+            <>
+              <p className="text-sm uppercase tracking-wide" style={{ color: "var(--color-text-secondary)" }}>Snipsy lab</p>
+              <h1 className="text-heading font-semibold">Stream Deck Emulator</h1>
+            </>
+          )}
+          {embedded ? (
+            <p className="text-base" style={{ color: "var(--color-text-secondary)" }} data-testid="streamdeck-help">
+              Each text snippet, clip, and automation becomes a key. Pressing a key here triggers it for real, just like the device. Install the Snipsy Stream Deck plugin to use a real device.
+            </p>
+          ) : (
           <p className="text-base mt-1" style={{ color: "var(--color-text-secondary)" }}>
             {projectName ? `${projectName}${demoMode ? " · demo mode on" : " · demo mode off"}` : "Open a project to populate buttons."}
           </p>
+          )}
         </div>
-        <div className="text-sm px-3 py-2 rounded" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }} data-testid="streamdeck-emulator-status">
+        <div className="text-sm px-3 py-2 rounded" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }} role="status" data-testid="streamdeck-emulator-status">
           {status}
         </div>
       </header>
@@ -101,7 +111,7 @@ function StreamDeckEmulator() {
       >
         {renderedButtons.length === 0 ? (
           <div className="col-span-5 text-center py-10" style={{ color: "var(--color-text-secondary)" }}>
-            No Stream Deck buttons available.
+            No keys yet. Add a text snippet, clip, or automation to create one.
           </div>
         ) : (
           renderedButtons.map((button) => (
