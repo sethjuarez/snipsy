@@ -1529,11 +1529,11 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
     { label: "Hotkey", ready: hotkeyStatus.state === "available" },
     { label: "Range", ready: endTime > startTime },
   ];
-  const inspectorTabs: Array<{ id: ClipInspectorTab; label: string; badge?: string }> = [
+  const inspectorTabs: Array<{ id: ClipInspectorTab; label: string; title?: string; badge?: string }> = [
     { id: "clip", label: "Basics", badge: hotkeyStatus.state === "available" && title.trim() ? undefined : "!" },
     { id: "playback", label: "Playback" },
     { id: "moments", label: "Moments", badge: String(pauseStops.length) },
-    { id: "stream-deck", label: "Stream Deck" },
+    { id: "stream-deck", label: "Deck", title: "Stream Deck" },
   ];
   const handleInspectorTabKey = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     const ids = inspectorTabs.map((tab) => tab.id);
@@ -2008,11 +2008,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       >
         <div className="space-y-4">
           <div
-            className="grid gap-1 rounded-lg p-1"
-            style={{
-              backgroundColor: "var(--color-surface-inset)",
-              gridTemplateColumns: `repeat(${inspectorTabs.length}, minmax(0, 1fr))`,
-            }}
+            className="flex gap-0.5 rounded-lg p-1"
+            style={{ backgroundColor: "var(--color-surface-inset)" }}
             role="tablist"
             aria-label="Clip inspector sections"
             data-testid="clip-inspector-tabs"
@@ -2030,11 +2027,13 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
                   tabIndex={active ? 0 : -1}
                   onClick={() => setInspectorTab(tab.id)}
                   onKeyDown={handleInspectorTabKey}
-                  className="flex min-w-0 items-center justify-center gap-1 rounded px-1.5 py-1 text-sm font-medium"
+                  className="flex min-w-0 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-sm font-medium"
                   style={{
                     backgroundColor: active ? "var(--color-accent)" : "transparent",
                     color: active ? "var(--color-text-on-accent)" : "var(--color-text-secondary)",
                   }}
+                  title={tab.title}
+                  aria-label={tab.title}
                   data-testid={`clip-inspector-tab-${tab.id}`}
                 >
                   <span className="truncate">{tab.label}</span>{tab.badge === "!" && <span className="sr-only"> (needs attention)</span>}

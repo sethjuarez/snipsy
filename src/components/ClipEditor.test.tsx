@@ -472,6 +472,11 @@ describe("ClipEditor inspector tabs", () => {
     expect(screen.getByTestId("clip-inspector-tab-moments").getAttribute("aria-controls")).toBeNull();
   });
 
+  it("uses a short Deck label with the full Stream Deck name for assistive tech", () => {
+    renderEditor([]);
+    expect(screen.getByRole("tab", { name: "Stream Deck" }).textContent).toBe("Deck");
+  });
+
   it("keeps the Stream Deck icon on its own tab", () => {
     renderEditor([]);
     fireEvent.click(screen.getByTestId("clip-inspector-tab-clip"));
