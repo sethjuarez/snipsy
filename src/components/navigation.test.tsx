@@ -114,12 +114,13 @@ describe("TitleBar", () => {
     const onToggleDemo = vi.fn();
     const { rerender } = render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={onToggleDemo} />);
     const toggle = screen.getByTestId("demo-mode-toggle");
-    expect(toggle.textContent).toBe("Start demo");
+    expect(toggle.textContent).toBe("Start");
     expect(toggle.getAttribute("aria-label")).toBe("Start demo");
     fireEvent.click(toggle);
     expect(onToggleDemo).toHaveBeenCalled();
     rerender(<TitleBar projectName="Demo" demoMode onToggleDemo={onToggleDemo} />);
-    expect(screen.getByTestId("demo-mode-toggle").textContent).toBe("Stop demo");
+    expect(screen.getByTestId("demo-mode-toggle").textContent).toBe("Stop");
+    expect(screen.getByTestId("demo-mode-toggle").getAttribute("aria-label")).toBe("Stop demo");
   });
 
   it("hides the search button without a handler", () => {

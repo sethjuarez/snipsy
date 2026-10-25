@@ -169,7 +169,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSe
               {demoMode
                 ? <CircleStop size={14} className="demo-pulse" aria-hidden="true" />
                 : <Play size={12} fill="currentColor" aria-hidden="true" />}
-              <span>{demoMode ? "Stop demo" : "Start demo"}</span>
+              <span>{demoMode ? "Stop" : "Start"}</span>
             </button>
           )}
 
