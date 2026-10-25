@@ -70,7 +70,7 @@ const video: ImportedVideo = {
   thumbnailPath: null,
 };
 
-function renderEditor(pauseStops: PauseStop[]) {
+function renderEditor(pauseStops: PauseStop[], extra: Partial<VideoSnippet> = {}) {
   const clip: VideoSnippet = {
     id: "clip-1",
     title: "Zoom clip",
@@ -81,6 +81,7 @@ function renderEditor(pauseStops: PauseStop[]) {
     hotkey: "CmdOrControl+Shift+9",
     speed: 1,
     pauseStops,
+    ...extra,
   };
   const onSave = vi.fn();
   const saveStates: ClipEditorSaveState[] = [];
@@ -106,6 +107,15 @@ const spotlightStop: PauseStop = {
   label: "Login",
   spotlight: { regions: [{ type: "rectangle", x: 60, y: 20, width: 20, height: 10 }] },
 };
+
+describe("ClipEditor saving", () => {
+  it("keeps transition actions it does not edit", () => {
+    const transitionActions = [{ trigger: "end", action: "nextSnippet" }] as unknown as VideoSnippet["transitionActions"];
+    const { onSave, save } = renderEditor([], { transitionActions });
+    save();
+    expect((onSave.mock.lastCall?.[0] as VideoSnippet).transitionActions).toEqual(transitionActions);
+  });
+});
 
 describe("ClipEditor zoom editing", () => {
   it("adds a ZoomIt-style zoom centered on the spotlight and saves it", async () => {

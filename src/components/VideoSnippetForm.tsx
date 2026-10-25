@@ -86,6 +86,8 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
     if (!canSave) return;
 
     void runSave(() => onSave({
+      // Keep playback settings this form doesn't edit (they live in the clip editor).
+      ...snippet,
       id: snippet?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),

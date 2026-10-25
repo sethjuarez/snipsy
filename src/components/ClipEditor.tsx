@@ -1410,6 +1410,8 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
       muted,
       streamDeckIcon,
       pauseStops: normalizedPauseStops.length > 0 ? normalizedPauseStops : undefined,
+      // Edited in the clip form, not here; keep them so saving the timeline doesn't drop them.
+      transitionActions: existingClip?.transitionActions,
     };
   };
 
