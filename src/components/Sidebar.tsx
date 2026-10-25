@@ -38,7 +38,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     id: "setup",
-    label: "Demo setup",
+    label: "Setup",
     items: [
       { id: "automations", label: "Automations", Icon: ScrollText },
     ],
