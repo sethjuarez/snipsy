@@ -174,9 +174,9 @@ export function validateHotkey(
 
   const parts = hotkey.split("+").map((part) => part.trim()).filter(Boolean);
   const hasModifier = parts.some(isModifierName);
-  const hasKey = parts.some((part) => !isModifierName(part));
-  if (!hasModifier || !hasKey) {
-    return { state: "invalid", message: `Use at least one modifier plus one key, like ${displayHotkey("CmdOrControl+Shift+1")}.` };
+  const keyCount = parts.filter((part) => !isModifierName(part)).length;
+  if (!hasModifier || keyCount !== 1) {
+    return { state: "invalid", message: `Use at least one modifier plus exactly one key, like ${displayHotkey("CmdOrControl+Shift+1")}.` };
   }
 
   const conflict = owners.find((owner) => owner.id !== currentId && normalizeHotkey(owner.hotkey) === normalized);

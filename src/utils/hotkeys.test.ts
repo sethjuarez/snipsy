@@ -60,6 +60,8 @@ describe("validateHotkey", () => {
     expect(validateHotkey("", []).state).toBe("empty");
     expect(validateHotkey("Ctrl+Shift", []).state).toBe("invalid");
     expect(validateHotkey("A", []).state).toBe("invalid");
+    expect(validateHotkey("Ctrl+A+B", []).state).toBe("invalid");
+    expect(validateHotkey("Ctrl+Shift+F5", []).state).toBe("available");
   });
 });
 
