@@ -92,6 +92,30 @@ describe("ScriptForm steps", () => {
     fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Open docs" }));
   });
+
+  it("reports saving, failure, and success to the header", async () => {
+    let settle!: { resolve: () => void; reject: (error: Error) => void };
+    const onSave = vi.fn(() => new Promise<void>((resolve, reject) => { settle = { resolve, reject }; }));
+    const onSaveStateChange = vi.fn();
+    render(<ScriptForm onSave={onSave} onSaveStateChange={onSaveStateChange} />);
+    const lastStatus = () => onSaveStateChange.mock.lastCall?.[0].saveStatus;
+
+    fireEvent.change(screen.getByTestId("automation-title"), { target: { value: "Open docs" } });
+    expect(lastStatus()).toBe("unsaved");
+
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(lastStatus()).toBe("saving");
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    settle.reject(new Error("disk full"));
+    await waitFor(() => expect(lastStatus()).toBe("error"));
+    expect(onSaveStateChange.mock.lastCall?.[0].hasUnsavedChanges).toBe(true);
+
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    settle.resolve();
+    await waitFor(() => expect(lastStatus()).toBe("saved"));
+  });
 });
 
 describe("StreamDeckPreview", () => {

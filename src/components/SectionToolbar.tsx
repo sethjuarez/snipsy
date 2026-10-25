@@ -15,11 +15,18 @@ interface SectionToolbarProps {
   title: string;
   status?: string;
   statusTestId?: string;
-  statusTone?: "success" | "muted";
+  statusTone?: "success" | "muted" | "warning" | "danger";
   primaryAction?: ToolbarAction;
   secondaryAction?: ToolbarAction;
   actions?: ToolbarAction[];
 }
+
+const STATUS_COLORS: Record<NonNullable<SectionToolbarProps["statusTone"]>, string> = {
+  success: "var(--color-success)",
+  muted: "var(--color-text-secondary)",
+  warning: "var(--color-warning)",
+  danger: "var(--color-danger)",
+};
 
 function getActionStyle(action: ToolbarAction): React.CSSProperties {
   if (action.tone === "danger") {
@@ -77,9 +84,12 @@ function SectionToolbar({
         {status && (
           <span
             className="max-w-40 truncate text-xs"
-            style={{ color: statusTone === "success" ? "var(--color-success)" : "var(--color-text-secondary)" }}
+            style={{ color: STATUS_COLORS[statusTone] }}
             title={status}
             data-testid={statusTestId}
+            data-tone={statusTone}
+            role="status"
+            aria-live="polite"
           >
             {status}
           </span>

@@ -201,7 +201,7 @@ if (isTauriRuntime()) {
 interface ClipEditorProps {
   video: ImportedVideo;
   existingClip?: VideoSnippet;
-  onSave: (clip: Omit<VideoSnippet, "id">) => void;
+  onSave: (clip: Omit<VideoSnippet, "id">) => Promise<void> | void;
   onSaveStateChange?: (state: ClipEditorSaveState) => void;
   hotkeyOwners?: HotkeyOwner[];
 }
@@ -1369,7 +1369,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   };
 
   // Baseline is taken once video metadata has loaded so default end times and speed don't count as edits.
-  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+  const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     startTime,
@@ -1416,8 +1416,7 @@ const ClipEditor = forwardRef<ClipEditorHandle, ClipEditorProps>(function ClipEd
   const handleSave = () => {
     const clip = buildClipDraft();
     if (!clip) return;
-    onSave(clip);
-    markSaved();
+    void runSave(() => onSave(clip));
   };
 
   const canSave = Boolean(title.trim()) && hotkeyStatus.state === "available" && endTime > startTime;

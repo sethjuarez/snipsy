@@ -13,6 +13,7 @@ import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList, { type VideoListHandle, type VideoListToolbarState } from "./components/VideoList";
 import ClipEditor, { type ClipEditorHandle, type ClipEditorSaveState } from "./components/ClipEditor";
+import { describeSaveState } from "./hooks/useSaveTracking";
 import VideoSnippetList from "./components/VideoSnippetList";
 import ClipsTabs from "./components/ClipsTabs";
 import HotkeyOverview from "./components/HotkeyOverview";
@@ -194,6 +195,17 @@ function App() {
       .catch((error: unknown) => showToast(`Could not duplicate ${noun}`, String(error), "error"));
   };
 
+  // Editors await this so they can show Saving…/Saved/Couldn't save; rethrowing keeps their changes unsaved.
+  const reportSave = async (saving: Promise<void>, title: string, noun: string) => {
+    try {
+      await saving;
+    } catch (error: unknown) {
+      showToast(`Couldn't save ${noun}`, String(error), "error");
+      throw error;
+    }
+    showToast(`Saved "${title}"`, undefined, "success");
+  };
+
   // -- Text snippet handlers --
   const handleEdit = (snippet: TextSnippet) => {
     setEditingSnippet(snippet);
@@ -209,15 +221,12 @@ function App() {
       },
     });
   };
-  const handleSave = (snippet: TextSnippet) => {
+  const handleSave = async (snippet: TextSnippet) => {
     const idx = textSnippets.findIndex((s) => s.id === snippet.id);
-    if (idx >= 0) {
-      const updated = [...textSnippets];
-      updated[idx] = snippet;
-      setTextSnippets(updated);
-    } else {
-      setTextSnippets([...textSnippets, snippet]);
-    }
+    const updated = idx >= 0
+      ? textSnippets.map((s) => (s.id === snippet.id ? snippet : s))
+      : [...textSnippets, snippet];
+    await reportSave(setTextSnippets(updated), snippet.title, "snippet");
     setEditingSnippet(snippet);
   };
   const handleCancel = () => {
@@ -259,15 +268,12 @@ function App() {
       },
     });
   };
-  const handleVideoSave = (snippet: VideoSnippet) => {
+  const handleVideoSave = async (snippet: VideoSnippet) => {
     const idx = videoSnippets.findIndex((s) => s.id === snippet.id);
-    if (idx >= 0) {
-      const updated = [...videoSnippets];
-      updated[idx] = snippet;
-      setVideoSnippets(updated);
-    } else {
-      setVideoSnippets([...videoSnippets, snippet]);
-    }
+    const updated = idx >= 0
+      ? videoSnippets.map((s) => (s.id === snippet.id ? snippet : s))
+      : [...videoSnippets, snippet];
+    await reportSave(setVideoSnippets(updated), snippet.title, "clip");
     setEditingVideoSnippet(snippet);
   };
   const handleVideoCancel = () => {
@@ -298,8 +304,8 @@ function App() {
       },
     });
   };
-  const handleScriptSave = (script: Script) => {
-    saveAutomation(script);
+  const handleScriptSave = async (script: Script) => {
+    await reportSave(saveAutomation(script), script.title, "automation");
     setShowScriptForm(false);
     setEditingScript(undefined);
   };
@@ -661,27 +667,7 @@ function App() {
                   existingClip={editingVideoSnippet}
                   hotkeyOwners={hotkeyOwners}
                   onSaveStateChange={setClipSaveState}
-                  onSave={(clip) => {
-                    if (editingVideoSnippet) {
-                      // Update existing snippet
-                      const idx = videoSnippets.findIndex((s) => s.id === editingVideoSnippet.id);
-                      if (idx >= 0) {
-                        const updatedSnippet = { id: editingVideoSnippet.id, ...clip };
-                        const updated = [...videoSnippets];
-                        updated[idx] = updatedSnippet;
-                        setVideoSnippets(updated);
-                        setEditingVideoSnippet(updatedSnippet);
-                      }
-                    } else {
-                      // Create new snippet
-                      const newSnippet: VideoSnippet = {
-                        id: crypto.randomUUID(),
-                        ...clip,
-                      };
-                      setVideoSnippets([...videoSnippets, newSnippet]);
-                      setEditingVideoSnippet(newSnippet);
-                    }
-                  }}
+                  onSave={(clip) => handleVideoSave({ id: editingVideoSnippet?.id ?? crypto.randomUUID(), ...clip })}
                 />
               </div>
             ) : (
@@ -906,7 +892,7 @@ function ContentHeader({
       onClick: saveAction.onClick,
       form: saveAction.form,
       type: saveAction.form ? "submit" : "button",
-      disabled: !saveAction.state.canSave,
+      disabled: !saveAction.state.canSave || saveAction.state.saveStatus === "saving",
       testId: saveAction.testId,
       tone: "primary",
     }
@@ -939,16 +925,16 @@ function ContentHeader({
     }
     : undefined;
 
+  const saveStatus = showForm && saveAction ? describeSaveState(saveAction.state) : undefined;
+
   return (
     <SectionToolbar
       title={editLabel ?? VIEW_LABELS[view]}
-      status={showForm
-        ? saveAction?.state.saveStatus === "saved" ? "Saved" : saveAction?.state.readinessText
-        : undefined}
+      status={saveStatus?.text}
       statusTestId={saveAction?.testId === "clip-save"
         ? "clip-readiness"
         : saveAction?.testId ? `${saveAction.testId}-status` : undefined}
-      statusTone={showForm && saveAction?.state.canSave ? "success" : "muted"}
+      statusTone={saveStatus?.tone}
       actions={[]}
       primaryAction={primaryAction}
       secondaryAction={secondaryAction}

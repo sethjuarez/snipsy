@@ -7,7 +7,7 @@ import IconEditor from "./IconEditor";
 
 interface VideoSnippetFormProps {
   snippet?: VideoSnippet;
-  onSave: (snippet: VideoSnippet) => void;
+  onSave: (snippet: VideoSnippet) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: EditorSaveState) => void;
 }
@@ -27,7 +27,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   const [muted, setMuted] = useState(snippet?.muted !== false);
   const [pauseStops] = useState(snippet?.pauseStops);
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("video"));
-  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+  const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     videoFile,
@@ -85,7 +85,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   const saveSnippet = () => {
     if (!canSave) return;
 
-    onSave({
+    void runSave(() => onSave({
       id: snippet?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),
@@ -99,8 +99,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
       streamDeckIcon,
       transitionActions:
         transitionActions.length > 0 ? transitionActions : undefined,
-    });
-    markSaved();
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -109,7 +108,7 @@ function VideoSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChang
   };
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+    onSaveStateChange?.({ canSave, readinessText, saveStatus, hasUnsavedChanges });
   }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   useEffect(() => {

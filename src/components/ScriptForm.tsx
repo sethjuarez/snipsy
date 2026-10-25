@@ -5,7 +5,7 @@ import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking"
 
 interface ScriptFormProps {
   script?: Script;
-  onSave: (script: Script) => void;
+  onSave: (script: Script) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: EditorSaveState) => void;
 }
@@ -20,7 +20,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const [hotkey, setHotkey] = useState(script?.hotkey ?? "");
   const [contributionGroups, setContributionGroups] = useState<AutomationContributionGroup[]>(() => defaultContributionGroups(script));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
-  const { saveStatus, hasUnsavedChanges, markSaved } = useSaveTracking({
+  const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
     hotkey: hotkey.trim(),
@@ -82,15 +82,14 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   const saveScript = () => {
     if (!canSave) return;
 
-    onSave({
+    void runSave(() => onSave({
       id: script?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),
       hotkey: hotkey.trim() || undefined,
       contributionGroups,
       streamDeckIcon: script?.streamDeckIcon,
-    });
-    markSaved();
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -119,7 +118,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
   };
 
   useEffect(() => {
-    onSaveStateChange?.({ canSave, readinessText: saveStatus === "saved" ? "Saved" : readinessText, saveStatus, hasUnsavedChanges });
+    onSaveStateChange?.({ canSave, readinessText, saveStatus, hasUnsavedChanges });
   }, [canSave, onSaveStateChange, readinessText, saveStatus, hasUnsavedChanges]);
 
   return (

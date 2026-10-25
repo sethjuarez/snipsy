@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useSaveTracking } from "./useSaveTracking";
+import { describeSaveState, useSaveTracking } from "./useSaveTracking";
 
 describe("useSaveTracking", () => {
   it("is idle until the snapshot changes, and clears when reverted", () => {
@@ -15,15 +15,77 @@ describe("useSaveTracking", () => {
     expect(result.current.hasUnsavedChanges).toBe(false);
   });
 
-  it("markSaved makes the current snapshot the new baseline", () => {
+  it("shows saving until the save resolves, then makes the snapshot the new baseline", async () => {
     const { result, rerender } = renderHook(({ value }) => useSaveTracking({ value }), { initialProps: { value: "a" } });
     rerender({ value: "b" });
-    act(() => result.current.markSaved());
+
+    let finish!: () => void;
+    let saved: Promise<boolean>;
+    act(() => {
+      saved = result.current.runSave(() => new Promise<void>((resolve) => { finish = resolve; }));
+    });
+    expect(result.current.saveStatus).toBe("saving");
+
+    await act(async () => {
+      finish();
+      expect(await saved).toBe(true);
+    });
     expect(result.current.saveStatus).toBe("saved");
     expect(result.current.hasUnsavedChanges).toBe(false);
 
     rerender({ value: "a" });
     expect(result.current.saveStatus).toBe("unsaved");
+  });
+
+  it("keeps changes unsaved and reports an error when the save fails", async () => {
+    const { result, rerender } = renderHook(({ value }) => useSaveTracking({ value }), { initialProps: { value: "a" } });
+    rerender({ value: "b" });
+
+    await act(async () => {
+      expect(await result.current.runSave(() => Promise.reject(new Error("disk full")))).toBe(false);
+    });
+    expect(result.current.saveStatus).toBe("error");
+    expect(result.current.hasUnsavedChanges).toBe(true);
+
+    await act(async () => {
+      await result.current.runSave(() => Promise.resolve());
+    });
+    expect(result.current.saveStatus).toBe("saved");
+  });
+
+  it("keeps edits made during a save unsaved", async () => {
+    const { result, rerender } = renderHook(({ value }) => useSaveTracking({ value }), { initialProps: { value: "a" } });
+    rerender({ value: "b" });
+
+    let finish!: () => void;
+    let saved: Promise<boolean>;
+    act(() => {
+      saved = result.current.runSave(() => new Promise<void>((resolve) => { finish = resolve; }));
+    });
+    rerender({ value: "c" });
+    await act(async () => {
+      finish();
+      await saved;
+    });
+    expect(result.current.saveStatus).toBe("unsaved");
+  });
+
+  it("ignores a second save while one is in flight", async () => {
+    const { result } = renderHook(() => useSaveTracking({ value: "a" }));
+    let finish!: () => void;
+    let first: Promise<boolean>;
+    act(() => {
+      first = result.current.runSave(() => new Promise<void>((resolve) => { finish = resolve; }));
+    });
+    let second = true;
+    await act(async () => {
+      second = await result.current.runSave(() => Promise.resolve());
+    });
+    expect(second).toBe(false);
+    await act(async () => {
+      finish();
+      await first;
+    });
   });
 
   it("waits for ready before capturing the baseline", () => {
@@ -37,5 +99,23 @@ describe("useSaveTracking", () => {
 
     rerender({ value: "edited", ready: true });
     expect(result.current.hasUnsavedChanges).toBe(true);
+  });
+});
+
+describe("describeSaveState", () => {
+  const state = (saveStatus: "idle" | "unsaved" | "saving" | "saved" | "error", canSave = true) => ({
+    canSave,
+    readinessText: canSave ? "Ready" : "Needs title",
+    saveStatus,
+    hasUnsavedChanges: saveStatus === "unsaved" || saveStatus === "error",
+  });
+
+  it("maps each state to header text and tone", () => {
+    expect(describeSaveState(state("idle"))).toEqual({ text: "Ready", tone: "muted" });
+    expect(describeSaveState(state("unsaved"))).toEqual({ text: "Unsaved changes", tone: "warning" });
+    expect(describeSaveState(state("saving"))).toEqual({ text: "Saving…", tone: "muted" });
+    expect(describeSaveState(state("saved"))).toEqual({ text: "Saved", tone: "success" });
+    expect(describeSaveState(state("error"))).toEqual({ text: "Couldn't save", tone: "danger" });
+    expect(describeSaveState(state("unsaved", false))).toEqual({ text: "Needs title", tone: "muted" });
   });
 });
