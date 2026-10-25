@@ -198,6 +198,32 @@ export function collectHotkeyOwners(
   ];
 }
 
+export interface HotkeyProblem {
+  tone: "warning" | "danger";
+  label: string;
+  detail: string;
+}
+
+/** Problem worth flagging on a list row, or null when the hotkey is fine (or optional and unset). */
+export function hotkeyProblem(
+  hotkey: string | undefined,
+  owners: HotkeyOwner[],
+  ownerId: string,
+  optional = false,
+): HotkeyProblem | null {
+  const status = validateHotkey(hotkey ?? "", owners, ownerId);
+  switch (status.state) {
+    case "available":
+      return null;
+    case "empty":
+      return optional ? null : { tone: "warning", label: "No hotkey", detail: "Assign a hotkey so this works in demo mode." };
+    case "invalid":
+      return { tone: "danger", label: "Invalid hotkey", detail: status.message };
+    case "conflict":
+      return { tone: "danger", label: "Hotkey conflict", detail: status.message };
+  }
+}
+
 /** One line per hotkey demo mode could not arm, using snippet titles where known. */
 export function describeHotkeyIssues(issues: HotkeyIssue[], owners: HotkeyOwner[]): string {
   const title = (id: string) => owners.find((owner) => owner.id === id)?.title ?? "Unknown snippet";

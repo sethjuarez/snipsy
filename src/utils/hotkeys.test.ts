@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { collectHotkeyOwners, describeHotkeyIssues, displayHotkey, normalizeHotkey, validateHotkey, type HotkeyOwner } from "./hotkeys";
+import { collectHotkeyOwners, describeHotkeyIssues, displayHotkey, hotkeyProblem, normalizeHotkey, validateHotkey, type HotkeyOwner } from "./hotkeys";
 
 const owner = (id: string, hotkey: string, title = id): HotkeyOwner => ({ id, title, hotkey, kind: "text" });
 
@@ -100,5 +100,24 @@ describe("displayHotkey", () => {
     expect(displayHotkey("CmdOrControl+Shift+1")).toBe("Ctrl+Shift+1");
     setPlatform("MacIntel");
     expect(displayHotkey("CmdOrControl+Alt+1")).toBe("Command+Option+1");
+  });
+});
+
+describe("hotkeyProblem", () => {
+  const owners = [owner("a", "CmdOrControl+1"), owner("b", "Ctrl+1"), owner("c", "CmdOrControl+2")];
+
+  it("returns null for an available hotkey", () => {
+    expect(hotkeyProblem("CmdOrControl+2", owners, "c")).toBeNull();
+  });
+
+  it("reports conflicts and invalid combos as danger", () => {
+    setPlatform("Win32");
+    expect(hotkeyProblem("CmdOrControl+1", owners, "a")).toMatchObject({ tone: "danger", label: "Hotkey conflict" });
+    expect(hotkeyProblem("A", owners, "x")).toMatchObject({ tone: "danger", label: "Invalid hotkey" });
+  });
+
+  it("warns about missing required hotkeys but not optional ones", () => {
+    expect(hotkeyProblem("", owners, "x")).toMatchObject({ tone: "warning", label: "No hotkey" });
+    expect(hotkeyProblem(undefined, owners, "x", true)).toBeNull();
   });
 });

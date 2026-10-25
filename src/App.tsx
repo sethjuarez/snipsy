@@ -23,6 +23,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners, describeHotkeyIssues } from "./utils/hotkeys";
+import { duplicateAutomation, duplicateTextSnippet, duplicateVideoSnippet } from "./utils/duplicate";
 import { upsertToast } from "./utils/toasts";
 import { traySurfaceName } from "./utils/platform";
 import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
@@ -119,6 +120,24 @@ function App() {
     );
   }, [demoHotkeyIssues]);
 
+  // Source video list, used to flag clips whose video was removed. Tagged with
+  // the project and cleared on leave so a stale set never flags a valid clip.
+  const [videoAvailability, setVideoAvailability] = useState<{ projectPath: string; files: ReadonlySet<string> } | null>(null);
+  useEffect(() => {
+    if (!projectPath || activeView !== "video-snippets") return;
+    let cancelled = false;
+    backend.getImportedVideos(projectPath)
+      .then((videos) => {
+        if (!cancelled) setVideoAvailability({ projectPath, files: new Set(videos.map((video) => video.relativePath)) });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      setVideoAvailability(null);
+    };
+  }, [projectPath, activeView]);
+  const availableVideoFiles = videoAvailability?.projectPath === projectPath ? videoAvailability.files : null;
+
   // Auto-open last project on startup
   useEffect(() => {
     // A webview reload resets demoMode to false while the backend may still
@@ -139,6 +158,12 @@ function App() {
       });
     return () => unlisten?.();
   }, [exitDemoMode]);
+
+  const reportDuplicate = (saving: Promise<void>, title: string, noun: string) => {
+    saving
+      .then(() => showToast(`Duplicated "${title}"`, "The copy has no hotkey yet. Assign one before your demo.", "success"))
+      .catch((error: unknown) => showToast(`Could not duplicate ${noun}`, String(error), "error"));
+  };
 
   // -- Text snippet handlers --
   const handleEdit = (snippet: TextSnippet) => {
@@ -169,6 +194,14 @@ function App() {
   const handleCancel = () => {
     setShowForm(false);
     setEditingSnippet(undefined);
+  };
+
+  const handleDuplicate = (snippet: TextSnippet) => {
+    const copy = duplicateTextSnippet(snippet);
+    const idx = textSnippets.findIndex((s) => s.id === snippet.id);
+    const updated = [...textSnippets];
+    updated.splice(idx + 1, 0, copy);
+    reportDuplicate(setTextSnippets(updated), snippet.title, "snippet");
   };
 
   // -- Video snippet handlers --
@@ -213,6 +246,14 @@ function App() {
     setEditingVideoSnippet(undefined);
   };
 
+  const handleVideoDuplicate = (snippet: VideoSnippet) => {
+    const copy = duplicateVideoSnippet(snippet);
+    const idx = videoSnippets.findIndex((s) => s.id === snippet.id);
+    const updated = [...videoSnippets];
+    updated.splice(idx + 1, 0, copy);
+    reportDuplicate(setVideoSnippets(updated), snippet.title, "clip");
+  };
+
   // -- Script handlers --
   const handleScriptEdit = (script: Script) => {
     setEditingScript(script);
@@ -232,6 +273,9 @@ function App() {
     saveAutomation(script);
     setShowScriptForm(false);
     setEditingScript(undefined);
+  };
+  const handleScriptDuplicate = (script: Script) => {
+    reportDuplicate(saveAutomation(duplicateAutomation(script)), script.title, "automation");
   };
   const handleScriptCancel = () => {
     setShowScriptForm(false);
@@ -498,7 +542,18 @@ function App() {
                   />
                 </div>
               ) : (
-                <TextSnippetList snippets={textSnippets} onEdit={handleEdit} onDelete={handleDelete} onReorder={setTextSnippets} />
+                <TextSnippetList
+                  snippets={textSnippets}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onReorder={setTextSnippets}
+                  onDuplicate={handleDuplicate}
+                  onAdd={() => {
+                    setEditingSnippet(undefined);
+                    setShowForm(true);
+                  }}
+                  hotkeyOwners={hotkeyOwners}
+                />
               )
             )}
 
@@ -532,6 +587,10 @@ function App() {
                   onEdit={handleVideoEdit}
                   onDelete={handleVideoDelete}
                   onPlay={playVideo}
+                  onDuplicate={handleVideoDuplicate}
+                  onBrowseVideos={() => setActiveView("videos")}
+                  hotkeyOwners={hotkeyOwners}
+                  availableVideoFiles={availableVideoFiles ?? undefined}
                 />
               )
             )}
@@ -553,8 +612,14 @@ function App() {
                     onEdit={handleScriptEdit}
                     onDelete={handleScriptDelete}
                     onRun={handleRunScript}
+                    onDuplicate={handleScriptDuplicate}
+                    onAdd={() => {
+                      setEditingScript(undefined);
+                      setShowScriptForm(true);
+                    }}
                     runningScriptId={runningScriptId}
                     runHistory={automationRunHistory}
+                    hotkeyOwners={hotkeyOwners}
                   />
                 )}
               </>
