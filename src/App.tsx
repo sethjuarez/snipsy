@@ -24,6 +24,8 @@ import ToastViewport, { type ToastMessage, type ToastTone } from "./components/T
 import ErrorBoundary from "./components/ErrorBoundary";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutsDialog from "./components/ShortcutsDialog";
+import SettingsDialog from "./components/SettingsDialog";
+import type { SettingsSectionId } from "./utils/settings";
 import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
 import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
 import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
@@ -368,6 +370,7 @@ function App() {
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const [demoStartOpen, setDemoStartOpen] = useState(false);
   const [elevated, setElevated] = useState<boolean | null>(null);
   useEffect(() => {
@@ -378,7 +381,13 @@ function App() {
     [textSnippets, videoSnippets, automations, availableVideoFiles, elevated],
   );
   const blockingOverlay = confirmDialog !== null || demoStartOpen;
-  const overlayOpen = paletteOpen || shortcutsOpen || blockingOverlay;
+  const overlayOpen = paletteOpen || shortcutsOpen || settingsSection !== null || blockingOverlay;
+  const openSettings = (section: SettingsSectionId = "appearance") => {
+    if (blockingOverlay) return;
+    setPaletteOpen(false);
+    setShortcutsOpen(false);
+    setSettingsSection(section);
+  };
 
   const commandContext: CommandContext = {
     demoMode,
@@ -405,6 +414,7 @@ function App() {
     toggleDemo: () => handleToggleDemo(),
     closeProject: () => guardEditorExit(() => void closeProject()),
     showShortcuts: () => setShortcutsOpen(true),
+    openSettings: () => openSettings(),
     toggleSidebar: () => setSidebarCollapsed((collapsed) => !collapsed),
     editText: (snippet) => guardEditorExit(() => {
       setActiveView("text-snippets");
@@ -447,11 +457,19 @@ function App() {
 
   const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
   shortcutHandlerRef.current = (event: KeyboardEvent) => {
-    if (!projectName || event.defaultPrevented || event.repeat) return;
+    if (event.defaultPrevented || event.repeat) return;
+    if (matchesShortcut(event, "CmdOrControl+,")) {
+      event.preventDefault();
+      if (settingsSection !== null) setSettingsSection(null);
+      else openSettings();
+      return;
+    }
+    if (!projectName) return;
     if (matchesShortcut(event, "CmdOrControl+K")) {
       event.preventDefault();
       if (blockingOverlay) return;
       setShortcutsOpen(false);
+      setSettingsSection(null);
       setPaletteOpen((open) => !open);
       return;
     }
@@ -459,6 +477,7 @@ function App() {
       event.preventDefault();
       if (blockingOverlay) return;
       setPaletteOpen(false);
+      setSettingsSection(null);
       setShortcutsOpen((open) => !open);
       return;
     }
@@ -516,20 +535,39 @@ function App() {
     else if (shouldConfirmDemoStart(preflight)) {
       setPaletteOpen(false);
       setShortcutsOpen(false);
+      setSettingsSection(null);
       setDemoStartOpen(true);
     } else void enterDemoMode();
   };
+
+  const settingsDialog = settingsSection !== null && (
+    <SettingsDialog
+      initialSection={settingsSection}
+      elevated={elevated}
+      onClose={() => setSettingsSection(null)}
+      onRelaunchAsAdmin={() => void backend.relaunchAsAdmin().catch((e) => showToast("Couldn't restart as administrator", String(e), "error"))}
+      onShowShortcuts={projectName ? () => {
+        setSettingsSection(null);
+        setShortcutsOpen(true);
+      } : undefined}
+      onNavigate={projectName ? (view) => {
+        setSettingsSection(null);
+        changeView(view);
+      } : undefined}
+    />
+  );
 
   // ── Welcome screen (no project loaded) ──
   if (!projectName) {
     return (
       <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-        <TitleBar projectName={null} demoMode={false} onToggleDemo={() => {}} />
+        <TitleBar projectName={null} demoMode={false} onToggleDemo={() => {}} onOpenSettings={openSettings} />
         <div className="flex-1 flex items-center justify-center">
           <Welcome />
         </div>
         <TrayHint />
         <StatusBar projectPath={null} demoMode={false} />
+        {settingsDialog}
       </div>
     );
   }
@@ -537,7 +575,7 @@ function App() {
   // ── Main app layout ──
   return (
     <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setPaletteOpen(true); } }} />
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setSettingsSection(null); setPaletteOpen(true); } }} onOpenSettings={openSettings} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} />
@@ -802,6 +840,7 @@ function App() {
 
       {paletteOpen && <CommandPalette commands={buildCommands(commandContext)} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {settingsDialog}
       {demoStartOpen && <DemoStartDialog preflight={preflight} onStart={() => void enterDemoMode()} onClose={() => setDemoStartOpen(false)} />}
 
     </div>

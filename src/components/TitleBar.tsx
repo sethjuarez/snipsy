@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Search } from "lucide-react";
+import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Search, Settings } from "lucide-react";
 import Kbd from "./ui/Kbd";
 import { getBackend } from "../services";
 import { isMacPlatform, traySurfaceName } from "../utils/platform";
@@ -13,6 +13,8 @@ interface TitleBarProps {
   onToggleDemo: () => void;
   /** Opens the command palette; the search button is hidden when omitted. */
   onOpenPalette?: () => void;
+  /** Opens Settings, optionally at a section; the gear is hidden when omitted. */
+  onOpenSettings?: (section?: "permissions") => void;
 }
 
 function isInteractiveTitlebarTarget(target: EventTarget | null) {
@@ -20,7 +22,7 @@ function isInteractiveTitlebarTarget(target: EventTarget | null) {
   return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [data-titlebar-interactive='true']"));
 }
 
-function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette }: TitleBarProps) {
+function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSettings }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
   const isMac = isMacPlatform();
   const [maximized, setMaximized] = useState(false);
@@ -174,10 +176,10 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette }: TitleB
           {/* Elevation warning — show when not running as admin */}
           {projectName && !elevated && (
             <button
-              onClick={handleRelaunchAsAdmin}
+              onClick={onOpenSettings ? () => onOpenSettings("permissions") : handleRelaunchAsAdmin}
               className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
-              title="Input protection requires Admin. Click to restart as Administrator."
-              aria-label="Restart as Administrator"
+              title={onOpenSettings ? "Not running as administrator. Open permission settings." : "Input protection requires Admin. Click to restart as Administrator."}
+              aria-label={onOpenSettings ? "Permission settings" : "Restart as Administrator"}
               data-testid="elevation-warning"
               style={{ ...titlebarButtonStyle, color: "var(--color-warning, #f59e0b)" }}
             >
@@ -196,10 +198,22 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette }: TitleB
           >
             {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
           </button>
+          {onOpenSettings && (
+            <button
+              onClick={() => onOpenSettings()}
+              className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
+              title={isMac ? "Settings (⌘,)" : "Settings (Ctrl+,)"}
+              aria-label="Settings"
+              aria-keyshortcuts="Control+Comma Meta+Comma"
+              data-testid="settings-button"
+              style={titlebarButtonStyle}
+            >
+              <Settings size={14} />
+            </button>
+          )}
 
 
         </div>
-
         {!isMac && (
           <>
             {/* Separator */}

@@ -34,6 +34,7 @@ export const NAV_SHORTCUTS = Object.fromEntries(
 export const STATIC_SHORTCUTS: ShortcutInfo[] = [
   { id: "palette", title: "Open command palette", shortcut: "CmdOrControl+K" },
   { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "CmdOrControl+/" },
+  { id: "settings", title: "Open settings", shortcut: "CmdOrControl+," },
   { id: "save", title: "Save the open editor", shortcut: "CmdOrControl+S" },
   { id: "escape", title: "Close a dialog or menu", shortcut: "Escape" },
 ];
@@ -57,6 +58,7 @@ export interface CommandContext {
   toggleDemo: () => void;
   closeProject: () => void;
   showShortcuts: () => void;
+  openSettings: () => void;
   toggleSidebar: () => void;
   editText: (snippet: TextSnippet) => void;
   editClip: (snippet: VideoSnippet) => void;
@@ -91,6 +93,7 @@ export function buildCommands(ctx: CommandContext): AppCommand[] {
     { id: "project.close", title: "Close project", group: "Project", keywords: ["home", "welcome"], run: ctx.closeProject },
     { id: "view.sidebar", title: "Toggle sidebar", group: "Project", keywords: ["collapse", "expand"], run: ctx.toggleSidebar },
     { id: "help.shortcuts", title: "Keyboard shortcuts", group: "Help", shortcut: "CmdOrControl+/", keywords: ["keys", "help"], run: ctx.showShortcuts },
+    { id: "app.settings", title: "Settings", group: "Help", shortcut: "CmdOrControl+,", keywords: ["preferences", "theme", "updates", "admin", "options"], run: ctx.openSettings },
     ...ctx.textSnippets.map<AppCommand>((snippet) => ({
       id: `text.edit.${snippet.id}`,
       title: `Edit ${snippet.title || "Untitled snippet"}`,

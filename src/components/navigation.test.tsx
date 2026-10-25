@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Sidebar from "./Sidebar";
 import ScriptForm from "./ScriptForm";
 
+const elevation = vi.hoisted(() => ({ value: true }));
 vi.mock("../services", () => ({
-  getBackend: () => ({ listStreamDeckButtons: vi.fn().mockResolvedValue([]), isElevated: vi.fn().mockResolvedValue(true) }),
+  getBackend: () => ({ listStreamDeckButtons: vi.fn().mockResolvedValue([]), isElevated: vi.fn(() => Promise.resolve(elevation.value)) }),
 }));
 vi.mock("../services/auditaur", () => ({ isTauriRuntime: () => false, tauriFileSrc: (file: string) => file }));
 
@@ -15,7 +16,10 @@ Object.defineProperty(window, "matchMedia", {
 });
 const { default: TitleBar } = await import("./TitleBar");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  elevation.value = true;
+});
 
 describe("Sidebar", () => {
   it("groups source videos and clips under Media", () => {
@@ -102,5 +106,22 @@ describe("TitleBar", () => {
   it("hides the search button without a handler", () => {
     render(<TitleBar projectName={null} demoMode={false} onToggleDemo={vi.fn()} />);
     expect(screen.queryByTestId("command-palette-button")).toBeNull();
+  });
+
+  it("opens settings from the gear, also without a project", () => {
+    const onOpenSettings = vi.fn();
+    render(<TitleBar projectName={null} demoMode={false} onToggleDemo={vi.fn()} onOpenSettings={onOpenSettings} />);
+    fireEvent.click(screen.getByTestId("settings-button"));
+    expect(onOpenSettings).toHaveBeenCalledWith();
+  });
+
+  it("sends the elevation warning to permission settings", async () => {
+    elevation.value = false;
+    const onOpenSettings = vi.fn();
+    render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} onOpenSettings={onOpenSettings} />);
+    await waitFor(() => expect(screen.getByTestId("elevation-warning")).toBeTruthy());
+    expect(screen.getByTestId("elevation-warning").getAttribute("aria-label")).toBe("Permission settings");
+    fireEvent.click(screen.getByTestId("elevation-warning"));
+    expect(onOpenSettings).toHaveBeenCalledWith("permissions");
   });
 });

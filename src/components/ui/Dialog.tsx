@@ -5,7 +5,7 @@ import { matchesShortcut } from "../../commands/catalog";
 import IconButton from "./IconButton";
 
 /** App-level shortcuts that must still reach the window while a dialog is open. */
-const PASSTHROUGH_SHORTCUTS = ["CmdOrControl+K", "CmdOrControl+/"];
+const PASSTHROUGH_SHORTCUTS = ["CmdOrControl+K", "CmdOrControl+/", "CmdOrControl+,"];
 
 interface DialogProps {
   title: string;

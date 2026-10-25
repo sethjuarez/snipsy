@@ -21,6 +21,7 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     toggleDemo: vi.fn(),
     closeProject: vi.fn(),
     showShortcuts: vi.fn(),
+    openSettings: vi.fn(),
     toggleSidebar: vi.fn(),
     editText: vi.fn(),
     editClip: vi.fn(),
@@ -83,6 +84,15 @@ describe("buildCommands", () => {
     expect(ctx.editAutomation).toHaveBeenCalledWith(script);
   });
 
+  it("opens settings from the palette and lists its shortcut", () => {
+    const ctx = makeContext();
+    const settings = find(ctx, "app.settings");
+    expect(settings.shortcut).toBe("CmdOrControl+,");
+    settings.run();
+    expect(ctx.openSettings).toHaveBeenCalled();
+    expect(ALL_SHORTCUTS.some((item) => item.shortcut === "CmdOrControl+,")).toBe(true);
+  });
+
   it("disables run commands while an automation is running", () => {
     expect(find(makeContext(), "automation.run.s1").disabledReason).toBeUndefined();
     expect(find(makeContext({ runningAutomationId: "other" }), "automation.run.s1").disabledReason).toBe("Another automation is running");
@@ -102,5 +112,6 @@ describe("matchesShortcut", () => {
     expect(matchesShortcut(key({ key: "k", ctrlKey: true, shiftKey: true }), "CmdOrControl+K")).toBe(false);
     expect(matchesShortcut(key({ key: "1", ctrlKey: true, altKey: true }), "CmdOrControl+1")).toBe(false);
     expect(matchesShortcut(key({ key: "Escape" }), "Escape")).toBe(true);
+    expect(matchesShortcut(key({ key: ",", ctrlKey: true }), "CmdOrControl+,")).toBe(true);
   });
 });

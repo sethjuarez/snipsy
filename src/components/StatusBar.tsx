@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useAppVersion } from "../hooks/useAppVersion";
 import { Folder, Radio } from "lucide-react";
 import UpdateIndicator from "./UpdateIndicator";
 
@@ -8,18 +8,7 @@ interface StatusBarProps {
 }
 
 function StatusBar({ projectPath, demoMode }: StatusBarProps) {
-  const [version, setVersion] = useState("");
-
-  useEffect(() => {
-    if ((window as any).__TAURI_INTERNALS__) {
-      import("@tauri-apps/api/app")
-        .then(({ getVersion }) => getVersion())
-        .then((v) => setVersion(import.meta.env.DEV ? `${v}-dev` : v))
-        .catch(() => setVersion("dev"));
-    } else {
-      setVersion("dev");
-    }
-  }, []);
+  const version = useAppVersion();
 
   return (
     <div
