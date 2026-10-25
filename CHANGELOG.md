@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/sethjuarez/snipsy/compare/v0.23.0...v0.24.0) (2026-10-25)
+
+
+### Features
+
+* UX overhaul, project export/import, and keep awake ([#39](https://github.com/sethjuarez/snipsy/issues/39)) ([afcfc37](https://github.com/sethjuarez/snipsy/commit/afcfc37f0a3de96ac64968bbd4645159d5b25930))
+
 ## [0.23.0](https://github.com/sethjuarez/snipsy/compare/v0.22.0...v0.23.0) (2026-10-24)
 
 
