@@ -98,3 +98,53 @@ describe("ScriptList", () => {
     expect(onRun).toHaveBeenCalledWith("a");
   });
 });
+
+describe("list filters", () => {
+  const filter = (value: string) => fireEvent.change(screen.getByTestId("list-filter"), { target: { value } });
+
+  it("filters text snippets by title, body, or hotkey and disables reordering", () => {
+    const snippets = [
+      { ...text("a", "CmdOrControl+1"), title: "Greeting", text: "hello there" },
+      { ...text("b", "CmdOrControl+Shift+7"), title: "Code" },
+    ];
+    render(<TextSnippetList snippets={snippets} onEdit={vi.fn()} onDelete={vi.fn()} onReorder={vi.fn()} />);
+    expect(screen.getByTestId("drag-handle-a")).toBeTruthy();
+
+    filter("hello");
+    expect(screen.getByTestId("snippet-a")).toBeTruthy();
+    expect(screen.queryByTestId("snippet-b")).toBeNull();
+    expect(screen.queryByTestId("drag-handle-a")).toBeNull();
+    expect(screen.getByTestId("list-filter-count").textContent).toBe("1 of 2");
+
+    filter("shift+7");
+    expect(screen.getByTestId("snippet-b")).toBeTruthy();
+    expect(screen.queryByTestId("snippet-a")).toBeNull();
+  });
+
+  it("clears with Escape and offers a clear action when nothing matches", () => {
+    render(<VideoSnippetList snippets={[clip("a", "CmdOrControl+1"), clip("b", "CmdOrControl+2", "videos/keynote.mp4")]} onEdit={vi.fn()} onDelete={vi.fn()} />);
+    filter("keynote");
+    expect(screen.queryByTestId("video-snippet-a")).toBeNull();
+    expect(screen.getByTestId("video-snippet-b")).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByTestId("list-filter"), { key: "Escape" });
+    expect(screen.getByTestId("video-snippet-a")).toBeTruthy();
+
+    filter("zzzz");
+    expect(screen.getByTestId("list-no-matches")).toBeTruthy();
+    fireEvent.click(screen.getByText("Clear filter"));
+    expect(screen.queryByTestId("list-no-matches")).toBeNull();
+    expect((screen.getByTestId("list-filter") as HTMLInputElement).value).toBe("");
+  });
+
+  it("matches automations by their site URLs", () => {
+    const automations: Script[] = [
+      { id: "a", title: "Docs", description: "", contributionGroups: [{ id: "g", title: "G", contributions: [{ id: "c", kind: "openSite", url: "https://learn.microsoft.com" }] }] },
+      { id: "b", title: "Other", description: "" },
+    ];
+    render(<ScriptList automations={automations} onEdit={vi.fn()} onDelete={vi.fn()} />);
+    filter("microsoft");
+    expect(screen.getByTestId("automation-a")).toBeTruthy();
+    expect(screen.queryByTestId("automation-b")).toBeNull();
+  });
+});

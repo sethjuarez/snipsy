@@ -13,6 +13,9 @@ pub fn create_project(
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<ProjectData, String> {
     let project_dir = PathBuf::from(&path);
+    if project_dir.join("project.json").exists() {
+        return Err("This folder already has a Snipsy project. Use Open Project instead.".into());
+    }
     fs::create_dir_all(&project_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let project = Project { name, description };
@@ -518,6 +521,20 @@ mod tests {
         assert!(opened.is_ok());
         let opened_data = opened.unwrap();
         assert_eq!(opened_data.project.name, "Test Project");
+    }
+
+    #[test]
+    fn create_project_refuses_to_overwrite_an_existing_project() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        create_project(path.clone(), "Original".into(), String::new(), None).unwrap();
+        fs::write(tmp.path().join("text-snippets.json"), "[\"keep\"]").unwrap();
+
+        let err = create_project(path, "Sample".into(), String::new(), None).unwrap_err();
+        assert!(err.contains("already has a Snipsy project"));
+        let project = fs::read_to_string(tmp.path().join("project.json")).unwrap();
+        assert!(project.contains("Original"));
+        assert_eq!(fs::read_to_string(tmp.path().join("text-snippets.json")).unwrap(), "[\"keep\"]");
     }
 
     #[test]

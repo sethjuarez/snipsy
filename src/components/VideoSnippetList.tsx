@@ -1,7 +1,10 @@
 import { AlertTriangle, Copy, Film, Pencil, Trash2, Play, Monitor, MousePointer, MousePointer2Off, MousePointerClick, Volume2, VolumeOff } from "lucide-react";
+import { useState } from "react";
 import EmptyState from "./EmptyState";
 import type { VideoSnippet } from "../types";
-import { hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { displayHotkey, hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { matchesQuery } from "../utils/search";
+import ListFilter, { NoMatches } from "./ui/ListFilter";
 import Button from "./ui/Button";
 import Kbd from "./ui/Kbd";
 import ListRow from "./ui/ListRow";
@@ -33,6 +36,7 @@ function VideoSnippetList({
   hotkeyOwners,
   availableVideoFiles,
 }: VideoSnippetListProps) {
+  const [query, setQuery] = useState("");
   if (snippets.length === 0) {
     return (
       <EmptyState
@@ -46,9 +50,16 @@ function VideoSnippetList({
     );
   }
 
+  const visible = query.trim()
+    ? snippets.filter((s) => matchesQuery(query, s.title, s.description, s.videoFile, displayHotkey(s.hotkey)))
+    : snippets;
+
   return (
+    <>
+    <ListFilter value={query} onChange={setQuery} label="clips" total={snippets.length} shown={visible.length} />
+    {visible.length === 0 && <NoMatches query={query} onClear={() => setQuery("")} />}
     <div className="space-y-2" data-testid="video-snippet-list">
-      {snippets.map((snippet) => {
+      {visible.map((snippet) => {
         const problem = hotkeyOwners ? hotkeyProblem(snippet.hotkey, hotkeyOwners, snippet.id) : null;
         const missingVideo = availableVideoFiles ? !availableVideoFiles.has(snippet.videoFile) : false;
         const menuItems: MenuItem[] = [
@@ -170,6 +181,7 @@ function VideoSnippetList({
         );
       })}
     </div>
+    </>
   );
 }
 

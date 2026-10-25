@@ -1,4 +1,5 @@
 import { AlertTriangle, Copy, Pencil, Plus, Trash2, Keyboard, Clipboard, GripVertical } from "lucide-react";
+import { useState } from "react";
 import EmptyState from "./EmptyState";
 import {
   DndContext,
@@ -18,7 +19,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { TextSnippet } from "../types";
-import { hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { displayHotkey, hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { matchesQuery } from "../utils/search";
+import ListFilter, { NoMatches } from "./ui/ListFilter";
 import Button from "./ui/Button";
 import Kbd from "./ui/Kbd";
 import ListRow from "./ui/ListRow";
@@ -41,9 +44,10 @@ interface ItemProps {
   onDelete: (id: string) => void;
   onDuplicate?: (snippet: TextSnippet) => void;
   hotkeyOwners?: HotkeyOwner[];
+  dragDisabled?: boolean;
 }
 
-function SortableSnippetItem({ snippet, onEdit, onDelete, onDuplicate, hotkeyOwners }: ItemProps) {
+function SortableSnippetItem({ snippet, onEdit, onDelete, onDuplicate, hotkeyOwners, dragDisabled }: ItemProps) {
   const {
     attributes,
     listeners,
@@ -51,7 +55,7 @@ function SortableSnippetItem({ snippet, onEdit, onDelete, onDuplicate, hotkeyOwn
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: snippet.id });
+  } = useSortable({ id: snippet.id, disabled: dragDisabled });
 
   const problem = hotkeyOwners ? hotkeyProblem(snippet.hotkey, hotkeyOwners, snippet.id) : null;
   const menuItems: MenuItem[] = [
@@ -67,7 +71,7 @@ function SortableSnippetItem({ snippet, onEdit, onDelete, onDuplicate, hotkeyOwn
       menuItems={menuItems}
       menuLabel={`More actions for ${snippet.title}`}
       data-testid={`snippet-${snippet.id}`}
-      leading={
+      leading={dragDisabled ? undefined : (
         <div
           {...attributes}
           {...listeners}
@@ -78,7 +82,7 @@ function SortableSnippetItem({ snippet, onEdit, onDelete, onDuplicate, hotkeyOwn
         >
           <GripVertical size={14} />
         </div>
-      }
+      )}
       actions={
         <>
           <Button tone="ghost" icon={<Pencil size={12} />} onClick={() => onEdit(snippet)} title="Edit text snippet" data-testid={`edit-${snippet.id}`}>
@@ -117,6 +121,7 @@ function TextSnippetList({ snippets, onEdit, onDelete, onReorder, onDuplicate, o
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  const [query, setQuery] = useState("");
 
   if (snippets.length === 0) {
     return (
@@ -140,11 +145,18 @@ function TextSnippetList({ snippets, onEdit, onDelete, onReorder, onDuplicate, o
     }
   };
 
+  const filtering = query.trim().length > 0;
+  const visible = filtering
+    ? snippets.filter((s) => matchesQuery(query, s.title, s.description, s.text, displayHotkey(s.hotkey), s.delivery))
+    : snippets;
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={snippets.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+      <ListFilter value={query} onChange={setQuery} label="text snippets" total={snippets.length} shown={visible.length} />
+      {visible.length === 0 && <NoMatches query={query} onClear={() => setQuery("")} />}
+      <SortableContext items={visible.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-2" data-testid="text-snippet-list">
-          {snippets.map((snippet) => (
+          {visible.map((snippet) => (
             <SortableSnippetItem
               key={snippet.id}
               snippet={snippet}
@@ -152,6 +164,7 @@ function TextSnippetList({ snippets, onEdit, onDelete, onReorder, onDuplicate, o
               onDelete={onDelete}
               onDuplicate={onDuplicate}
               hotkeyOwners={hotkeyOwners}
+              dragDisabled={filtering}
             />
           ))}
         </div>

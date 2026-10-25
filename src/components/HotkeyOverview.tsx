@@ -5,7 +5,8 @@ import { CSS } from "@dnd-kit/utilities";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import { Keyboard, Play, Film, FileText, Clipboard, MousePointerClick, MousePointer, MousePointer2Off, GripVertical, Volume2, VolumeOff, Pencil, Trash2 } from "lucide-react";
 import type { TextSnippet, VideoSnippet } from "../types";
-import { displayHotkey } from "../utils/hotkeys";
+import EmptyState from "./EmptyState";
+import Kbd from "./ui/Kbd";
 
 interface HotkeyOverviewProps {
   textSnippets: TextSnippet[];
@@ -149,13 +150,7 @@ function TextCardInner({
       </div>
       {/* Footer: hotkey + delivery method */}
       <div className="px-3 py-2 flex items-center gap-2">
-        <span
-          className="flex items-center gap-1.5 text-base px-2.5 py-1 rounded font-mono shrink-0"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
-        >
-          <Keyboard size={11} />
-          {displayHotkey(snippet.hotkey)}
-        </span>
+        <Kbd hotkey={snippet.hotkey} />
         <span
           className="text-xs ml-auto shrink-0 px-1.5 py-0.5 rounded flex items-center gap-1"
           style={snippet.delivery === "fast-type"
@@ -260,13 +255,7 @@ function VideoCardInner({
       </div>
       {/* Footer: hotkey + extras */}
       <div className="px-3 py-2 flex items-center gap-2">
-        <span
-          className="flex items-center gap-1.5 text-base px-2.5 py-1 rounded font-mono shrink-0"
-          style={{ backgroundColor: "var(--color-surface-inset)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
-        >
-          <Keyboard size={11} />
-          {displayHotkey(snippet.hotkey)}
-        </span>
+        <Kbd hotkey={snippet.hotkey} />
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <span
             className="inline-block w-3.5 h-3.5 rounded-sm border"
@@ -363,11 +352,13 @@ function HotkeyOverview({
 
   if (allItems.length === 0) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--color-text-secondary)" }} data-testid="hotkey-overview-empty">
-        <Keyboard size={32} className="mx-auto mb-3 opacity-40" />
-        <p className="text-md">No hotkeys configured yet</p>
-        <p className="text-base mt-1">Create text snippets or video clips to assign hotkeys.</p>
-      </div>
+      <EmptyState
+        icon={Keyboard}
+        title="No hotkeys configured yet"
+        description="Create text snippets or video clips to assign hotkeys."
+        tip={<>Tip: press <Kbd hotkey="CmdOrControl+K" /> to create anything.</>}
+        data-testid="hotkey-overview-empty"
+      />
     );
   }
 

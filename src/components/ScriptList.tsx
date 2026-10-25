@@ -1,7 +1,10 @@
 import { AlertTriangle, Copy, History, Pencil, Play, Plus, Trash2, Workflow } from "lucide-react";
+import { useState } from "react";
 import EmptyState from "./EmptyState";
 import type { Script } from "../types";
-import { hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { displayHotkey, hotkeyProblem, type HotkeyOwner } from "../utils/hotkeys";
+import { matchesQuery } from "../utils/search";
+import ListFilter, { NoMatches } from "./ui/ListFilter";
 import Button from "./ui/Button";
 import Kbd from "./ui/Kbd";
 import ListRow from "./ui/ListRow";
@@ -29,6 +32,7 @@ export interface AutomationRunHistoryItem {
 }
 
 function ScriptList({ automations, onEdit, onDelete, onRun, onDuplicate, onAdd, runningScriptId, runHistory = [], hotkeyOwners }: ScriptListProps) {
+  const [query, setQuery] = useState("");
   if (automations.length === 0) {
     return (
       <EmptyState
@@ -42,9 +46,22 @@ function ScriptList({ automations, onEdit, onDelete, onRun, onDuplicate, onAdd, 
     );
   }
 
+  const visible = query.trim()
+    ? automations.filter((s) => matchesQuery(
+      query,
+      s.title,
+      s.description,
+      s.hotkey ? displayHotkey(s.hotkey) : undefined,
+      ...(s.contributionGroups ?? []).flatMap((group) => [group.title, ...group.contributions.flatMap((c) => [c.title, c.url])]),
+    ))
+    : automations;
+
   return (
+    <>
+    <ListFilter value={query} onChange={setQuery} label="automations" total={automations.length} shown={visible.length} />
+    {visible.length === 0 && <NoMatches query={query} onClear={() => setQuery("")} />}
     <div className="space-y-2" data-testid="automation-list">
-      {automations.map((script) => (
+      {visible.map((script) => (
         <AutomationRow
           key={script.id}
           script={script}
@@ -58,6 +75,7 @@ function ScriptList({ automations, onEdit, onDelete, onRun, onDuplicate, onAdd, 
         />
       ))}
     </div>
+    </>
   );
 }
 
