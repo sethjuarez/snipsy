@@ -32,7 +32,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "content",
     label: "Content",
     items: [
-      { id: "text-snippets", label: "Text snippets", Icon: FileText },
+      { id: "text-snippets", label: "Snippets", Icon: FileText },
       { id: "video-snippets", label: "Clips", Icon: Film, subviews: [{ id: "videos", label: "Source videos" }] },
     ],
   },

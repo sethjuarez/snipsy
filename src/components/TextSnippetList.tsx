@@ -152,7 +152,7 @@ function TextSnippetList({ snippets, onEdit, onDelete, onReorder, onDuplicate, o
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <ListFilter value={query} onChange={setQuery} label="text snippets" total={snippets.length} shown={visible.length} />
+      <ListFilter value={query} onChange={setQuery} label="snippets" total={snippets.length} shown={visible.length} />
       {visible.length === 0 && <NoMatches query={query} onClear={() => setQuery("")} />}
       <SortableContext items={visible.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-2" data-testid="text-snippet-list">

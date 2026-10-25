@@ -863,7 +863,7 @@ function App() {
 /* ── Content header with title + add button ── */
 const VIEW_LABELS: Record<AppView, string> = {
   home: "Overview",
-  "text-snippets": "Text Snippets",
+  "text-snippets": "Snippets",
   videos: "Clips",
   "video-snippets": "Clips",
   automations: "Automations",
