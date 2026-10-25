@@ -706,7 +706,7 @@ function App() {
             <>
             {activeView === "home" && (
               <div className="space-y-4">
-                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} onToggleDemo={handleToggleDemo} />
+                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} />
                 <HotkeyOverview
                   textSnippets={textSnippets}
                   videoSnippets={videoSnippets}

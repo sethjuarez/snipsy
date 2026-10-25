@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DemoPreflightPanel, DemoStartDialog } from "./DemoPreflight";
 import { computePreflight, DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
 import type { TextSnippet } from "../types";
-import { useKeepAwakeStore } from "../stores/keepAwakeStore";
-import { KEEP_AWAKE_KEY } from "../utils/keepAwake";
 
 const snippet: TextSnippet = { id: "t", title: "Hello", description: "", text: "hi", hotkey: "CmdOrControl+Shift+1", delivery: "paste" };
 const ready = computePreflight({ textSnippets: [snippet], videoSnippets: [], automations: [], elevated: false });
@@ -14,49 +12,37 @@ beforeEach(() => localStorage.clear());
 afterEach(cleanup);
 
 describe("DemoPreflightPanel", () => {
-  it("shows the checklist and a labeled start button", () => {
-    const onToggleDemo = vi.fn();
-    render(<DemoPreflightPanel preflight={ready} demoMode={false} projectName="Keynote" onToggleDemo={onToggleDemo} />);
+  it("shows the checklist and points to the title bar to start", () => {
+    render(<DemoPreflightPanel preflight={ready} demoMode={false} projectName="Keynote" />);
     expect(screen.getByTestId("demo-readiness-status").textContent).toBe("Ready with warnings");
     expect(screen.getByTestId("preflight-hotkeys").getAttribute("data-state")).toBe("pass");
     expect(screen.getByTestId("preflight-elevation").textContent).toContain("Warning:");
-    const start = screen.getByRole("button", { name: "Start demo" });
-    expect(start.textContent).toBe("Start");
-    fireEvent.click(start);
-    expect(onToggleDemo).toHaveBeenCalled();
+    expect(screen.getByTestId("demo-live-status").textContent).toContain("Start from the top bar");
   });
 
-  it("offers a shared Keep awake checkbox beside Start", () => {
-    useKeepAwakeStore.setState({ keepAwake: true });
-    render(<DemoPreflightPanel preflight={ready} demoMode={false} projectName="Keynote" onToggleDemo={vi.fn()} />);
-    const box = screen.getByTestId("demo-panel-keep-awake") as HTMLInputElement;
-    expect(box.checked).toBe(true);
-    fireEvent.click(box);
-    expect(useKeepAwakeStore.getState().keepAwake).toBe(false);
-    expect(localStorage.getItem(KEEP_AWAKE_KEY)).toBe("false");
-    useKeepAwakeStore.setState({ keepAwake: true });
+  it("leaves Start, Stop and Keep awake to the title bar", () => {
+    const { rerender } = render(<DemoPreflightPanel preflight={ready} demoMode={false} projectName="Keynote" />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    rerender(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
-  it("hides Keep awake while live", () => {
-    render(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" onToggleDemo={vi.fn()} />);
-    expect(screen.queryByTestId("demo-panel-keep-awake")).toBeNull();
-  });
-
-  it("shows live status and a stop button while demoing", () => {
-    render(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" onToggleDemo={vi.fn()} />);
+  it("shows live status while demoing", () => {
+    render(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" />);
     expect(screen.getByTestId("demo-readiness-status").textContent).toBe("Live");
-    expect(screen.getByTestId("demo-live-status").textContent).toContain("Keynote · 1 hotkey armed");
+    expect(screen.getByTestId("demo-live-status").textContent).toContain("Keynote · 1 hotkey armed. Stop from the top bar");
     expect(screen.queryByTestId("demo-preflight-checks")).toBeNull();
-    expect(screen.getByRole("button", { name: "Stop demo" }).textContent).toBe("Stop");
   });
 
   it("uses the live armed count when registrations failed", () => {
-    render(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" liveArmedCount={0} onToggleDemo={vi.fn()} />);
+    render(<DemoPreflightPanel preflight={ready} demoMode projectName="Keynote" liveArmedCount={0} />);
     expect(screen.getByTestId("demo-live-status").textContent).toContain("Keynote · 0 hotkeys armed");
   });
 
   it("marks an empty project as not ready", () => {
-    render(<DemoPreflightPanel preflight={empty} demoMode={false} projectName="Keynote" onToggleDemo={vi.fn()} />);
+    render(<DemoPreflightPanel preflight={empty} demoMode={false} projectName="Keynote" />);
     expect(screen.getByTestId("demo-readiness-status").textContent).toBe("Not ready");
   });
 });

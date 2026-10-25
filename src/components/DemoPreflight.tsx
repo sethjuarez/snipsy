@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle, Play, Radio, Square, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, Radio, XCircle } from "lucide-react";
 import type { Preflight, PreflightCheck, PreflightState } from "../utils/preflight";
 import { DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
 import { traySurfaceName } from "../utils/platform";
 import Button from "./ui/Button";
-import KeepAwakeToggle from "./KeepAwakeToggle";
 import Dialog from "./ui/Dialog";
 
 const STATE_ICON: Record<PreflightState, { icon: typeof CheckCircle; color: string; label: string }> = {
@@ -49,11 +48,10 @@ interface DemoPreflightPanelProps {
   projectName: string;
   /** Hotkeys registered while live; defaults to the preflight prediction. */
   liveArmedCount?: number;
-  onToggleDemo: () => void;
 }
 
-/** Overview card: checklist before a demo, live status while it runs. */
-export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmedCount = preflight.armedCount, onToggleDemo }: DemoPreflightPanelProps) {
+/** Overview card: checklist before a demo, live status while it runs. Start/Stop lives in the title bar. */
+export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmedCount = preflight.armedCount }: DemoPreflightPanelProps) {
   const status = demoMode ? "Live" : STATUS_TEXT[preflight.state];
   const badgeStyle = demoMode
     ? { backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }
@@ -79,21 +77,9 @@ export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmed
           </h3>
           <p className="text-base mt-1" style={{ color: "var(--color-text-secondary)" }} role="status" data-testid="demo-live-status">
             {demoMode
-              ? `${projectName} · ${liveArmedCount} hotkey${liveArmedCount === 1 ? "" : "s"} armed. Stop from here or the ${traySurfaceName()} menu.`
-              : `Start hides Snipsy to the ${traySurfaceName()} and listens for your hotkeys.`}
+              ? `${projectName} · ${liveArmedCount} hotkey${liveArmedCount === 1 ? "" : "s"} armed. Stop from the top bar or the ${traySurfaceName()} menu.`
+              : `Start from the top bar to hide Snipsy to the ${traySurfaceName()} and listen for your hotkeys.`}
           </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {!demoMode && <KeepAwakeToggle testId="demo-panel-keep-awake" />}
-          <Button
-            tone={demoMode ? "danger" : "primary"}
-            icon={demoMode ? <Square size={12} fill="currentColor" aria-hidden="true" /> : <Play size={12} fill="currentColor" aria-hidden="true" />}
-            onClick={onToggleDemo}
-            aria-label={demoMode ? "Stop demo" : "Start demo"}
-            data-testid="demo-panel-toggle"
-          >
-            {demoMode ? "Stop" : "Start"}
-          </Button>
         </div>
       </div>
       {!demoMode && (
