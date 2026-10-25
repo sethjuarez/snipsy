@@ -115,6 +115,35 @@ describe("ClipEditor saving", () => {
     save();
     expect((onSave.mock.lastCall?.[0] as VideoSnippet).transitionActions).toEqual(transitionActions);
   });
+
+  it("saves every field it was given unchanged", () => {
+    const extra: Partial<VideoSnippet> = {
+      description: "Walkthrough",
+      targetMonitor: "\\\\.\\DISPLAY2",
+      endBehavior: "freeze",
+      hideCursor: true,
+      backgroundColor: "#112233",
+      clickToPlay: true,
+      muted: true,
+      transitionActions: [{ trigger: "end", action: "nextSnippet" }] as unknown as VideoSnippet["transitionActions"],
+      streamDeckIcon: { kind: "emoji", value: "🎬", background: "#000000", foreground: "#ffffff" },
+    };
+    const { onSave, save } = renderEditor([spotlightStop], extra);
+    save();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const saved = onSave.mock.lastCall?.[0] as VideoSnippet;
+    // The editor saves everything but the id; App supplies the existing id.
+    expect(saved).toEqual({
+      title: "Zoom clip",
+      videoFile: video.relativePath,
+      startTime: 0,
+      endTime: 8,
+      hotkey: "CmdOrControl+Shift+9",
+      speed: 1,
+      ...extra,
+      pauseStops: [spotlightStop],
+    });
+  });
 });
 
 describe("ClipEditor zoom editing", () => {
