@@ -9,16 +9,9 @@ export interface EditorSaveState {
   hasUnsavedChanges: boolean;
 }
 
-export type SaveStatusTone = "success" | "muted" | "warning" | "danger";
-
-/** Header text and tone for an editor's save state. */
-export function describeSaveState(state: EditorSaveState): { text: string; tone: SaveStatusTone } {
-  if (state.saveStatus === "saving") return { text: "Saving…", tone: "muted" };
-  if (state.saveStatus === "error") return { text: "Couldn't save", tone: "danger" };
-  if (!state.canSave) return { text: state.readinessText, tone: "muted" };
-  if (state.saveStatus === "unsaved") return { text: "Unsaved changes", tone: "warning" };
-  if (state.saveStatus === "saved") return { text: "Saved", tone: "success" };
-  return { text: state.readinessText, tone: "muted" };
+/** Explains why Save is disabled (e.g. "Needs Title"); save results are reported by toasts instead. */
+export function saveBlockerText(state: EditorSaveState): string | undefined {
+  return state.canSave ? undefined : state.readinessText;
 }
 
 /**

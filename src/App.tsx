@@ -13,7 +13,7 @@ import TextSnippetList from "./components/TextSnippetList";
 import TextSnippetForm from "./components/TextSnippetForm";
 import VideoList, { type VideoListHandle, type VideoListToolbarState } from "./components/VideoList";
 import ClipEditor, { type ClipEditorHandle, type ClipEditorSaveState } from "./components/ClipEditor";
-import { describeSaveState } from "./hooks/useSaveTracking";
+import { saveBlockerText } from "./hooks/useSaveTracking";
 import VideoSnippetList from "./components/VideoSnippetList";
 import ClipsTabs from "./components/ClipsTabs";
 import HotkeyOverview from "./components/HotkeyOverview";
@@ -931,16 +931,15 @@ function ContentHeader({
     }
     : undefined;
 
-  const saveStatus = showForm && saveAction ? describeSaveState(saveAction.state) : undefined;
+  const saveBlocker = showForm && saveAction ? saveBlockerText(saveAction.state) : undefined;
 
   return (
     <SectionToolbar
       title={editLabel ?? VIEW_LABELS[view]}
-      status={saveStatus?.text}
+      status={saveBlocker}
       statusTestId={saveAction?.testId === "clip-save"
         ? "clip-readiness"
         : saveAction?.testId ? `${saveAction.testId}-status` : undefined}
-      statusTone={saveStatus?.tone}
       actions={[]}
       primaryAction={primaryAction}
       secondaryAction={secondaryAction}

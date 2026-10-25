@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { describeSaveState, useSaveTracking } from "./useSaveTracking";
+import { saveBlockerText, useSaveTracking } from "./useSaveTracking";
 
 describe("useSaveTracking", () => {
   it("is idle until the snapshot changes, and clears when reverted", () => {
@@ -102,20 +102,16 @@ describe("useSaveTracking", () => {
   });
 });
 
-describe("describeSaveState", () => {
-  const state = (saveStatus: "idle" | "unsaved" | "saving" | "saved" | "error", canSave = true) => ({
+describe("saveBlockerText", () => {
+  const state = (canSave: boolean) => ({
     canSave,
-    readinessText: canSave ? "Ready" : "Needs title",
-    saveStatus,
-    hasUnsavedChanges: saveStatus === "unsaved" || saveStatus === "error",
+    readinessText: canSave ? "Ready" : "Needs Title",
+    saveStatus: "unsaved" as const,
+    hasUnsavedChanges: true,
   });
 
-  it("maps each state to header text and tone", () => {
-    expect(describeSaveState(state("idle"))).toEqual({ text: "Ready", tone: "muted" });
-    expect(describeSaveState(state("unsaved"))).toEqual({ text: "Unsaved changes", tone: "warning" });
-    expect(describeSaveState(state("saving"))).toEqual({ text: "Saving…", tone: "muted" });
-    expect(describeSaveState(state("saved"))).toEqual({ text: "Saved", tone: "success" });
-    expect(describeSaveState(state("error"))).toEqual({ text: "Couldn't save", tone: "danger" });
-    expect(describeSaveState(state("unsaved", false))).toEqual({ text: "Needs title", tone: "muted" });
+  it("only explains why Save is disabled", () => {
+    expect(saveBlockerText(state(false))).toBe("Needs Title");
+    expect(saveBlockerText(state(true))).toBeUndefined();
   });
 });
