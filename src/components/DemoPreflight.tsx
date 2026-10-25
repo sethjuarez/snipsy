@@ -79,7 +79,7 @@ export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmed
           <p className="text-base mt-1" style={{ color: "var(--color-text-secondary)" }} role="status" data-testid="demo-live-status">
             {demoMode
               ? `${projectName} · ${liveArmedCount} hotkey${liveArmedCount === 1 ? "" : "s"} armed. Stop from here or the ${traySurfaceName()} menu.`
-              : `Start demo hides Snipsy to the ${traySurfaceName()} and listens for your hotkeys.`}
+              : `Start hides Snipsy to the ${traySurfaceName()} and listens for your hotkeys.`}
           </p>
         </div>
         <Button
@@ -87,9 +87,10 @@ export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmed
           icon={demoMode ? <Square size={12} fill="currentColor" aria-hidden="true" /> : <Play size={12} fill="currentColor" aria-hidden="true" />}
           onClick={onToggleDemo}
           className="shrink-0"
+          aria-label={demoMode ? "Stop demo" : "Start demo"}
           data-testid="demo-panel-toggle"
         >
-          {demoMode ? "Stop demo" : "Start demo"}
+          {demoMode ? "Stop" : "Start"}
         </Button>
       </div>
       {!demoMode && (
@@ -150,7 +151,7 @@ export function DemoStartDialog({ preflight, onStart, onClose }: DemoStartDialog
         <div className="flex justify-end gap-2 pt-1">
           <Button onClick={onClose} data-testid="demo-start-cancel">Cancel</Button>
           <Button tone="primary" onClick={start} data-testid="demo-start-confirm">
-            {preflight.state === "fail" ? "Start anyway" : "Start demo"}
+            {preflight.state === "fail" ? "Start anyway" : "Start"}
           </Button>
         </div>
       </div>

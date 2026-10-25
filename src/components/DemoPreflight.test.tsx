@@ -18,7 +18,9 @@ describe("DemoPreflightPanel", () => {
     expect(screen.getByTestId("demo-readiness-status").textContent).toBe("Ready with warnings");
     expect(screen.getByTestId("preflight-hotkeys").getAttribute("data-state")).toBe("pass");
     expect(screen.getByTestId("preflight-elevation").textContent).toContain("Warning:");
-    fireEvent.click(screen.getByRole("button", { name: "Start demo" }));
+    const start = screen.getByRole("button", { name: "Start demo" });
+    expect(start.textContent).toBe("Start");
+    fireEvent.click(start);
     expect(onToggleDemo).toHaveBeenCalled();
   });
 
@@ -27,7 +29,7 @@ describe("DemoPreflightPanel", () => {
     expect(screen.getByTestId("demo-readiness-status").textContent).toBe("Live");
     expect(screen.getByTestId("demo-live-status").textContent).toContain("Keynote · 1 hotkey armed");
     expect(screen.queryByTestId("demo-preflight-checks")).toBeNull();
-    expect(screen.getByRole("button", { name: "Stop demo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop demo" }).textContent).toBe("Stop");
   });
 
   it("uses the live armed count when registrations failed", () => {
