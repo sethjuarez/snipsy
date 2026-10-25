@@ -1,4 +1,4 @@
-export type SettingsSectionId = "appearance" | "demo" | "permissions" | "updates" | "stream-deck" | "shortcuts";
+export type SettingsSectionId = "project" | "appearance" | "demo" | "permissions" | "updates" | "stream-deck" | "shortcuts";
 
 export interface SettingsSection {
   id: SettingsSectionId;
@@ -8,6 +8,7 @@ export interface SettingsSection {
 }
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
+  { id: "project", label: "Project", description: "Name and description of the open project", keywords: ["rename", "name", "title", "description", "notes"] },
   { id: "appearance", label: "Appearance", description: "Light, dark, or match the system", keywords: ["dark", "light", "system", "color", "theme", "mode"] },
   { id: "demo", label: "Demo", description: "What happens when a demo starts", keywords: ["checklist", "confirm", "preflight", "present", "start"] },
   { id: "permissions", label: "Permissions", description: "Administrator rights for input protection", keywords: ["admin", "administrator", "elevation", "elevated", "uac", "input", "block"] },

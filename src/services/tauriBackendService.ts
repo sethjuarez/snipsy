@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke } from "./auditaur";
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
-import type { ArchiveSummary, ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, Project, ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -13,6 +13,10 @@ export class TauriBackendService implements BackendService {
 
   async openProject(path: string): Promise<ProjectData> {
     return invoke<ProjectData>("open_project", { path });
+  }
+
+  async saveProject(path: string, name: string, description: string): Promise<Project> {
+    return invoke<Project>("save_project", { path, name, description });
   }
 
   async exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary> {

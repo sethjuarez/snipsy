@@ -61,6 +61,7 @@ export interface CommandContext {
   toggleDemo: () => void;
   closeProject: () => void;
   exportProject: () => void;
+  renameProject: () => void;
   showShortcuts: () => void;
   openSettings: () => void;
   toggleSidebar: () => void;
@@ -95,6 +96,7 @@ export function buildCommands(ctx: CommandContext): AppCommand[] {
       run: ctx.toggleDemo,
     },
     { id: "project.export", title: "Export project…", group: "Project", keywords: ["zip", "archive", "share", "backup", "save as"], run: ctx.exportProject },
+    { id: "project.rename", title: "Rename project", group: "Project", keywords: ["name", "description", "edit"], run: ctx.renameProject },
     { id: "project.close", title: "Close project", group: "Project", keywords: ["home", "welcome"], run: ctx.closeProject },
     { id: "view.sidebar", title: "Toggle sidebar", group: "Project", keywords: ["collapse", "expand"], run: ctx.toggleSidebar },
     { id: "help.shortcuts", title: "Keyboard shortcuts", group: "Help", shortcut: "CmdOrControl+/", keywords: ["keys", "help"], run: ctx.showShortcuts },

@@ -88,6 +88,33 @@ pub fn load_project_data(project_dir: &std::path::Path) -> Result<ProjectData, S
 
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_project(
+    path: String,
+    name: String,
+    description: String,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Project, String> {
+    let project_dir = PathBuf::from(&path);
+    if !project_dir.join("project.json").is_file() {
+        return Err("No Snipsy project found in this folder.".into());
+    }
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("Project name cannot be empty.".into());
+    }
+    let project = Project {
+        name,
+        description: description.trim().to_string(),
+    };
+    let json = serde_json::to_string_pretty(&project)
+        .map_err(|e| format!("Failed to serialize project: {e}"))?;
+    fs::write(project_dir.join("project.json"), json)
+        .map_err(|e| format!("Failed to write project.json: {e}"))?;
+    Ok(project)
+}
+
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
 pub fn save_text_snippets(
     path: String,
     snippets: Vec<TextSnippet>,
@@ -524,6 +551,34 @@ mod tests {
         assert!(opened.is_ok());
         let opened_data = opened.unwrap();
         assert_eq!(opened_data.project.name, "Test Project");
+    }
+
+    #[test]
+    fn save_project_updates_name_and_description() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        create_project(path.clone(), "Old".into(), "old".into(), None).unwrap();
+
+        let saved = save_project(path.clone(), "  New name ".into(), " new desc ".into(), None).unwrap();
+        assert_eq!(saved.name, "New name");
+        assert_eq!(saved.description, "new desc");
+        let opened = open_project(path, None).unwrap();
+        assert_eq!(opened.project, saved);
+    }
+
+    #[test]
+    fn save_project_rejects_empty_name_and_missing_project() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        assert!(save_project(path.clone(), "Name".into(), String::new(), None)
+            .unwrap_err()
+            .contains("No Snipsy project"));
+
+        create_project(path.clone(), "Keep".into(), String::new(), None).unwrap();
+        assert!(save_project(path.clone(), "   ".into(), String::new(), None)
+            .unwrap_err()
+            .contains("cannot be empty"));
+        assert_eq!(open_project(path, None).unwrap().project.name, "Keep");
     }
 
     #[test]

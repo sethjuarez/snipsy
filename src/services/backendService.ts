@@ -1,5 +1,6 @@
 import type {
   ArchiveSummary,
+  Project,
   ProjectData,
   ImportedVideo,
   MonitorInfo,
@@ -56,6 +57,8 @@ export interface BackendService {
     description: string,
   ): Promise<ProjectData>;
   openProject(path: string): Promise<ProjectData>;
+  /** Rename the project or change its description; returns the saved values. */
+  saveProject(path: string, name: string, description: string): Promise<Project>;
   /** Zip the project folder (videos included) into a single archive. */
   exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary>;
   /** Unzip a project archive into an empty folder. */

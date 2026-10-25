@@ -78,6 +78,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::create_project,
             commands::open_project,
+            commands::save_project,
             project_archive::export_project,
             project_archive::import_project,
             commands::save_text_snippets,

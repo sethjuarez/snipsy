@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
-import { CheckCircle2, Download, ExternalLink, Keyboard, LayoutGrid, RefreshCw, Search, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, Keyboard, LayoutGrid, RefreshCw, Save, Search, ShieldAlert } from "lucide-react";
 import Dialog from "./ui/Dialog";
 import Button from "./ui/Button";
 import Kbd from "./ui/Kbd";
@@ -20,6 +20,10 @@ interface SettingsDialogProps {
   onShowShortcuts?: () => void;
   /** Opens a project view; omitted when no project is open. */
   onNavigate?: (view: "stream-deck" | "hotkeys") => void;
+  /** The open project; omitted when none is open. */
+  project?: { name: string; description: string };
+  /** Saves the project name and description; rejects with a message on failure. */
+  onSaveProject?: (name: string, description: string) => Promise<void>;
 }
 
 const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
@@ -46,6 +50,71 @@ function readDemoChecklist(): boolean {
   } catch {
     return true;
   }
+}
+
+const fieldStyle = { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" };
+
+function ProjectSection({ project, onSaveProject }: Pick<SettingsDialogProps, "project" | "onSaveProject">) {
+  const [name, setName] = useState(project?.name ?? "");
+  const [description, setDescription] = useState(project?.description ?? "");
+  const [saving, setSaving] = useState(false);
+  if (!project || !onSaveProject) {
+    return <Row title="No project open" description="Open or create a project to rename it." />;
+  }
+  const changed = name.trim() !== project.name || description.trim() !== project.description;
+  const canSave = Boolean(name.trim()) && changed && !saving;
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      await onSaveProject(name, description);
+      setName(name.trim());
+      setDescription(description.trim());
+    } catch {
+      // The caller reports the error.
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+      className="space-y-3 pt-2.5"
+      style={{ borderTop: "1px solid var(--color-border-subtle)" }}
+      data-testid="settings-project-form"
+    >
+      <label className="block">
+        <span className="mb-1 block text-base font-medium" style={{ color: "var(--color-text)" }}>Name</span>
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="w-full rounded px-2 py-1 text-base"
+          style={fieldStyle}
+          data-testid="settings-project-name"
+        />
+        {!name.trim() && <span className="mt-1 block text-sm" style={{ color: "var(--color-danger)" }}>A project needs a name.</span>}
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-base font-medium" style={{ color: "var(--color-text)" }}>Description</span>
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={3}
+          className="w-full rounded px-2 py-1 text-base"
+          style={fieldStyle}
+          data-testid="settings-project-description"
+        />
+      </label>
+      <div className="flex justify-end">
+        <Button type="submit" tone="primary" icon={<Save size={12} />} disabled={!canSave} data-testid="settings-project-save">
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </form>
+  );
 }
 
 function AppearanceSection() {
@@ -201,7 +270,7 @@ function ShortcutsSection({ onShowShortcuts, onNavigate }: Pick<SettingsDialogPr
 }
 
 /** App settings in sections, with search and deep links. */
-function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onShowShortcuts, onNavigate }: SettingsDialogProps) {
+function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onShowShortcuts, onNavigate, project, onSaveProject }: SettingsDialogProps) {
   const [selected, setSelected] = useState<SettingsSectionId>(initialSection);
   const [query, setQuery] = useState("");
   useEffect(() => setSelected(initialSection), [initialSection]);
@@ -212,6 +281,8 @@ function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRe
 
   const renderSection = (id: SettingsSectionId) => {
     switch (id) {
+      case "project":
+        return <ProjectSection project={project} onSaveProject={onSaveProject} />;
       case "appearance":
         return <AppearanceSection />;
       case "demo":

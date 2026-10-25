@@ -4,6 +4,7 @@ import type { Script, TextSnippet, VideoSnippet } from "../types";
 const backend = vi.hoisted(() => ({
   createProject: vi.fn(),
   openProject: vi.fn(),
+  saveProject: vi.fn(),
   saveTextSnippets: vi.fn(),
   saveVideoSnippets: vi.fn(),
   loadAutomations: vi.fn(),
@@ -54,6 +55,30 @@ beforeEach(async () => {
     demoHotkeySyncError: null,
   });
   await useProjectStore.getState().syncDemoHotkeys(); // drain the queue between tests
+});
+
+describe("updateProject", () => {
+  it("saves the name and description and renames the recent entry", async () => {
+    localStorage.setItem("snipsy:recentProjects", JSON.stringify([
+      { path: "C:/project", name: "Project", lastOpened: "2024-01-01T00:00:00.000Z" },
+      { path: "C:/other", name: "Other", lastOpened: "2024-01-01T00:00:00.000Z" },
+    ]));
+    backend.saveProject.mockResolvedValue({ name: "Renamed", description: "Notes" });
+
+    await useProjectStore.getState().updateProject(" Renamed ", " Notes ");
+
+    expect(backend.saveProject).toHaveBeenCalledWith("C:/project", " Renamed ", " Notes ");
+    const state = useProjectStore.getState();
+    expect(state.projectName).toBe("Renamed");
+    expect(state.projectDescription).toBe("Notes");
+    expect(state.recentProjects.map((r) => `${r.path}:${r.name}`)).toEqual(["C:/project:Renamed", "C:/other:Other"]);
+  });
+
+  it("keeps the old name when the backend rejects", async () => {
+    backend.saveProject.mockRejectedValue("Project name cannot be empty.");
+    await expect(useProjectStore.getState().updateProject("", "")).rejects.toBe("Project name cannot be empty.");
+    expect(useProjectStore.getState().projectName).toBe("Project");
+  });
 });
 
 describe("buildDemoHotkeys", () => {

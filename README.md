@@ -75,7 +75,7 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 ### Settings
 
 - The title-bar gear (or **Ctrl/Cmd+,**) opens Settings, with or without a project. Search filters its sections.
-- **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
+- **Project** (rename the open project or edit its description; also **Rename project** in the palette), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
 - The title-bar shield, shown when Snipsy isn't elevated, opens Permissions.
 
 ## Data Model

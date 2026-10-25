@@ -60,6 +60,8 @@ interface ProjectState {
     description: string,
   ) => Promise<void>;
   openProject: (path: string) => Promise<void>;
+  /** Rename the open project or change its description. */
+  updateProject: (name: string, description: string) => Promise<void>;
   closeProject: () => void;
   autoOpenLastProject: () => Promise<boolean>;
   loadRecentProjects: () => void;
@@ -191,6 +193,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // Swap the live demo hotkeys to this project even if a side load failed.
     await get().syncDemoHotkeys();
     if (automations.status === "rejected") throw automations.reason;
+  },
+
+  updateProject: async (name, description) => {
+    const path = get().projectPath;
+    if (!path) throw new Error("No project is open.");
+    const project = await backend.saveProject(path, name, description);
+    set({ projectName: project.name, projectDescription: project.description });
+    if (loadRecentProjects().some((recent) => recent.path === path)) {
+      saveRecentProject(path, project.name);
+      set({ recentProjects: loadRecentProjects() });
+    }
   },
 
   closeProject: () => {

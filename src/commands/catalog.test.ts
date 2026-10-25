@@ -21,6 +21,7 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     toggleDemo: vi.fn(),
     closeProject: vi.fn(),
     exportProject: vi.fn(),
+    renameProject: vi.fn(),
     showShortcuts: vi.fn(),
     openSettings: vi.fn(),
     toggleSidebar: vi.fn(),

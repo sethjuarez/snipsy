@@ -1,6 +1,6 @@
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
-import type { ArchiveSummary, ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, Project, ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const FIXTURE_PROJECT: ProjectData = {
@@ -112,6 +112,13 @@ export class MockBackendService implements BackendService {
 
   async openProject(_path: string): Promise<ProjectData> {
     return structuredClone(this.data);
+  }
+
+  async saveProject(_path: string, name: string, description: string): Promise<Project> {
+    const project = { name: name.trim(), description: description.trim() };
+    if (!project.name) throw new Error("Project name cannot be empty.");
+    this.data = { ...this.data, project };
+    return { ...project };
   }
 
   async exportProject(_projectPath: string, archivePath: string): Promise<ArchiveSummary> {

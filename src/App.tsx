@@ -64,6 +64,8 @@ type ConfirmDialogState = {
 function App() {
   const projectName = useProjectStore((s) => s.projectName);
   const projectPath = useProjectStore((s) => s.projectPath);
+  const projectDescription = useProjectStore((s) => s.projectDescription);
+  const updateProject = useProjectStore((s) => s.updateProject);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
@@ -439,6 +441,7 @@ function App() {
     toggleDemo: () => handleToggleDemo(),
     closeProject: () => guardEditorExit(() => void closeProject()),
     exportProject: () => void handleExportProject(),
+    renameProject: () => openSettings("project"),
     showShortcuts: () => setShortcutsOpen(true),
     openSettings: () => openSettings(),
     toggleSidebar: () => setSidebarCollapsed((collapsed) => !collapsed),
@@ -584,6 +587,14 @@ function App() {
         setSettingsSection(null);
         changeView(view);
       } : undefined}
+      project={projectName ? { name: projectName, description: projectDescription ?? "" } : undefined}
+      onSaveProject={projectName ? (name, description) => updateProject(name, description).then(
+        () => showToast("Saved project", undefined, "success", "project-save"),
+        (error: unknown) => {
+          showToast("Couldn't save project", String(error), "error", "project-save");
+          throw error;
+        },
+      ) : undefined}
     />
   );
 

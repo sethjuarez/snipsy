@@ -198,3 +198,43 @@ describe("SettingsDialog", () => {
     expect(screen.queryByTestId("settings-open-hotkeys")).toBeNull();
   });
 });
+
+describe("Project settings", () => {
+  it("is found by rename", () => {
+    expect(filterSettingsSections("rename").map((section) => section.id)).toEqual(["project"]);
+  });
+
+  it("asks for a project when none is open", () => {
+    renderDialog({ initialSection: "project" });
+    expect(screen.getByTestId("settings-section-project").textContent).toContain("No project open");
+    expect(screen.queryByTestId("settings-project-form")).toBeNull();
+  });
+
+  it("saves a trimmed name and description once something changed", async () => {
+    const onSaveProject = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ initialSection: "project", project: { name: "Demo", description: "" }, onSaveProject });
+    const save = screen.getByTestId("settings-project-save") as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+
+    fireEvent.change(screen.getByTestId("settings-project-name"), { target: { value: "  " } });
+    expect(save.disabled).toBe(true);
+    expect(screen.getByTestId("settings-section-project").textContent).toContain("needs a name");
+
+    fireEvent.change(screen.getByTestId("settings-project-name"), { target: { value: " Keynote " } });
+    fireEvent.change(screen.getByTestId("settings-project-description"), { target: { value: "Build 2025" } });
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(onSaveProject).toHaveBeenCalledWith(" Keynote ", "Build 2025"));
+    await waitFor(() => expect((screen.getByTestId("settings-project-name") as HTMLInputElement).value).toBe("Keynote"));
+  });
+
+  it("keeps the edits when saving fails", async () => {
+    const onSaveProject = vi.fn().mockRejectedValue(new Error("disk full"));
+    renderDialog({ initialSection: "project", project: { name: "Demo", description: "" }, onSaveProject });
+    fireEvent.change(screen.getByTestId("settings-project-name"), { target: { value: "Renamed" } });
+    fireEvent.click(screen.getByTestId("settings-project-save"));
+    await waitFor(() => expect(onSaveProject).toHaveBeenCalled());
+    await waitFor(() => expect((screen.getByTestId("settings-project-save") as HTMLButtonElement).disabled).toBe(false));
+    expect((screen.getByTestId("settings-project-name") as HTMLInputElement).value).toBe("Renamed");
+  });
+});
