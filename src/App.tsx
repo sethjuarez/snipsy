@@ -32,6 +32,7 @@ import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight"
 import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
 import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
+import { describeArchive, exportOpenProject } from "./utils/projectArchive";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners, describeHotkeyIssues, type HotkeyOwner } from "./utils/hotkeys";
 import { duplicateAutomation, duplicateTextSnippet, duplicateVideoSnippet } from "./utils/duplicate";
@@ -335,17 +336,17 @@ function App() {
     setScriptSaveState(DEFAULT_SAVE_STATE);
   }, []);
 
-  const guardEditorExit = useCallback((next: () => void) => {
-    const activeSaveState = clipEditingVideo
-      ? clipSaveState
-      : showForm
-        ? textSnippetSaveState
-        : showVideoForm
-          ? videoSnippetSaveState
-          : showScriptForm
-            ? scriptSaveState
-            : null;
+  const activeSaveState = clipEditingVideo
+    ? clipSaveState
+    : showForm
+      ? textSnippetSaveState
+      : showVideoForm
+        ? videoSnippetSaveState
+        : showScriptForm
+          ? scriptSaveState
+          : null;
 
+  const guardEditorExit = useCallback((next: () => void) => {
     if (!activeSaveState?.hasUnsavedChanges) {
       closeActiveEditor();
       next();
@@ -365,18 +366,26 @@ function App() {
         next();
       },
     });
-  }, [
-    clipEditingVideo,
-    clipSaveState,
-    closeActiveEditor,
-    scriptSaveState,
-    showForm,
-    showScriptForm,
-    showVideoForm,
-    textSnippetSaveState,
-    videoSnippetSaveState,
-  ]);
+  }, [activeSaveState, closeActiveEditor]);
   const requestCloseActiveEditor = useCallback(() => guardEditorExit(() => {}), [guardEditorExit]);
+
+  const handleExportProject = async () => {
+    const unsaved = Boolean(activeSaveState?.hasUnsavedChanges);
+    try {
+      const summary = await exportOpenProject(() =>
+        showToast("Exporting project…", "Videos are included, so large projects can take a moment.", "info", "project-export"),
+      );
+      if (!summary) return;
+      showToast(
+        "Project exported",
+        unsaved ? `Unsaved editor changes weren't included. ${describeArchive(summary)}` : describeArchive(summary),
+        unsaved ? "warning" : "success",
+        "project-export",
+      );
+    } catch (error) {
+      showToast("Couldn't export project", String(error), "error", "project-export");
+    }
+  };
 
   // Leaving the clip editor asks before discarding unsaved edits; list forms stay open per view.
   const changeView = (view: AppView) => {
@@ -429,6 +438,7 @@ function App() {
     }),
     toggleDemo: () => handleToggleDemo(),
     closeProject: () => guardEditorExit(() => void closeProject()),
+    exportProject: () => void handleExportProject(),
     showShortcuts: () => setShortcutsOpen(true),
     openSettings: () => openSettings(),
     toggleSidebar: () => setSidebarCollapsed((collapsed) => !collapsed),
@@ -594,7 +604,7 @@ function App() {
       <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setSettingsSection(null); setPaletteOpen(true); } }} onOpenSettings={openSettings} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} />
+        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">

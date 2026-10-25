@@ -14,7 +14,7 @@ A **Project** is the top-level organizational unit in Snipsy. A project is store
 - **Video Snippets** — pre-recorded screen capture clips with assigned hotkeys, playback speeds, and optional transition actions.
 - **Automations** (Advanced mode) — ordered, reusable actions that can prepare a demo or open sites programmatically.
 
-A user can have multiple projects (e.g., one per talk or demo). All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
+A user can have multiple projects (e.g., one per talk or demo). **Export project** (sidebar footer or command palette) zips the whole folder, videos included, into a .snipsy.zip; **Import Project** on the welcome screen unzips one into an empty folder and opens it. All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
 
 ### Demo Mode
 
@@ -201,6 +201,7 @@ Open-site contributions are idempotent by URL within one automation run. If the 
 | Input simulation | `enigo` | Simulate keyboard and mouse input for fast-type delivery and transition actions |
 | Video playback | HTML `<video>` element; thumbnails captured in the webview, FPS read from MP4/MOV metadata (no FFmpeg) | Fullscreen chromeless playback of video snippets |
 | File system | `std::fs` + `serde_json` | Read/write project JSON files and manage video assets |
+| Project archives | `zip` | Export/import a project folder as a `.zip` (videos stored, JSON deflated, zip-slip guarded) |
 | Async runtime | `tokio` | Async operations for automation execution and file I/O |
 | Observability | Auditaur | Local-first telemetry for frontend errors, console logs, Tauri events, IPC, traces, and full-app drive/smoke workflows |
 

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useProjectStore, type RecentProject } from "../stores/projectStore";
-import { FolderOpen, FolderPlus, FolderSearch, X, Clock, Sparkles } from "lucide-react";
+import { FolderOpen, FolderPlus, FolderSearch, X, Clock, Sparkles, PackageOpen } from "lucide-react";
 import { createSampleProject } from "../utils/sampleProject";
+import { importProjectArchive } from "../utils/projectArchive";
 import appIcon from "../assets/icon.png";
 
 /** Deterministic hue from a string (for project avatars) */
@@ -24,7 +25,8 @@ function relativeTime(iso: string): string {
 }
 
 function Welcome() {
-  const [showForm, setShowForm] = useState<"open" | "create" | "sample" | null>(null);
+  const [showForm, setShowForm] = useState<"open" | "create" | "sample" | "import" | null>(null);
+  const [archivePath, setArchivePath] = useState("");
   const [path, setPath] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -68,6 +70,41 @@ function Welcome() {
       await createSampleProject(selected);
     } catch (e) {
       setError(`Couldn't create the sample project: ${e}`);
+    }
+  };
+
+  const handleImportProject = async () => {
+    setError(null);
+    let archive: string | null = null;
+    let destination: string | null = null;
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      archive = await open({
+        multiple: false,
+        title: "Choose a Snipsy project archive",
+        filters: [{ name: "Snipsy project", extensions: ["zip"] }],
+      });
+      if (!archive) return;
+      destination = await open({ directory: true, multiple: false, title: "Choose an empty folder for the imported project" });
+    } catch {
+      setShowForm("import");
+      return;
+    }
+    if (!destination) return;
+    try {
+      await importProjectArchive(archive, destination);
+    } catch (e) {
+      setError(`Couldn't import the project: ${e}`);
+    }
+  };
+
+  const handleImportFromForm = async () => {
+    if (!archivePath.trim() || !path.trim()) return;
+    try {
+      setError(null);
+      await importProjectArchive(archivePath.trim(), path.trim());
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -146,7 +183,7 @@ function Welcome() {
           <div className="flex-1 space-y-3">
             {/* Action cards (only show when form is not open) */}
             {!showForm && (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleOpenProject}
                   className="flex flex-col items-center gap-2 p-5 rounded-lg text-md font-medium transition-all hover:shadow-md"
@@ -195,6 +232,22 @@ function Welcome() {
                     Explore with examples
                   </span>
                 </button>
+                <button
+                  onClick={handleImportProject}
+                  className="flex flex-col items-center gap-2 p-5 rounded-lg text-md font-medium transition-all hover:shadow-md"
+                  style={{
+                    backgroundColor: "var(--color-surface-alt)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                  }}
+                  data-testid="import-project"
+                >
+                  <PackageOpen size={24} style={{ color: "var(--color-accent)" }} />
+                  Import Project
+                  <span className="text-sm font-normal" style={{ color: "var(--color-text-secondary)" }}>
+                    From a .zip export
+                  </span>
+                </button>
               </div>
             )}
 
@@ -212,10 +265,10 @@ function Welcome() {
               >
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-md font-semibold" style={{ color: "var(--color-text)" }}>
-                    {showForm === "open" ? "Open Project" : showForm === "sample" ? "Sample Project" : "New Project"}
+                    {showForm === "open" ? "Open Project" : showForm === "sample" ? "Sample Project" : showForm === "import" ? "Import Project" : "New Project"}
                   </h3>
                   <button
-                    onClick={() => { setShowForm(null); setError(null); setPath(""); setName(""); setDescription(""); }}
+                    onClick={() => { setShowForm(null); setError(null); setPath(""); setArchivePath(""); setName(""); setDescription(""); }}
                     className="w-6 h-6 flex items-center justify-center rounded hover:opacity-70"
                     style={{ color: "var(--color-text-secondary)" }}
                   >
@@ -223,9 +276,26 @@ function Welcome() {
                   </button>
                 </div>
 
+                {showForm === "import" && (
+                  <div>
+                    <label htmlFor="welcome-archive" className="block font-medium mb-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                      Archive Path
+                    </label>
+                    <input
+                      id="welcome-archive"
+                      type="text"
+                      value={archivePath}
+                      onChange={(e) => setArchivePath(e.target.value)}
+                      placeholder="/path/to/project.snipsy.zip"
+                      className="w-full px-3 py-1.5 rounded text-md"
+                      style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="welcome-path" className="block font-medium mb-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                    Project Path
+                    {showForm === "import" ? "Empty Destination Folder" : "Project Path"}
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -290,12 +360,12 @@ function Welcome() {
                 )}
 
                 <button
-                  onClick={showForm === "open" ? handleOpen : showForm === "sample" ? handleCreateSample : handleCreate}
+                  onClick={showForm === "open" ? handleOpen : showForm === "sample" ? handleCreateSample : showForm === "import" ? handleImportFromForm : handleCreate}
                   className="w-full py-2 px-4 rounded font-medium text-md"
                   style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-                  data-testid={showForm === "open" ? "open-project-submit" : showForm === "sample" ? "sample-project-submit" : "create-project-submit"}
+                  data-testid={showForm === "open" ? "open-project-submit" : showForm === "sample" ? "sample-project-submit" : showForm === "import" ? "import-project-submit" : "create-project-submit"}
                 >
-                  {showForm === "open" ? "Open" : showForm === "sample" ? "Create sample" : "Create"}
+                  {showForm === "open" ? "Open" : showForm === "sample" ? "Create sample" : showForm === "import" ? "Import" : "Create"}
                 </button>
               </div>
             )}

@@ -20,6 +20,7 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     newAutomation: vi.fn(),
     toggleDemo: vi.fn(),
     closeProject: vi.fn(),
+    exportProject: vi.fn(),
     showShortcuts: vi.fn(),
     openSettings: vi.fn(),
     toggleSidebar: vi.fn(),
@@ -54,6 +55,15 @@ describe("buildCommands", () => {
   it("has unique ids", () => {
     const ids = buildCommands(makeContext()).map((command) => command.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("exports the project from the palette", () => {
+    const ctx = makeContext();
+    const command = find(ctx, "project.export");
+    expect(command.group).toBe("Project");
+    expect(command.keywords).toContain("zip");
+    command.run();
+    expect(ctx.exportProject).toHaveBeenCalled();
   });
 
   it("wires navigation and create commands", () => {

@@ -60,6 +60,7 @@ export interface CommandContext {
   newAutomation: () => void;
   toggleDemo: () => void;
   closeProject: () => void;
+  exportProject: () => void;
   showShortcuts: () => void;
   openSettings: () => void;
   toggleSidebar: () => void;
@@ -93,6 +94,7 @@ export function buildCommands(ctx: CommandContext): AppCommand[] {
       keywords: ["demo mode", "present", "live", "hotkeys"],
       run: ctx.toggleDemo,
     },
+    { id: "project.export", title: "Export project…", group: "Project", keywords: ["zip", "archive", "share", "backup", "save as"], run: ctx.exportProject },
     { id: "project.close", title: "Close project", group: "Project", keywords: ["home", "welcome"], run: ctx.closeProject },
     { id: "view.sidebar", title: "Toggle sidebar", group: "Project", keywords: ["collapse", "expand"], run: ctx.toggleSidebar },
     { id: "help.shortcuts", title: "Keyboard shortcuts", group: "Help", shortcut: "CmdOrControl+/", keywords: ["keys", "help"], run: ctx.showShortcuts },

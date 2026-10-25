@@ -6,6 +6,7 @@ mod focus;
 mod keyboard_hook;
 mod models;
 mod playback;
+mod project_archive;
 mod scripting;
 mod stream_deck;
 mod stream_deck_control;
@@ -76,6 +77,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::create_project,
             commands::open_project,
+            project_archive::export_project,
+            project_archive::import_project,
             commands::save_text_snippets,
             commands::save_video_snippets,
             commands::import_video,

@@ -1,4 +1,5 @@
 import type {
+  ArchiveSummary,
   ProjectData,
   ImportedVideo,
   MonitorInfo,
@@ -50,6 +51,12 @@ export interface BackendService {
     description: string,
   ): Promise<ProjectData>;
   openProject(path: string): Promise<ProjectData>;
+  /** Zip the project folder (videos included) into a single archive. */
+  exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary>;
+  /** Unzip a project archive into an empty folder. */
+  importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary>;
+  /** Ask where to save a project archive; null when cancelled. */
+  selectArchiveSavePath(defaultName: string): Promise<string | null>;
   saveTextSnippets(path: string, snippets: TextSnippet[]): Promise<void>;
   saveVideoSnippets(path: string, snippets: VideoSnippet[]): Promise<void>;
   enterDemoMode(hotkeys: SnippetHotkey[]): Promise<HotkeyIssue[]>;

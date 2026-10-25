@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Keyboard, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Archive, Keyboard, type LucideIcon } from "lucide-react";
 
 export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck";
 
@@ -61,13 +61,14 @@ interface SidebarProps {
   activeView: AppView;
   onViewChange: (view: AppView) => void;
   onCloseProject?: () => void;
+  onExportProject?: () => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 const rowClass = "flex items-center gap-2 px-3 py-1.5 rounded text-base font-medium w-full text-left";
 
-function Sidebar({ activeView, onViewChange, onCloseProject, collapsed = false, onCollapsedChange }: SidebarProps) {
+function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, collapsed = false, onCollapsedChange }: SidebarProps) {
   return (
     <nav
       className="no-select flex flex-col shrink-0 overflow-hidden"
@@ -133,20 +134,36 @@ function Sidebar({ activeView, onViewChange, onCloseProject, collapsed = false, 
         ))}
       </div>
 
-      {onCloseProject && (
-        <div className="p-1.5" style={{ borderTop: "1px solid var(--color-border)" }}>
-          <button
-            type="button"
-            onClick={onCloseProject}
-            className={rowClass}
-            style={{ color: "var(--color-text-secondary)" }}
-            data-testid="nav-close-project"
-            aria-label="Close project"
-            title="Close project"
-          >
-            <LogOut size={15} />
-            {!collapsed && <span>Close project</span>}
-          </button>
+      {(onCloseProject || onExportProject) && (
+        <div className="flex flex-col gap-0.5 p-1.5" style={{ borderTop: "1px solid var(--color-border)" }}>
+          {onExportProject && (
+            <button
+              type="button"
+              onClick={onExportProject}
+              className={rowClass}
+              style={{ color: "var(--color-text-secondary)" }}
+              data-testid="nav-export-project"
+              aria-label="Export project"
+              title="Export project as a .zip (videos included)"
+            >
+              <Archive size={15} />
+              {!collapsed && <span>Export project</span>}
+            </button>
+          )}
+          {onCloseProject && (
+            <button
+              type="button"
+              onClick={onCloseProject}
+              className={rowClass}
+              style={{ color: "var(--color-text-secondary)" }}
+              data-testid="nav-close-project"
+              aria-label="Close project"
+              title="Close project"
+            >
+              <LogOut size={15} />
+              {!collapsed && <span>Close project</span>}
+            </button>
+          )}
         </div>
       )}
     </nav>

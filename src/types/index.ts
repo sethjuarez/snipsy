@@ -149,6 +149,12 @@ export interface ImportedVideo {
   thumbnailPath: string | null;
 }
 
+/** Result of exporting or importing a project archive. */
+export interface ArchiveSummary {
+  path: string;
+  fileCount: number;
+}
+
 export interface ProjectData {
   project: Project;
   textSnippets: TextSnippet[];

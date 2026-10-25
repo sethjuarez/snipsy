@@ -32,6 +32,16 @@ describe("Sidebar", () => {
     expect(screen.queryByTestId("nav-videos")).toBeNull();
   });
 
+  it("offers export and close project in the footer", () => {
+    const onExportProject = vi.fn();
+    const onCloseProject = vi.fn();
+    render(<Sidebar activeView="home" onViewChange={vi.fn()} onExportProject={onExportProject} onCloseProject={onCloseProject} />);
+    fireEvent.click(screen.getByTestId("nav-export-project"));
+    expect(onExportProject).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("nav-close-project"));
+    expect(onCloseProject).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps Clips highlighted on the Source videos tab", () => {
     render(<Sidebar activeView="videos" onViewChange={vi.fn()} />);
     expect(screen.getByTestId("nav-video-snippets").getAttribute("aria-current")).toBe("page");

@@ -1,6 +1,6 @@
 import type { BackendService, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
-import type { ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const FIXTURE_PROJECT: ProjectData = {
@@ -77,6 +77,7 @@ const FIXTURE_PROJECT: ProjectData = {
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
+  private archives = new Map<string, ProjectData>();
   private _automations: Script[] = [
     {
       id: "sc-1",
@@ -110,6 +111,22 @@ export class MockBackendService implements BackendService {
 
   async openProject(_path: string): Promise<ProjectData> {
     return structuredClone(this.data);
+  }
+
+  async exportProject(_projectPath: string, archivePath: string): Promise<ArchiveSummary> {
+    const fileCount = 3 + this._automations.length + this._importedVideos.length;
+    this.archives.set(archivePath, structuredClone(this.data));
+    return { path: archivePath, fileCount };
+  }
+
+  async importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary> {
+    const archived = this.archives.get(archivePath);
+    if (archived) this.data = structuredClone(archived);
+    return { path: destinationPath, fileCount: 3 };
+  }
+
+  async selectArchiveSavePath(defaultName: string): Promise<string | null> {
+    return `/mock/exports/${defaultName}`;
   }
 
   async saveTextSnippets(

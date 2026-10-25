@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke } from "./auditaur";
 import type { BackendService, HotkeyIssue, SnippetHotkey } from "./backendService";
-import type { ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -13,6 +13,23 @@ export class TauriBackendService implements BackendService {
 
   async openProject(path: string): Promise<ProjectData> {
     return invoke<ProjectData>("open_project", { path });
+  }
+
+  async exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary> {
+    return invoke<ArchiveSummary>("export_project", { projectPath, archivePath });
+  }
+
+  async importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary> {
+    return invoke<ArchiveSummary>("import_project", { archivePath, destinationPath });
+  }
+
+  async selectArchiveSavePath(defaultName: string): Promise<string | null> {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    return save({
+      title: "Export project",
+      defaultPath: defaultName,
+      filters: [{ name: "Snipsy project", extensions: ["zip"] }],
+    });
   }
 
   async saveTextSnippets(
