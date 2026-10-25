@@ -21,6 +21,9 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import SectionToolbar, { type ToolbarAction } from "./components/SectionToolbar";
 import ToastViewport, { type ToastMessage, type ToastTone } from "./components/ToastViewport";
 import ErrorBoundary from "./components/ErrorBoundary";
+import CommandPalette from "./components/CommandPalette";
+import ShortcutsDialog from "./components/ShortcutsDialog";
+import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
 import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners, describeHotkeyIssues } from "./utils/hotkeys";
@@ -295,7 +298,7 @@ function App() {
     setScriptSaveState(DEFAULT_SAVE_STATE);
   }, []);
 
-  const requestCloseActiveEditor = useCallback(() => {
+  const guardEditorExit = useCallback((next: () => void) => {
     const activeSaveState = clipEditingVideo
       ? clipSaveState
       : showForm
@@ -308,6 +311,7 @@ function App() {
 
     if (!activeSaveState?.hasUnsavedChanges) {
       closeActiveEditor();
+      next();
       return;
     }
 
@@ -321,6 +325,7 @@ function App() {
       onConfirm: () => {
         closeActiveEditor();
         setConfirmDialog(null);
+        next();
       },
     });
   }, [
@@ -334,6 +339,89 @@ function App() {
     textSnippetSaveState,
     videoSnippetSaveState,
   ]);
+  const requestCloseActiveEditor = useCallback(() => guardEditorExit(() => {}), [guardEditorExit]);
+
+  // Leaving the clip editor asks before discarding unsaved edits; list forms stay open per view.
+  const changeView = (view: AppView) => {
+    if (clipEditingVideo) guardEditorExit(() => setActiveView(view));
+    else setActiveView(view);
+  };
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const overlayOpen = paletteOpen || shortcutsOpen || confirmDialog !== null;
+
+  const commandContext: CommandContext = {
+    demoMode,
+    textSnippets,
+    videoSnippets,
+    automations,
+    runningAutomationId: runningScriptId,
+    navigate: changeView,
+    newTextSnippet: () => guardEditorExit(() => {
+      setActiveView("text-snippets");
+      setEditingSnippet(undefined);
+      setShowForm(true);
+    }),
+    newClip: () => guardEditorExit(() => {
+      setActiveView("video-snippets");
+      setEditingVideoSnippet(undefined);
+      setShowVideoForm(true);
+    }),
+    newAutomation: () => guardEditorExit(() => {
+      setActiveView("automations");
+      setEditingScript(undefined);
+      setShowScriptForm(true);
+    }),
+    toggleDemo: () => handleToggleDemo(),
+    closeProject: () => guardEditorExit(() => void closeProject()),
+    showShortcuts: () => setShortcutsOpen(true),
+    toggleSidebar: () => setSidebarCollapsed((collapsed) => !collapsed),
+    editText: (snippet) => guardEditorExit(() => {
+      setActiveView("text-snippets");
+      handleEdit(snippet);
+    }),
+    editClip: (snippet) => guardEditorExit(() => {
+      setActiveView("video-snippets");
+      void handleVideoEdit(snippet);
+    }),
+    playClip: (snippet) => void playVideo(snippet),
+    editAutomation: (script) => guardEditorExit(() => {
+      setActiveView("automations");
+      handleScriptEdit(script);
+    }),
+    runAutomation: (script) => void handleRunScript(script.id),
+  };
+
+  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
+  shortcutHandlerRef.current = (event: KeyboardEvent) => {
+    if (!projectName || event.defaultPrevented || event.repeat) return;
+    if (matchesShortcut(event, "CmdOrControl+K")) {
+      event.preventDefault();
+      if (confirmDialog) return;
+      setShortcutsOpen(false);
+      setPaletteOpen((open) => !open);
+      return;
+    }
+    if (matchesShortcut(event, "CmdOrControl+/")) {
+      event.preventDefault();
+      if (confirmDialog) return;
+      setPaletteOpen(false);
+      setShortcutsOpen((open) => !open);
+      return;
+    }
+    if (overlayOpen) return;
+    const view = (Object.keys(NAV_SHORTCUTS) as AppView[]).find((candidate) => matchesShortcut(event, NAV_SHORTCUTS[candidate]));
+    if (view) {
+      event.preventDefault();
+      changeView(view);
+    }
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => shortcutHandlerRef.current(event);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleRunScript = useCallback(async (scriptId: string) => {
     if (!projectPath) return;
@@ -393,16 +481,10 @@ function App() {
   // ── Main app layout ──
   return (
     <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} />
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!confirmDialog) { setShortcutsOpen(false); setPaletteOpen(true); } }} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={(view) => {
-          if (clipEditingVideo) {
-            setClipEditingVideo(null);
-            setEditingVideoSnippet(undefined);
-          }
-          setActiveView(view);
-        }} onCloseProject={closeProject} />
+        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -654,6 +736,9 @@ function App() {
           data-testid={confirmDialog.testId ?? "confirm-delete-dialog"}
         />
       )}
+
+      {paletteOpen && <CommandPalette commands={buildCommands(commandContext)} onClose={() => setPaletteOpen(false)} />}
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
 
     </div>
   );

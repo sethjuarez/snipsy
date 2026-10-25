@@ -4,11 +4,16 @@ import Sidebar from "./Sidebar";
 import ScriptForm from "./ScriptForm";
 
 vi.mock("../services", () => ({
-  getBackend: () => ({ listStreamDeckButtons: vi.fn().mockResolvedValue([]) }),
+  getBackend: () => ({ listStreamDeckButtons: vi.fn().mockResolvedValue([]), isElevated: vi.fn().mockResolvedValue(true) }),
 }));
 vi.mock("../services/auditaur", () => ({ isTauriRuntime: () => false, tauriFileSrc: (file: string) => file }));
 
 const { default: StreamDeckEmulator } = await import("./StreamDeckEmulator");
+Object.defineProperty(window, "matchMedia", {
+  configurable: true,
+  value: (query: string) => ({ matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+});
+const { default: TitleBar } = await import("./TitleBar");
 
 afterEach(cleanup);
 
@@ -54,6 +59,16 @@ describe("ScriptForm steps", () => {
     fireEvent.click(screen.getByTestId("add-contribution-group"));
     expect(screen.getByRole("textbox", { name: "Step 2 name" })).toHaveProperty("value", "Step 2");
   });
+
+  it("saves with Ctrl+S once a name is set", () => {
+    const onSave = vi.fn();
+    render(<ScriptForm onSave={onSave} />);
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByTestId("automation-title"), { target: { value: "Open docs" } });
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ title: "Open docs" }));
+  });
 });
 
 describe("StreamDeckEmulator", () => {
@@ -61,5 +76,19 @@ describe("StreamDeckEmulator", () => {
     render(<StreamDeckEmulator embedded />);
     expect(screen.queryByText("Stream Deck Emulator")).toBeNull();
     expect(screen.getByTestId("streamdeck-help").textContent).toMatch(/triggers it for real/);
+  });
+});
+
+describe("TitleBar", () => {
+  it("opens the command palette from the search button", () => {
+    const onOpenPalette = vi.fn();
+    render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} onOpenPalette={onOpenPalette} />);
+    fireEvent.click(screen.getByTestId("command-palette-button"));
+    expect(onOpenPalette).toHaveBeenCalled();
+  });
+
+  it("hides the search button without a handler", () => {
+    render(<TitleBar projectName={null} demoMode={false} onToggleDemo={vi.fn()} />);
+    expect(screen.queryByTestId("command-palette-button")).toBeNull();
   });
 });

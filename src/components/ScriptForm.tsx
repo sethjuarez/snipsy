@@ -79,8 +79,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
       : group));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveScript = () => {
     if (!canSave) return;
 
     onSave({
@@ -93,6 +92,21 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
     });
     markSaved();
   };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveScript();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s" || capturingHotkey) return;
+      event.preventDefault();
+      saveScript();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();

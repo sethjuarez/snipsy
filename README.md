@@ -61,6 +61,12 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
 - Automations are stored as human-editable JSON files within the project folder.
 
+### Command Palette & Shortcuts
+
+- Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
+- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–6** switch sidebar views, and **Ctrl/Cmd+S** saves the open editor.
+- These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
+
 ## Data Model
 
 ### Project Folder Structure
