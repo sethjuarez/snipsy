@@ -5,6 +5,64 @@ import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import IconEditor from "./IconEditor";
 
+// Match the clamps in src-tauri/src/typing.rs.
+const MAX_TYPO_CHANCE = 20;
+const MAX_TYPE_VARIATION = 100;
+
+/** A whole percent within 0..max; missing or invalid values read as off. */
+function toPercent(value: number | undefined, max: number): number {
+  const percent = Math.round(Number(value ?? 0));
+  return Number.isFinite(percent) ? Math.min(max, Math.max(0, percent)) : 0;
+}
+
+const formatPercent = (value: number) => (value === 0 ? "Off" : `${value}%`);
+
+interface PercentSliderProps {
+  id: string;
+  label: string;
+  hint: string;
+  warning?: string;
+  value: number;
+  max: number;
+  onChange: (value: number) => void;
+}
+
+function PercentSlider({ id, label, hint, warning, value, max, onChange }: PercentSliderProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+        {label}
+      </label>
+      <div className="flex items-center gap-3">
+        <input
+          id={id}
+          type="range"
+          min={0}
+          max={max}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-48 accent-[var(--color-accent)]"
+          aria-valuetext={formatPercent(value)}
+          aria-describedby={`${id}-hint`}
+          data-testid={id}
+        />
+        <span className="w-10 tabular-nums text-base" style={{ color: "var(--color-text)" }} data-testid={`${id}-label`}>
+          {formatPercent(value)}
+        </span>
+      </div>
+      <p id={`${id}-hint`} className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+        {hint}
+        {warning && (
+          <span className="block mt-1" style={{ color: "var(--color-warning)" }} data-testid={`${id}-warning`}>
+            {warning}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
 interface TextSnippetFormProps {
   snippet?: TextSnippet;
   onSave: (snippet: TextSnippet) => Promise<void> | void;
@@ -23,6 +81,8 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   const [typeDelay, setTypeDelay] = useState<number>(
     snippet?.typeDelay ?? 30,
   );
+  const [typoChance, setTypoChance] = useState(() => toPercent(snippet?.typoChance, MAX_TYPO_CHANCE));
+  const [typeVariation, setTypeVariation] = useState(() => toPercent(snippet?.typeVariation, MAX_TYPE_VARIATION));
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
@@ -32,6 +92,8 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
     hotkey,
     delivery,
     typeDelay,
+    typoChance,
+    typeVariation,
     streamDeckIcon,
   });
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
@@ -59,6 +121,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   const saveSnippet = () => {
     if (!canSave) return;
 
+    const fastType = delivery === "fast-type";
     void runSave(() => onSave({
       id: snippet?.id ?? crypto.randomUUID(),
       title: title.trim(),
@@ -66,7 +129,9 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       text,
       hotkey,
       delivery,
-      typeDelay: delivery === "fast-type" ? typeDelay : undefined,
+      typeDelay: fastType ? typeDelay : undefined,
+      typoChance: fastType && typoChance > 0 ? typoChance : undefined,
+      typeVariation: fastType && typeVariation > 0 ? typeVariation : undefined,
       streamDeckIcon,
     }));
   };
@@ -211,22 +276,45 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       </div>
 
       {delivery === "fast-type" && (
-        <div>
-          <label htmlFor="snippet-type-delay" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Type Delay (ms)
-          </label>
-          <input
-            id="snippet-type-delay"
-            type="number"
-            value={typeDelay}
-            onChange={(e) => setTypeDelay(Number(e.target.value))}
-            min={1}
-            max={500}
-            className="w-32 px-3 py-2 rounded text-md"
-            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="snippet-type-delay"
+        <>
+          <div>
+            <label htmlFor="snippet-type-delay" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+              Type Delay (ms)
+            </label>
+            <input
+              id="snippet-type-delay"
+              type="number"
+              value={typeDelay}
+              onChange={(e) => setTypeDelay(Number(e.target.value))}
+              min={1}
+              max={500}
+              className="w-32 px-3 py-2 rounded text-md"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+              data-testid="snippet-type-delay"
+            />
+          </div>
+
+          <PercentSlider
+            id="snippet-typo-chance"
+            label="Typos"
+            hint="Chance each letter (A–Z) or digit is mistyped, then fixed with Backspace."
+            warning={typoChance > 0
+              ? "Turn off for fields with inline autocomplete, like browser address bars and spreadsheet cells."
+              : undefined}
+            value={typoChance}
+            max={MAX_TYPO_CHANCE}
+            onChange={setTypoChance}
           />
-        </div>
+
+          <PercentSlider
+            id="snippet-type-variation"
+            label="Rhythm Variation"
+            hint="Uneven key timing, with short pauses after spaces and line breaks."
+            value={typeVariation}
+            max={MAX_TYPE_VARIATION}
+            onChange={setTypeVariation}
+          />
+        </>
       )}
 
       <IconEditor

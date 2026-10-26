@@ -275,12 +275,14 @@ pub fn deliver_text(
     text: String,
     method: String,
     type_delay: Option<u32>,
+    typo_chance: Option<u32>,
+    type_variation: Option<u32>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     deliver_text_with_cancel(
         text,
         method,
-        FastTypeOptions::new(type_delay, None, None),
+        FastTypeOptions::new(type_delay, typo_chance, type_variation),
         None,
         auditaur_trace_context,
     )
@@ -306,7 +308,7 @@ mod tests {
 
     #[test]
     fn deliver_text_rejects_unknown_method() {
-        let result = deliver_text("hello".into(), "unknown".into(), None, None);
+        let result = deliver_text("hello".into(), "unknown".into(), None, None, None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown delivery method"));
     }

@@ -1,4 +1,4 @@
-//! Plans fast-type keystrokes. Optional typos mistype a letter or digit
+//! Plans fast-type keystrokes. Optional typos mistype a letter (A–Z) or digit
 //! (nearby QWERTY key, doubled, swapped, or skipped) and erase it with
 //! Backspace before any other kind of key, so the result always matches the
 //! snippet. Optional rhythm variation jitters key delays and pauses after
@@ -7,12 +7,15 @@
 use fastrand::Rng;
 
 pub const DEFAULT_TYPE_DELAY_MS: u32 = 30;
+// Match the snippet editor's sliders, so the editor always shows what runs.
+const MAX_TYPO_CHANCE: u32 = 20;
+const MAX_TYPE_VARIATION: u32 = 100;
 const BACKSPACE_DELAY_FACTOR: f64 = 0.7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FastTypeOptions {
     pub delay_ms: u32,
-    /// Percent chance that a letter or digit is mistyped.
+    /// Percent chance that a letter (A–Z) or digit is mistyped.
     pub typo_chance: u32,
     /// Percent the delay between keys may drift from `delay_ms`.
     pub variation: u32,
@@ -26,8 +29,8 @@ impl FastTypeOptions {
     ) -> Self {
         Self {
             delay_ms: type_delay.unwrap_or(DEFAULT_TYPE_DELAY_MS),
-            typo_chance: typo_chance.unwrap_or(0).min(100),
-            variation: type_variation.unwrap_or(0).min(100),
+            typo_chance: typo_chance.unwrap_or(0).min(MAX_TYPO_CHANCE),
+            variation: type_variation.unwrap_or(0).min(MAX_TYPE_VARIATION),
         }
     }
 }
@@ -389,7 +392,7 @@ mod tests {
         assert_eq!(FastTypeOptions::new(None, None, None), options(30, 0, 0));
         assert_eq!(
             FastTypeOptions::new(Some(5), Some(250), Some(101)),
-            options(5, 100, 100)
+            options(5, 20, 100)
         );
     }
 

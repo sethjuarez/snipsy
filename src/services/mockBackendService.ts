@@ -185,6 +185,8 @@ export class MockBackendService implements BackendService {
     _text: string,
     _method: string,
     _typeDelay?: number,
+    _typoChance?: number,
+    _typeVariation?: number,
   ): Promise<void> {
     // Mock: no-op in test mode
   }

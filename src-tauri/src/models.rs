@@ -17,6 +17,12 @@ pub struct TextSnippet {
     pub delivery: DeliveryMethod,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_delay: Option<u32>,
+    /// Percent chance each letter (A–Z) or digit is mistyped, then fixed (fast-type only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub typo_chance: Option<u32>,
+    /// Percent of random variation in fast-type key timing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_variation: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_deck_icon: Option<StreamDeckIcon>,
 }
@@ -226,12 +232,16 @@ mod tests {
             "text": "import React from 'react';",
             "hotkey": "Ctrl+Shift+1",
             "delivery": "fast-type",
-            "typeDelay": 30
+            "typeDelay": 30,
+            "typoChance": 3,
+            "typeVariation": 40
         }"#;
         let snippet: TextSnippet = serde_json::from_str(json).unwrap();
         assert_eq!(snippet.id, "unique-id");
         assert_eq!(snippet.delivery, DeliveryMethod::FastType);
         assert_eq!(snippet.type_delay, Some(30));
+        assert_eq!(snippet.typo_chance, Some(3));
+        assert_eq!(snippet.type_variation, Some(40));
 
         let re_json = serde_json::to_string(&snippet).unwrap();
         let re_snippet: TextSnippet = serde_json::from_str(&re_json).unwrap();
@@ -251,6 +261,13 @@ mod tests {
         let snippet: TextSnippet = serde_json::from_str(json).unwrap();
         assert_eq!(snippet.delivery, DeliveryMethod::Paste);
         assert_eq!(snippet.type_delay, None);
+        assert_eq!(snippet.typo_chance, None);
+        assert_eq!(snippet.type_variation, None);
+
+        let saved = serde_json::to_value(&snippet).unwrap();
+        for key in ["typeDelay", "typoChance", "typeVariation"] {
+            assert!(saved.get(key).is_none(), "{key} should be omitted");
+        }
     }
 
     #[test]

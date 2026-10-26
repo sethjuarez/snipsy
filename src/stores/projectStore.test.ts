@@ -94,6 +94,27 @@ describe("buildDemoHotkeys", () => {
     expect(hotkeys[1]).toMatchObject({ projectPath: "C:/project", videoFile: "v.mp4" });
     expect(hotkeys[2]).toMatchObject({ projectPath: "C:/project", scriptId: "s" });
   });
+
+  it("carries fast-type timing and typo settings for text hotkeys", () => {
+    const [hotkey] = buildDemoHotkeys({
+      projectPath: "C:/project",
+      textSnippets: [{
+        ...text("t", "Ctrl+1"),
+        delivery: "fast-type",
+        typeDelay: 20,
+        typoChance: 4,
+        typeVariation: 50,
+      }],
+      videoSnippets: [],
+      automations: [],
+    });
+    expect(hotkey).toMatchObject({
+      delivery: "fast-type",
+      typeDelay: 20,
+      typoChance: 4,
+      typeVariation: 50,
+    });
+  });
 });
 
 describe("demo hotkey sync", () => {

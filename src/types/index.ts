@@ -37,6 +37,10 @@ export interface TextSnippet {
   hotkey: string;
   delivery: DeliveryMethod;
   typeDelay?: number;
+  /** Fast-type only: percent chance each letter (A–Z) or digit is mistyped, then fixed. */
+  typoChance?: number;
+  /** Fast-type only: percent of random variation in key timing. */
+  typeVariation?: number;
   streamDeckIcon?: StreamDeckIcon;
 }
 

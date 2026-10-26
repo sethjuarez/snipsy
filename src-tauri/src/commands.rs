@@ -615,6 +615,8 @@ mod tests {
             hotkey: "Ctrl+Shift+1".into(),
             delivery: DeliveryMethod::FastType,
             type_delay: Some(30),
+            typo_chance: Some(3),
+            type_variation: Some(40),
             stream_deck_icon: Some(StreamDeckIcon::Preset {
                 value: "code".into(),
                 background: Some("#111827".into()),
@@ -633,6 +635,8 @@ mod tests {
         assert_eq!(data.text_snippets.len(), 1);
         assert_eq!(data.text_snippets[0].title, "Hello");
         assert_eq!(data.text_snippets[0].delivery, DeliveryMethod::FastType);
+        assert_eq!(data.text_snippets[0].typo_chance, Some(3));
+        assert_eq!(data.text_snippets[0].type_variation, Some(40));
         assert!(matches!(
             data.text_snippets[0].stream_deck_icon,
             Some(StreamDeckIcon::Preset { .. })

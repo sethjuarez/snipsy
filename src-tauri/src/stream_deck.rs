@@ -126,6 +126,8 @@ pub async fn trigger_stream_deck_button(
                     snippet.text.clone(),
                     delivery_method_name(&snippet.delivery).into(),
                     snippet.type_delay,
+                    snippet.typo_chance,
+                    snippet.type_variation,
                     None,
                 )?;
                 return Ok(trigger_result(
@@ -147,13 +149,17 @@ pub async fn trigger_stream_deck_button(
             let text = snippet.text.clone();
             let title = snippet.title.clone();
             let snippet_id = snippet.id.clone();
-            let type_delay = snippet.type_delay;
+            let options = crate::typing::FastTypeOptions::new(
+                snippet.type_delay,
+                snippet.typo_chance,
+                snippet.type_variation,
+            );
             tauri::async_runtime::spawn_blocking(move || {
                 let _guard = RunClearGuard(run_id);
                 if let Err(error) = crate::delivery::deliver_text_with_cancel(
                     text,
                     "fast-type".into(),
-                    crate::typing::FastTypeOptions::new(type_delay, None, None),
+                    options,
                     Some(cancel_token),
                     None,
                 ) {
@@ -839,6 +845,8 @@ mod tests {
             hotkey: "Ctrl+Shift+1".into(),
             delivery: crate::models::DeliveryMethod::Paste,
             type_delay: None,
+            typo_chance: None,
+            type_variation: None,
             stream_deck_icon: None,
         };
         let video = VideoSnippet {
@@ -921,6 +929,8 @@ mod tests {
             hotkey: "Ctrl+Shift+1".into(),
             delivery: crate::models::DeliveryMethod::Paste,
             type_delay: None,
+            typo_chance: None,
+            type_variation: None,
             stream_deck_icon: None,
         };
         let data = ProjectData {

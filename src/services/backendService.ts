@@ -20,6 +20,8 @@ export interface SnippetHotkey {
   text?: string;
   delivery?: string;
   typeDelay?: number;
+  typoChance?: number;
+  typeVariation?: number;
   // Video snippet fields
   projectPath?: string;
   videoFile?: string;
@@ -74,6 +76,8 @@ export interface BackendService {
     text: string,
     method: string,
     typeDelay?: number,
+    typoChance?: number,
+    typeVariation?: number,
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;
