@@ -121,13 +121,20 @@ pub async fn trigger_stream_deck_button(
 
     match action {
         StreamDeckAction::Text(snippet) => {
+            // Admit the delivery before publishing a run, so a busy press fails
+            // here, where the plugin can show it.
+            let permit = crate::delivery::try_begin_delivery()?;
+            let options = crate::typing::FastTypeOptions::new(
+                snippet.type_delay,
+                snippet.typo_chance,
+                snippet.type_variation,
+            );
             if snippet.delivery == DeliveryMethod::Paste {
-                crate::delivery::deliver_text(
-                    snippet.text.clone(),
-                    delivery_method_name(&snippet.delivery).into(),
-                    snippet.type_delay,
-                    snippet.typo_chance,
-                    snippet.type_variation,
+                crate::delivery::deliver_text_with_permit(
+                    permit,
+                    &snippet.text,
+                    delivery_method_name(&snippet.delivery),
+                    options,
                     None,
                 )?;
                 return Ok(trigger_result(
@@ -149,19 +156,14 @@ pub async fn trigger_stream_deck_button(
             let text = snippet.text.clone();
             let title = snippet.title.clone();
             let snippet_id = snippet.id.clone();
-            let options = crate::typing::FastTypeOptions::new(
-                snippet.type_delay,
-                snippet.typo_chance,
-                snippet.type_variation,
-            );
             tauri::async_runtime::spawn_blocking(move || {
                 let _guard = RunClearGuard(run_id);
-                if let Err(error) = crate::delivery::deliver_text_with_cancel(
-                    text,
-                    "fast-type".into(),
+                if let Err(error) = crate::delivery::deliver_text_with_permit(
+                    permit,
+                    &text,
+                    "fast-type",
                     options,
                     Some(cancel_token),
-                    None,
                 ) {
                     tracing::error!(error = %error, snippet = %snippet_id, title = %title, "Stream Deck fast-type delivery failed");
                 }

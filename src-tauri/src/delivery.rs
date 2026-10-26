@@ -68,6 +68,54 @@ impl Drop for InputBlock {
     }
 }
 
+// ─── One delivery at a time ─────────────────────────────────────────────────
+
+/// Returned when a delivery starts while another is still running.
+pub const DELIVERY_BUSY: &str =
+    "Another text delivery is already running. Try again when it finishes.";
+
+/// Admits one delivery at a time across hotkeys, Stream Deck, and IPC.
+/// Overlapping deliveries would interleave keystrokes, race on the clipboard,
+/// and release each other's input block early. Busy callers fail fast instead
+/// of queuing, so an extra press never types a snippet twice.
+struct DeliveryGate {
+    busy: AtomicBool,
+}
+
+impl DeliveryGate {
+    const fn new() -> Self {
+        Self {
+            busy: AtomicBool::new(false),
+        }
+    }
+
+    fn try_enter(&'static self) -> Result<DeliveryPermit, String> {
+        self.busy
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| DeliveryPermit { gate: self })
+            .map_err(|_| DELIVERY_BUSY.to_string())
+    }
+}
+
+static DELIVERY_GATE: DeliveryGate = DeliveryGate::new();
+
+/// Proof that the caller holds the delivery gate. Released on drop, including
+/// during a panic. `Send`, so it can be reserved before spawning a delivery.
+#[must_use]
+pub struct DeliveryPermit {
+    gate: &'static DeliveryGate,
+}
+
+impl Drop for DeliveryPermit {
+    fn drop(&mut self) {
+        self.gate.busy.store(false, Ordering::Release);
+    }
+}
+
+pub fn try_begin_delivery() -> Result<DeliveryPermit, String> {
+    DELIVERY_GATE.try_enter()
+}
+
 /// Release all modifier keys to ensure a clean state before simulating input.
 /// When a global hotkey like Ctrl+Shift+1 triggers delivery, those modifiers
 /// are still physically held — releasing them prevents "stuck" modifiers from
@@ -133,7 +181,7 @@ impl KeyOutput for EnigoOutput {
     }
 }
 
-pub fn deliver_fast_type_with_cancel(
+fn deliver_fast_type_with_cancel(
     text: &str,
     options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
@@ -240,9 +288,14 @@ fn sleep_with_cancel(duration_ms: u64, cancel_token: Option<&Arc<AtomicBool>>) -
     !is_cancelled(cancel_token)
 }
 
+/// Time for the target to read the clipboard after Ctrl/Cmd+V. Input injection
+/// only queues the keys, so returning (and releasing the delivery gate) sooner
+/// would let the next delivery replace the clipboard before this paste reads it.
+const PASTE_SETTLE_MS: u64 = 200;
+
 /// Deliver text using paste (clipboard + Ctrl+V).
 /// Blocks user input briefly during the paste action.
-pub fn deliver_paste(text: &str) -> Result<(), String> {
+fn deliver_paste(text: &str) -> Result<(), String> {
     let mut clipboard =
         arboard::Clipboard::new().map_err(|e| format!("Failed to access clipboard: {e}"))?;
     clipboard
@@ -288,6 +341,7 @@ pub fn deliver_paste(text: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to release Control: {e}"))?;
     }
 
+    thread::sleep(Duration::from_millis(PASTE_SETTLE_MS));
     // _guard drops here → unblocks input
     Ok(())
 }
@@ -302,25 +356,28 @@ pub fn deliver_text(
     type_variation: Option<u32>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    deliver_text_with_cancel(
-        text,
-        method,
+    deliver_text_with_permit(
+        try_begin_delivery()?,
+        &text,
+        &method,
         FastTypeOptions::new(type_delay, typo_chance, type_variation),
         None,
-        auditaur_trace_context,
     )
 }
 
-pub fn deliver_text_with_cancel(
-    text: String,
-    method: String,
+/// Delivers under a permit the caller already holds, which lets a caller
+/// reserve the gate before handing delivery to another thread. The permit is
+/// released when delivery returns.
+pub fn deliver_text_with_permit(
+    _permit: DeliveryPermit,
+    text: &str,
+    method: &str,
     options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
-    _auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    match method.as_str() {
-        "fast-type" => deliver_fast_type_with_cancel(&text, options, cancel_token),
-        "paste" => deliver_paste(&text),
+    match method {
+        "fast-type" => deliver_fast_type_with_cancel(text, options, cancel_token),
+        "paste" => deliver_paste(text),
         _ => Err(format!("Unknown delivery method: {method}")),
     }
 }
@@ -334,6 +391,50 @@ mod tests {
         let result = deliver_text("hello".into(), "unknown".into(), None, None, None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown delivery method"));
+    }
+
+    #[test]
+    fn delivery_gate_admits_one_delivery_at_a_time() {
+        static GATE: DeliveryGate = DeliveryGate::new();
+        let first = GATE.try_enter().expect("an idle gate admits a delivery");
+        assert_eq!(GATE.try_enter().err().as_deref(), Some(DELIVERY_BUSY));
+        drop(first);
+        assert!(
+            GATE.try_enter().is_ok(),
+            "the gate reopens when the permit drops"
+        );
+    }
+
+    #[test]
+    fn delivery_gate_admits_exactly_one_concurrent_caller() {
+        static GATE: DeliveryGate = DeliveryGate::new();
+        let callers = 8;
+        let start = std::sync::Barrier::new(callers);
+        let admitted: Vec<DeliveryPermit> = thread::scope(|scope| {
+            let handles: Vec<_> = (0..callers)
+                .map(|_| {
+                    scope.spawn(|| {
+                        start.wait();
+                        GATE.try_enter().ok()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .filter_map(|handle| handle.join().unwrap())
+                .collect()
+        });
+        assert_eq!(admitted.len(), 1);
+    }
+
+    #[test]
+    fn failed_delivery_releases_the_gate() {
+        static GATE: DeliveryGate = DeliveryGate::new();
+        let permit = GATE.try_enter().unwrap();
+        let options = FastTypeOptions::new(None, None, None);
+        let result = deliver_text_with_permit(permit, "hello", "unknown", options, None);
+        assert!(result.unwrap_err().contains("Unknown delivery method"));
+        assert!(GATE.try_enter().is_ok());
     }
 
     #[derive(Default)]

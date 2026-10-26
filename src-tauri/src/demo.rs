@@ -180,8 +180,6 @@ fn partition_duplicate_hotkeys(
 
 type HotkeyAction = crate::keyboard_hook::HookCallback;
 
-static TEXT_DELIVERY_LOCK: Mutex<()> = Mutex::new(());
-
 /// Build the work a hotkey performs. Actions may block (fast-type), so callers
 /// must run them off the main and hook threads.
 fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAction> {
@@ -192,9 +190,8 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
             let (type_delay, typo_chance, type_variation) =
                 (hk.type_delay, hk.typo_chance, hk.type_variation);
             Some(std::sync::Arc::new(move || {
-                // Serialize deliveries so rapid presses can't interleave keystrokes
-                // or release another delivery's input block early.
-                let _guard = TEXT_DELIVERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+                // The shared delivery gate rejects presses while another
+                // delivery runs, so keystrokes never interleave.
                 if let Err(e) = crate::delivery::deliver_text(
                     text.clone(),
                     delivery.clone(),

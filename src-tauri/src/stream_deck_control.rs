@@ -306,7 +306,9 @@ fn command_error_code(error: &str) -> &'static str {
         || error.contains("Automation not found")
     {
         "snippetNotFound"
-    } else if error.contains("Another Stream Deck action is already running") {
+    } else if error.contains("Another Stream Deck action is already running")
+        || error.contains(crate::delivery::DELIVERY_BUSY)
+    {
         "busy"
     } else if error.contains("Unknown Stream Deck snippet type") {
         "unknownSnippetType"
@@ -1580,6 +1582,7 @@ mod tests {
             command_error_code("Another Stream Deck action is already running."),
             "busy"
         );
+        assert_eq!(command_error_code(crate::delivery::DELIVERY_BUSY), "busy");
         assert_eq!(
             command_error_code("Failed to read project.json: not found"),
             "projectUnavailable"
