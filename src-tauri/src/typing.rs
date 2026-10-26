@@ -50,6 +50,26 @@ pub struct Step {
     pub dirty_after: usize,
 }
 
+/// Totals for one plan, for logging.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlanSummary {
+    pub keystrokes: usize,
+    pub typos: usize,
+    pub planned_ms: u64,
+}
+
+pub fn summarize(steps: &[Step]) -> PlanSummary {
+    PlanSummary {
+        keystrokes: steps.len(),
+        // Each correction ends with the Backspace that clears the last mistake.
+        typos: steps
+            .iter()
+            .filter(|step| step.action == Action::Backspace && step.dirty_after == 0)
+            .count(),
+        planned_ms: steps.iter().map(|step| step.delay_ms).sum(),
+    }
+}
+
 pub fn plan(text: &str, options: &FastTypeOptions, rng: &mut Rng) -> Vec<Step> {
     let target: Vec<char> = text.chars().collect();
     let mut planner = Planner {
@@ -156,7 +176,11 @@ impl Planner<'_> {
             } else {
                 self.key_delay(ch)
             };
-            self.push(Action::Type(ch), delay, (offset + 1).saturating_sub(typo.keep));
+            self.push(
+                Action::Type(ch),
+                delay,
+                (offset + 1).saturating_sub(typo.keep),
+            );
         }
         for remaining in (0..typo.typed.len() - typo.keep).rev() {
             let delay = self.backspace_delay();
@@ -388,6 +412,26 @@ mod tests {
     }
 
     #[test]
+    fn summary_counts_keystrokes_typos_and_time() {
+        let text = "the quick brown fox jumps over the lazy dog ".repeat(5);
+        for seed in 0..50 {
+            let steps = plan(&text, &options(30, 20, 50), &mut Rng::with_seed(seed));
+            let summary = summarize(&steps);
+            assert_eq!(summary.keystrokes, steps.len());
+            assert_eq!(summary.typos, typo_count(&steps));
+        }
+        let clean = summarize(&plan("abc", &options(30, 0, 0), &mut Rng::with_seed(1)));
+        assert_eq!(
+            clean,
+            PlanSummary {
+                keystrokes: 3,
+                typos: 0,
+                planned_ms: 90
+            }
+        );
+    }
+
+    #[test]
     fn options_default_and_clamp() {
         assert_eq!(FastTypeOptions::new(None, None, None), options(30, 0, 0));
         assert_eq!(
@@ -427,7 +471,10 @@ mod tests {
             let target: Vec<char> = text.chars().collect();
             for seed in 0..200 {
                 let typo = pick_typo(&target, index, &mut Rng::with_seed(seed));
-                assert!(typo.typed.iter().all(char::is_ascii_alphanumeric), "{typo:?}");
+                assert!(
+                    typo.typed.iter().all(char::is_ascii_alphanumeric),
+                    "{typo:?}"
+                );
                 assert_eq!(typo.clean_from, index + 1, "{typo:?}");
             }
         }
@@ -439,8 +486,9 @@ mod tests {
             for seed in 0..20 {
                 let key = nearby_key(ch, &mut Rng::with_seed(seed));
                 assert_ne!(key, ch);
-                assert!(qwerty_neighbors(ch.to_ascii_lowercase())
-                    .contains(key.to_ascii_lowercase()));
+                assert!(
+                    qwerty_neighbors(ch.to_ascii_lowercase()).contains(key.to_ascii_lowercase())
+                );
                 assert_eq!(key.is_ascii_uppercase(), ch.is_ascii_uppercase());
             }
         }

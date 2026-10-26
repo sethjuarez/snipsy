@@ -135,6 +135,17 @@ pub fn deliver_fast_type_with_cancel(
     cancel_token: Option<Arc<AtomicBool>>,
 ) -> Result<(), String> {
     let steps = typing::plan(text, &options, &mut fastrand::Rng::new());
+    let summary = typing::summarize(&steps);
+    tracing::info!(
+        chars = text.chars().count(),
+        keystrokes = summary.keystrokes,
+        typos = summary.typos,
+        planned_ms = summary.planned_ms,
+        delay_ms = options.delay_ms,
+        typo_chance = options.typo_chance,
+        variation = options.variation,
+        "Fast-type planned"
+    );
 
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
@@ -150,7 +161,15 @@ pub fn deliver_fast_type_with_cancel(
 
     let mut output = EnigoOutput { enigo, focus_ctx };
     let cleanup_delay_ms = u64::from(options.delay_ms.min(MAX_CLEANUP_DELAY_MS));
-    run_steps(&steps, &mut output, cancel_token.as_ref(), cleanup_delay_ms)
+    let started = std::time::Instant::now();
+    let result = run_steps(&steps, &mut output, cancel_token.as_ref(), cleanup_delay_ms);
+    tracing::info!(
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        cancelled = is_cancelled(cancel_token.as_ref()),
+        ok = result.is_ok(),
+        "Fast-type finished"
+    );
+    result
     // _guard drops here → unblocks input
 }
 
