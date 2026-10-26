@@ -94,17 +94,21 @@ struct EnigoOutput {
 }
 
 impl EnigoOutput {
-    fn ensure_focused(&self) {
-        // Fallback: re-focus if somehow stolen (non-Windows platforms)
-        if let Some(ref ctx) = self.focus_ctx {
-            focus::ensure_focused(ctx);
+    /// Refocuses the target if another window took focus. Fails rather than
+    /// send keys to the wrong window when the target can't be brought back.
+    fn ensure_focused(&self) -> Result<(), String> {
+        match &self.focus_ctx {
+            Some(ctx) if !focus::ensure_focused(ctx) => Err(
+                "Typing stopped: the target window lost focus and could not be refocused.".into(),
+            ),
+            _ => Ok(()),
         }
     }
 }
 
 impl KeyOutput for EnigoOutput {
     fn type_char(&mut self, ch: char) -> Result<(), String> {
-        self.ensure_focused();
+        self.ensure_focused()?;
         match ch {
             '\n' => self
                 .enigo
@@ -122,7 +126,7 @@ impl KeyOutput for EnigoOutput {
     }
 
     fn backspace(&mut self) -> Result<(), String> {
-        self.ensure_focused();
+        self.ensure_focused()?;
         self.enigo
             .key(Key::Backspace, Direction::Click)
             .map_err(|e| format!("Failed to press Backspace: {e}"))
@@ -153,7 +157,7 @@ pub fn deliver_fast_type_with_cancel(
     // Release any held modifier keys from the hotkey trigger
     release_modifiers(&mut enigo);
 
-    // Capture focus context as a safety net for non-Windows platforms
+    // Remember the target so typing can refocus it, or stop, if focus moves
     let focus_ctx = focus::capture_focused_window();
 
     // Block all user mouse/keyboard input while we type
