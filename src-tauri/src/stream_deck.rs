@@ -153,7 +153,7 @@ pub async fn trigger_stream_deck_button(
                 if let Err(error) = crate::delivery::deliver_text_with_cancel(
                     text,
                     "fast-type".into(),
-                    type_delay,
+                    crate::typing::FastTypeOptions::new(type_delay, None, None),
                     Some(cancel_token),
                     None,
                 ) {

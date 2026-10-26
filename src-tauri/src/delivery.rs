@@ -7,7 +7,10 @@ use std::thread;
 use std::time::Duration;
 
 use crate::focus;
+use crate::typing::{self, Action, FastTypeOptions, Step};
 use tauri_plugin_auditaur::IpcTraceContext;
+
+const MAX_CLEANUP_DELAY_MS: u32 = 20;
 
 // ─── Platform input blocking ────────────────────────────────────────────────
 // Primary: BlockInput (needs admin). Fallback: ClipCursor (locks mouse in place).
@@ -78,11 +81,61 @@ fn release_modifiers(enigo: &mut Enigo) {
     thread::sleep(Duration::from_millis(30));
 }
 
+/// Sends keystrokes to the focused window. A trait so the fast-type executor
+/// can be tested without simulating real input.
+trait KeyOutput {
+    fn type_char(&mut self, ch: char) -> Result<(), String>;
+    fn backspace(&mut self) -> Result<(), String>;
+}
+
+struct EnigoOutput {
+    enigo: Enigo,
+    focus_ctx: Option<focus::FocusContext>,
+}
+
+impl EnigoOutput {
+    fn ensure_focused(&self) {
+        // Fallback: re-focus if somehow stolen (non-Windows platforms)
+        if let Some(ref ctx) = self.focus_ctx {
+            focus::ensure_focused(ctx);
+        }
+    }
+}
+
+impl KeyOutput for EnigoOutput {
+    fn type_char(&mut self, ch: char) -> Result<(), String> {
+        self.ensure_focused();
+        match ch {
+            '\n' => self
+                .enigo
+                .key(Key::Return, Direction::Click)
+                .map_err(|e| format!("Failed to press Return: {e}")),
+            '\t' => self
+                .enigo
+                .key(Key::Tab, Direction::Click)
+                .map_err(|e| format!("Failed to press Tab: {e}")),
+            _ => self
+                .enigo
+                .text(&ch.to_string())
+                .map_err(|e| format!("Failed to type character '{ch}': {e}")),
+        }
+    }
+
+    fn backspace(&mut self) -> Result<(), String> {
+        self.ensure_focused();
+        self.enigo
+            .key(Key::Backspace, Direction::Click)
+            .map_err(|e| format!("Failed to press Backspace: {e}"))
+    }
+}
+
 pub fn deliver_fast_type_with_cancel(
     text: &str,
-    type_delay_ms: u32,
+    options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
 ) -> Result<(), String> {
+    let steps = typing::plan(text, &options, &mut fastrand::Rng::new());
+
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|e| format!("Failed to create enigo instance: {e}"))?;
 
@@ -95,36 +148,54 @@ pub fn deliver_fast_type_with_cancel(
     // Block all user mouse/keyboard input while we type
     let _guard = InputBlock::new();
 
-    for ch in text.chars() {
-        if is_cancelled(cancel_token.as_ref()) {
+    let mut output = EnigoOutput { enigo, focus_ctx };
+    let cleanup_delay_ms = u64::from(options.delay_ms.min(MAX_CLEANUP_DELAY_MS));
+    run_steps(&steps, &mut output, cancel_token.as_ref(), cleanup_delay_ms)
+    // _guard drops here → unblocks input
+}
+
+/// Runs planned keystrokes. When cancelled or a keystroke fails, erases any
+/// typo still on screen so a stopped run never leaves one behind. Assumes a
+/// failed keystroke had no effect, so cleanup after an error is best effort.
+fn run_steps(
+    steps: &[Step],
+    output: &mut impl KeyOutput,
+    cancel_token: Option<&Arc<AtomicBool>>,
+    cleanup_delay_ms: u64,
+) -> Result<(), String> {
+    let mut mistakes = 0;
+    for step in steps {
+        if is_cancelled(cancel_token) {
+            erase_mistakes(output, mistakes, cleanup_delay_ms);
             return Ok(());
         }
-
-        // Fallback: re-focus if somehow stolen (non-Windows platforms)
-        if let Some(ref ctx) = focus_ctx {
-            focus::ensure_focused(ctx);
+        let sent = match step.action {
+            Action::Type(ch) => output.type_char(ch),
+            Action::Backspace => output.backspace(),
+        };
+        if let Err(error) = sent {
+            erase_mistakes(output, mistakes, cleanup_delay_ms);
+            return Err(error);
         }
-
-        if ch == '\n' {
-            enigo
-                .key(Key::Return, Direction::Click)
-                .map_err(|e| format!("Failed to press Return: {e}"))?;
-        } else if ch == '\t' {
-            enigo
-                .key(Key::Tab, Direction::Click)
-                .map_err(|e| format!("Failed to press Tab: {e}"))?;
-        } else {
-            enigo
-                .text(&ch.to_string())
-                .map_err(|e| format!("Failed to type character '{ch}': {e}"))?;
-        }
-        if !sleep_with_cancel(type_delay_ms as u64, cancel_token.as_ref()) {
+        mistakes = step.dirty_after;
+        if !sleep_with_cancel(step.delay_ms, cancel_token) {
+            erase_mistakes(output, mistakes, cleanup_delay_ms);
             return Ok(());
         }
     }
-
-    // _guard drops here → unblocks input
     Ok(())
+}
+
+/// Best effort and not cancellable; stops at the first failed keystroke.
+fn erase_mistakes(output: &mut impl KeyOutput, count: usize, delay_ms: u64) {
+    for index in 0..count {
+        if index > 0 {
+            thread::sleep(Duration::from_millis(delay_ms));
+        }
+        if output.backspace().is_err() {
+            return;
+        }
+    }
 }
 
 fn is_cancelled(cancel_token: Option<&Arc<AtomicBool>>) -> bool {
@@ -206,18 +277,24 @@ pub fn deliver_text(
     type_delay: Option<u32>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
-    deliver_text_with_cancel(text, method, type_delay, None, auditaur_trace_context)
+    deliver_text_with_cancel(
+        text,
+        method,
+        FastTypeOptions::new(type_delay, None, None),
+        None,
+        auditaur_trace_context,
+    )
 }
 
 pub fn deliver_text_with_cancel(
     text: String,
     method: String,
-    type_delay: Option<u32>,
+    options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
     _auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     match method.as_str() {
-        "fast-type" => deliver_fast_type_with_cancel(&text, type_delay.unwrap_or(30), cancel_token),
+        "fast-type" => deliver_fast_type_with_cancel(&text, options, cancel_token),
         "paste" => deliver_paste(&text),
         _ => Err(format!("Unknown delivery method: {method}")),
     }
@@ -232,5 +309,121 @@ mod tests {
         let result = deliver_text("hello".into(), "unknown".into(), None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unknown delivery method"));
+    }
+
+    #[derive(Default)]
+    struct FakeOutput {
+        screen: Vec<char>,
+        keystrokes: usize,
+        cancel_after: Option<usize>,
+        fail_at: Option<usize>,
+        cancel: Arc<AtomicBool>,
+    }
+
+    impl FakeOutput {
+        fn press(&mut self) -> Result<(), String> {
+            if self.fail_at == Some(self.keystrokes) {
+                self.fail_at = None;
+                return Err("keystroke rejected".into());
+            }
+            self.keystrokes += 1;
+            if self.cancel_after == Some(self.keystrokes) {
+                self.cancel.store(true, Ordering::SeqCst);
+            }
+            Ok(())
+        }
+
+        fn typed(&self) -> String {
+            self.screen.iter().collect()
+        }
+    }
+
+    impl KeyOutput for FakeOutput {
+        fn type_char(&mut self, ch: char) -> Result<(), String> {
+            self.press()?;
+            self.screen.push(ch);
+            Ok(())
+        }
+
+        fn backspace(&mut self) -> Result<(), String> {
+            self.press()?;
+            assert!(self.screen.pop().is_some(), "backspace on an empty screen");
+            Ok(())
+        }
+    }
+
+    const TEXT: &str = "Typing quickly, with typos!\n\tDone 42";
+
+    fn typo_heavy_plan() -> Vec<Step> {
+        let options = FastTypeOptions {
+            delay_ms: 0,
+            typo_chance: 40,
+            variation: 0,
+        };
+        let steps = typing::plan(TEXT, &options, &mut fastrand::Rng::with_seed(11));
+        assert!(steps.iter().any(|step| step.action == Action::Backspace));
+        steps
+    }
+
+    /// The correct part of what the first `applied` keystrokes put on screen.
+    fn correct_prefix_after(steps: &[Step], applied: usize) -> String {
+        let mut screen = Vec::new();
+        for step in &steps[..applied] {
+            match step.action {
+                Action::Type(ch) => screen.push(ch),
+                Action::Backspace => {
+                    screen.pop();
+                }
+            }
+        }
+        screen
+            .into_iter()
+            .zip(TEXT.chars())
+            .take_while(|(shown, wanted)| shown == wanted)
+            .map(|(ch, _)| ch)
+            .collect()
+    }
+
+    #[test]
+    fn run_steps_types_through_typos_to_the_exact_text() {
+        let mut output = FakeOutput::default();
+        run_steps(&typo_heavy_plan(), &mut output, None, 0).unwrap();
+        assert_eq!(output.typed(), TEXT);
+    }
+
+    #[test]
+    fn cancelling_at_any_keystroke_erases_only_the_typo() {
+        let steps = typo_heavy_plan();
+        for cancel_after in 0..=steps.len() {
+            let mut output = FakeOutput {
+                cancel_after: Some(cancel_after),
+                ..FakeOutput::default()
+            };
+            let cancel = output.cancel.clone();
+            cancel.store(cancel_after == 0, Ordering::SeqCst);
+            run_steps(&steps, &mut output, Some(&cancel), 0).unwrap();
+            assert_eq!(
+                output.typed(),
+                correct_prefix_after(&steps, cancel_after),
+                "cancelled after {cancel_after} keys"
+            );
+        }
+    }
+
+    #[test]
+    fn failed_keystrokes_erase_only_the_typo() {
+        let steps = typo_heavy_plan();
+        for fail_at in 0..steps.len() {
+            let mut output = FakeOutput {
+                fail_at: Some(fail_at),
+                ..FakeOutput::default()
+            };
+            assert!(run_steps(&steps, &mut output, None, 0).is_err());
+            assert_eq!(
+                output.typed(),
+                correct_prefix_after(&steps, fail_at),
+                "failed at key {fail_at}"
+            );
+        }
     }
 }

@@ -21,6 +21,7 @@ arboard = "3"
 xcap = "0.8"
 image = "0.25"
 base64 = "0.22"
+fastrand = "2"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 

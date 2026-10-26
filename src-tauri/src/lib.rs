@@ -12,6 +12,7 @@ mod scripting;
 mod stream_deck;
 mod stream_deck_control;
 mod tray;
+mod typing;
 mod video_meta;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
