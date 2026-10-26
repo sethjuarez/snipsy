@@ -30,6 +30,9 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - The user can choose the delivery method per snippet:
   - **Fast-type**: Simulates keystrokes to type the text character by character (useful when you want it to look like you're typing live).
   - **Paste**: Inserts the text via the system clipboard (instant, useful for large blocks).
+- Fast-type can look more human. Both settings are re-randomized on every run, and the final text always matches the snippet:
+  - **Typos**: Chance (0–20%) that a letter or digit is mistyped (nearby key, doubled, swapped, or skipped), then fixed with Backspace.
+  - **Rhythm Variation**: How much (0–100%) key timing drifts, with short pauses after spaces and line breaks.
 
 ### Video Snippets
 
@@ -109,12 +112,16 @@ All configuration is stored as **JSON files**, making projects human-readable, v
   "text": "import React from 'react';",
   "hotkey": "Ctrl+Shift+1",
   "delivery": "fast-type",
-  "typeDelay": 30
+  "typeDelay": 30,
+  "typoChance": 3,
+  "typeVariation": 40
 }
 ```
 
 - `delivery`: `"fast-type"` or `"paste"`.
 - `typeDelay` (optional, fast-type only): Milliseconds between simulated keystrokes.
+- `typoChance` (optional, fast-type only): Percent chance (0–20) that a letter or digit is mistyped and corrected. Omitted means off.
+- `typeVariation` (optional, fast-type only): Percent (0–100) that key timing drifts from `typeDelay`. Omitted means off.
 
 ### Video Snippet Schema
 

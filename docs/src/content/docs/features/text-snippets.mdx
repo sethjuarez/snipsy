@@ -24,6 +24,8 @@ Click the **+** button in the Snippets view header. Fill in:
 | **Text** | The content to deliver |
 | **Delivery** | `fast-type` or `paste` (see below) |
 | **Type Delay** | Milliseconds between keystrokes (fast-type only) |
+| **Typos** | Chance (0–20%) a letter or digit is mistyped, then fixed (fast-type only) |
+| **Rhythm Variation** | How much (0–100%) key timing drifts (fast-type only) |
 
 <Screenshot src="/images/text-form.png" alt="Text snippet editing form" caption="Editing a text snippet — configure hotkey, text, and delivery method" />
 
@@ -36,6 +38,19 @@ Simulates individual keystrokes as if you're typing. This looks natural to your 
 - **Type Delay** controls speed (default: 30ms between keys)
 - Works with any application that accepts keyboard input
 - Best for: code demos, terminal commands, live coding
+
+#### Humanize
+
+Two optional settings make fast-type look less robotic. Both are re-randomized on every run, and the final text always matches the snippet.
+
+| Setting | Effect |
+|---------|--------|
+| **Typos** | Mistypes a letter or digit (nearby key, doubled, swapped, or skipped), pauses as if noticing, then fixes it with Backspace. Mistakes never span a space, symbol, or line break. |
+| **Rhythm Variation** | Uneven key timing, with short pauses after spaces and line breaks. |
+
+<Aside type="caution">
+Turn **Typos** off for fields that react to each keystroke, like browser address bars and spreadsheet cells with inline autocomplete, or masked inputs. A mistyped key can accept a suggestion that Backspace doesn't undo.
+</Aside>
 
 ### Paste
 
