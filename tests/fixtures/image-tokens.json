@@ -1,0 +1,48 @@
+[
+  { "text": "", "segments": [] },
+  { "text": "plain text", "segments": [{ "kind": "text", "value": "plain text" }] },
+  { "text": "{{image:logo.png}}", "segments": [{ "kind": "image", "value": "logo.png" }] },
+  {
+    "text": "Before {{image:logo.png}} after",
+    "segments": [
+      { "kind": "text", "value": "Before " },
+      { "kind": "image", "value": "logo.png" },
+      { "kind": "text", "value": " after" }
+    ]
+  },
+  {
+    "text": "{{image:a.png}}{{image:b-2.jpg}}",
+    "segments": [
+      { "kind": "image", "value": "a.png" },
+      { "kind": "image", "value": "b-2.jpg" }
+    ]
+  },
+  {
+    "text": "line\n{{image:shot.jpeg}}\n",
+    "segments": [
+      { "kind": "text", "value": "line\n" },
+      { "kind": "image", "value": "shot.jpeg" },
+      { "kind": "text", "value": "\n" }
+    ]
+  },
+  { "text": "{{name}} and {{ image:x.png }}", "segments": [{ "kind": "text", "value": "{{name}} and {{ image:x.png }}" }] },
+  { "text": "{image:x.png}", "segments": [{ "kind": "text", "value": "{image:x.png}" }] },
+  {
+    "text": "{{{image:x.png}}}",
+    "segments": [
+      { "kind": "text", "value": "{" },
+      { "kind": "image", "value": "x.png" },
+      { "kind": "text", "value": "}" }
+    ]
+  },
+  { "text": "café ☕ {{image:x.png}}", "segments": [{ "kind": "text", "value": "café ☕ " }, { "kind": "image", "value": "x.png" }] },
+  { "text": "{{image:logo.png", "error": "Unclosed image reference: add }} after {{image:" },
+  { "text": "ok {{image:a.png}} then {{image:", "error": "Unclosed image reference: add }} after {{image:" },
+  { "text": "{{image:}}", "error": "Invalid image reference: {{image:}}" },
+  { "text": "{{image:Logo.png}}", "error": "Invalid image reference: {{image:Logo.png}}" },
+  { "text": "{{image: logo.png}}", "error": "Invalid image reference: {{image: logo.png}}" },
+  { "text": "{{image:logo.gif}}", "error": "Invalid image reference: {{image:logo.gif}}" },
+  { "text": "{{image:../project.json}}", "error": "Invalid image reference: {{image:../project.json}}" },
+  { "text": "{{image:con.png}}", "error": "Invalid image reference: {{image:con.png}}" },
+  { "text": "{{image:logo}}", "error": "Invalid image reference: {{image:logo}}" }
+]

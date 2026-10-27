@@ -10,6 +10,7 @@ mod models;
 mod playback;
 mod project_archive;
 mod scripting;
+mod snippet_text;
 mod stream_deck;
 mod stream_deck_control;
 mod tray;
