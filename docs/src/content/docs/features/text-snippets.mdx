@@ -52,6 +52,21 @@ Two optional settings make fast-type look less robotic. Both are re-randomized o
 Turn **Typos** off for fields that react to each keystroke, like browser address bars and spreadsheet cells with inline autocomplete, or masked inputs. A mistyped key can accept a suggestion that Backspace doesn't undo.
 </Aside>
 
+#### Images
+
+Fast-type snippets can paste images mid-text. Add a reference like `{{image:logo.png}}` where the image should appear; Snipsy types the text before it, pastes the image from the clipboard, then keeps typing. Images are never humanized.
+
+| Where | How |
+|-------|-----|
+| **Snippets → Images** tab | **Import Image** (PNG or JPEG), **Copy reference**, or delete. Each row shows how many snippets use it. |
+| Snippet editor | **Insert image** picks an existing image; **Import image…** adds a file; pasting an image into the text adds it too. |
+
+Images are copied into the project's `images/` folder, so they travel with exports. The editor and pre-demo checklist flag malformed references, missing images, and snippets set to **Paste** (paste delivery can't include images).
+
+<Aside type="tip">
+The target app must accept pasted images (e.g. Word, Teams, Slack, Paint). Plain-text editors ignore them.
+</Aside>
+
 ### Paste
 
 Inserts the full text via the clipboard (`Ctrl+V`). Instant delivery — the entire text appears at once.

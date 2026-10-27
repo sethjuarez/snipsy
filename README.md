@@ -33,6 +33,9 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - Fast-type can look more human. Both settings are re-randomized on every run, and the final text always matches the snippet:
   - **Typos**: Chance (0–20%) that a letter or digit is mistyped (nearby key, doubled, swapped, or skipped), then fixed with Backspace.
   - **Rhythm Variation**: How much (0–100%) key timing drifts, with short pauses after spaces and line breaks.
+- Fast-type snippets can embed **images** with `{{image:<key>}}` (e.g. `{{image:logo.png}}`). Each image is pasted from the clipboard at that point; images are never humanized. Paste delivery can't include images.
+  - Manage images on the **Images** tab under Snippets (import, copy reference, delete). In the snippet editor, **Insert image**, **Import image…**, or paste an image into the text to add it.
+  - The editor and pre-demo checklist flag malformed, missing, or paste-mode references.
 
 ### Video Snippets
 
@@ -95,6 +98,8 @@ my-demo-project/
 ├── automations/          # Automation definitions (Advanced mode)
 │   ├── setup-build.json
 │   └── deploy-flow.json
+├── images/               # PNG/JPEG images embedded in text snippets
+│   └── logo.png
 └── videos/               # Video asset files
     ├── build-process.mp4
     └── deploy-demo.mp4
@@ -122,6 +127,7 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 - `typeDelay` (optional, fast-type only): Milliseconds between simulated keystrokes.
 - `typoChance` (optional, fast-type only): Percent chance (0–20) that a letter or digit is mistyped and corrected. Omitted means off.
 - `typeVariation` (optional, fast-type only): Percent (0–100) that key timing drifts from `typeDelay`. Omitted means off.
+- `text` may contain `{{image:<key>}}` references to files in `images/` (lowercase `a-z0-9-` name, `.png`/`.jpg`/`.jpeg`). Fast-type only. Other `{{…}}` text is typed literally.
 
 ### Video Snippet Schema
 
