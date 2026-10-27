@@ -1,10 +1,11 @@
 import type { Script, TextSnippet, VideoSnippet } from "../types";
 import { assignHotkeys, collectHotkeyOwners } from "./hotkeys";
+import { imageRefProblems } from "./snippetText";
 
 export type PreflightState = "pass" | "warn" | "fail";
 
 export interface PreflightCheck {
-  id: "hotkeys" | "problems" | "unassigned" | "sources" | "elevation";
+  id: "hotkeys" | "problems" | "unassigned" | "sources" | "images" | "elevation";
   state: PreflightState;
   label: string;
   detail?: string;
@@ -25,6 +26,8 @@ export interface PreflightInput {
   automations: Script[];
   /** Project-relative video files on disk; null when not loaded yet. */
   availableVideoFiles?: ReadonlySet<string> | null;
+  /** Keys of the project's images; null when not loaded yet. */
+  availableImageKeys?: ReadonlySet<string> | null;
   /** Null when unknown. */
   elevated?: boolean | null;
 }
@@ -67,6 +70,19 @@ export function computePreflight(input: PreflightInput): Preflight {
     checks.push(missing > 0
       ? { id: "sources", state: "warn", label: `${plural(missing, "clip")} missing a source video`, detail: "Re-import the video or pick another source." }
       : { id: "sources", state: "pass", label: "All clip source videos found" });
+  }
+
+  if (input.availableImageKeys) {
+    const available = input.availableImageKeys;
+    const broken = input.textSnippets.filter((snippet) => imageRefProblems(snippet.text, snippet.delivery, available) !== null);
+    if (broken.length > 0) {
+      checks.push({
+        id: "images",
+        state: "warn",
+        label: `${plural(broken.length, "snippet")} with image problems`,
+        detail: `Fix the images in: ${broken.map((snippet) => snippet.title).join(", ")}.`,
+      });
+    }
   }
 
   if (input.elevated === false) {

@@ -1,5 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { ImagePlus } from "lucide-react";
 import type { TextSnippet, DeliveryMethod, StreamDeckIcon } from "../types";
+import { getBackend } from "../services";
+import { imageRefProblems, imageToken } from "../utils/snippetText";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
@@ -16,6 +19,17 @@ function toPercent(value: number | undefined, max: number): number {
 }
 
 const formatPercent = (value: number) => (value === 0 ? "Off" : `${value}%`);
+
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
+
+function readBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the image"));
+    reader.readAsDataURL(file);
+  });
+}
 
 interface PercentSliderProps {
   id: string;
@@ -68,9 +82,25 @@ interface TextSnippetFormProps {
   onSave: (snippet: TextSnippet) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: EditorSaveState) => void;
+  /** Needed to add images; without it the image tools are hidden. */
+  projectPath?: string | null;
+  /** Keys of the project's images; null while loading. */
+  availableImageKeys?: ReadonlySet<string> | null;
+  /** Called after an image is added to the project from this form. */
+  onImageImported?: (key: string) => void;
+  onError?: (title: string, detail: string) => void;
 }
 
-function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange }: TextSnippetFormProps) {
+function TextSnippetForm({
+  snippet,
+  onSave,
+  hotkeyOwners = [],
+  onSaveStateChange,
+  projectPath,
+  availableImageKeys = null,
+  onImageImported,
+  onError,
+}: TextSnippetFormProps) {
   const [title, setTitle] = useState(snippet?.title ?? "");
   const [description, setDescription] = useState(snippet?.description ?? "");
   const [text, setText] = useState(snippet?.text ?? "");
@@ -85,6 +115,8 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   const [typeVariation, setTypeVariation] = useState(() => toPercent(snippet?.typeVariation, MAX_TYPE_VARIATION));
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [importingImage, setImportingImage] = useState(false);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
@@ -104,6 +136,55 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       !title.trim() ? "Title" : null,
       hotkeyStatus.state !== "available" ? "Hotkey" : null,
     ].filter(Boolean).join(", ")}`;
+  const imageProblem = imageRefProblems(text, delivery, availableImageKeys);
+
+  /** Inserts at a selection captured before any async work, so later typing isn't clobbered. */
+  const insertAt = (start: number, end: number, insert: string) => {
+    setText((current) => current.slice(0, start) + insert + current.slice(end));
+    requestAnimationFrame(() => {
+      const el = textRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(start + insert.length, start + insert.length);
+    });
+  };
+  const selection = () => {
+    const el = textRef.current;
+    return el ? [el.selectionStart, el.selectionEnd] as const : [text.length, text.length] as const;
+  };
+
+  const addImage = async (load: () => Promise<{ key: string } | null>) => {
+    const [start, end] = selection();
+    setImportingImage(true);
+    try {
+      const image = await load();
+      if (!image) return;
+      onImageImported?.(image.key);
+      insertAt(start, end, imageToken(image.key));
+    } catch (error) {
+      onError?.("Could not add image", String(error));
+    } finally {
+      setImportingImage(false);
+    }
+  };
+
+  const importImageFile = () => {
+    if (!projectPath) return;
+    void addImage(async () => {
+      const filePath = await getBackend().selectImageFile();
+      return filePath ? getBackend().importImage(projectPath, filePath) : null;
+    });
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const file = Array.from(e.clipboardData?.files ?? []).find((f) => IMAGE_TYPES.has(f.type));
+    if (!file || !projectPath) return;
+    e.preventDefault();
+    // Clipboard screenshots are usually named "image.png"; the title makes a friendlier key.
+    const name = file.name && file.name.toLowerCase() !== "image.png" ? file.name : title.trim() || "pasted-image";
+    void addImage(async () => getBackend().importImageData(projectPath, name, await readBase64(file)));
+  };
+
   const handleHotkeyCapture = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       e.preventDefault();
@@ -200,10 +281,53 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
           onChange={(e) => setText(e.target.value)}
           placeholder="The text to deliver..."
           rows={5}
+          ref={textRef}
+          onPaste={handlePaste}
           className="w-full px-3 py-2 rounded font-mono text-md"
           style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+          aria-describedby={imageProblem ? "snippet-image-problem" : undefined}
           data-testid="snippet-text"
         />
+        {projectPath && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Insert image"
+              value=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const [start, end] = selection();
+                insertAt(start, end, imageToken(e.target.value));
+              }}
+              disabled={!availableImageKeys || availableImageKeys.size === 0}
+              className="px-2 py-1 rounded text-sm"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+              data-testid="snippet-insert-image"
+            >
+              <option value="">{availableImageKeys && availableImageKeys.size > 0 ? "Insert image…" : "No images yet"}</option>
+              {[...(availableImageKeys ?? [])].sort().map((key) => (
+                <option key={key} value={key}>{key}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={importImageFile}
+              disabled={importingImage}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+              data-testid="snippet-import-image"
+            >
+              <ImagePlus size={12} aria-hidden="true" /> {importingImage ? "Adding…" : "Import image…"}
+            </button>
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              Or paste one. Images paste as-is in Fast Type and are never humanized.
+            </span>
+          </div>
+        )}
+        {imageProblem && (
+          <p id="snippet-image-problem" className="mt-1 text-sm" style={{ color: "var(--color-danger)" }} data-testid="snippet-image-problem">
+            {imageProblem}
+          </p>
+        )}
       </div>
 
       <div>

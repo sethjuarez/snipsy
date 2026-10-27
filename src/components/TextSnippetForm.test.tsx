@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TextSnippet } from "../types";
 import TextSnippetForm from "./TextSnippetForm";
 
+vi.mock("../services", () => ({ getBackend: () => ({}) }));
+
 afterEach(cleanup);
 
 describe("TextSnippetForm", () => {

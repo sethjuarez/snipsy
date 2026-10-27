@@ -1,6 +1,6 @@
 import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Archive, Keyboard, type LucideIcon } from "lucide-react";
 
-export type AppView = "home" | "text-snippets" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck";
+export type AppView = "home" | "text-snippets" | "images" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck";
 
 interface NavSubview {
   id: AppView;
@@ -32,7 +32,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "content",
     label: "Content",
     items: [
-      { id: "text-snippets", label: "Snippets", Icon: FileText },
+      { id: "text-snippets", label: "Snippets", Icon: FileText, subviews: [{ id: "images", label: "Images" }] },
       { id: "video-snippets", label: "Clips", Icon: Film, subviews: [{ id: "videos", label: "Source videos" }] },
     ],
   },
