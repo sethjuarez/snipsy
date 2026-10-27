@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/sethjuarez/snipsy/compare/v0.24.0...v0.25.0) (2026-10-27)
+
+
+### Features
+
+* humanized fast-type, images in snippets, and Shift+Enter line breaks ([#41](https://github.com/sethjuarez/snipsy/issues/41)) ([ef1b8a3](https://github.com/sethjuarez/snipsy/commit/ef1b8a3094ad82ee588b711131556f5ef5a9b4f2))
+
 ## [0.24.0](https://github.com/sethjuarez/snipsy/compare/v0.23.0...v0.24.0) (2026-10-25)
 
 
