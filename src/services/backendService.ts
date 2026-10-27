@@ -79,6 +79,8 @@ export interface BackendService {
     typeDelay?: number,
     typoChance?: number,
     typeVariation?: number,
+    /** Needed when the text references `{{image:key}}` images. */
+    projectPath?: string,
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;

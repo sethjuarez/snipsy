@@ -26,9 +26,9 @@ pub fn parse(text: &str) -> Result<Vec<Segment>, String> {
             segments.push(Segment::Text(rest[..start].to_string()));
         }
         let after = &rest[start + OPEN.len()..];
-        let end = after.find(CLOSE).ok_or_else(|| {
-            format!("Unclosed image reference: add }}}} after {OPEN}")
-        })?;
+        let end = after
+            .find(CLOSE)
+            .ok_or_else(|| format!("Unclosed image reference: add }}}} after {OPEN}"))?;
         let key = &after[..end];
         if !is_image_key(key) {
             return Err(format!("Invalid image reference: {OPEN}{key}{CLOSE}"));

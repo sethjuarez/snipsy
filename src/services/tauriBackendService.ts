@@ -68,8 +68,16 @@ export class TauriBackendService implements BackendService {
     typeDelay?: number,
     typoChance?: number,
     typeVariation?: number,
+    projectPath?: string,
   ): Promise<void> {
-    return invoke("deliver_text", { text, method, typeDelay, typoChance, typeVariation });
+    return invoke("deliver_text", {
+      text,
+      method,
+      typeDelay,
+      typoChance,
+      typeVariation,
+      projectPath,
+    });
   }
 
   async importVideo(

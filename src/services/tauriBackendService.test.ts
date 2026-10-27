@@ -33,6 +33,22 @@ describe("TauriBackendService images", () => {
     ]);
   });
 
+  it("passes the project path so text delivery can load images", async () => {
+    const backend = new TauriBackendService();
+    invoke.mockResolvedValue(undefined);
+
+    await backend.deliverText("a {{image:logo.png}}", "fast-type", 10, 2, 30, "C:/demo");
+
+    expect(invoke).toHaveBeenCalledWith("deliver_text", {
+      text: "a {{image:logo.png}}",
+      method: "fast-type",
+      typeDelay: 10,
+      typoChance: 2,
+      typeVariation: 30,
+      projectPath: "C:/demo",
+    });
+  });
+
   // Auditaur's frontend span would otherwise store the image bytes in telemetry.
   it("keeps pasted image bytes out of the traced invoke", async () => {
     untracedInvoke.mockResolvedValue(undefined);

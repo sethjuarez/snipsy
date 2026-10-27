@@ -134,6 +134,7 @@ pub async fn trigger_stream_deck_button(
                     permit,
                     &snippet.text,
                     delivery_method_name(&snippet.delivery),
+                    Some(project_path.as_str()),
                     options,
                     None,
                 )?;
@@ -145,6 +146,13 @@ pub async fn trigger_stream_deck_button(
                 ));
             }
 
+            // Load images before publishing the run, so a missing image is
+            // reported on the key instead of only in the log.
+            let prepared = crate::delivery::prepare_text(
+                &snippet.text,
+                "fast-type",
+                Some(project_path.as_str()),
+            )?;
             let cancel_token = Arc::new(AtomicBool::new(false));
             let run_id = begin_run(
                 key,
@@ -153,15 +161,13 @@ pub async fn trigger_stream_deck_button(
                 None,
                 None,
             )?;
-            let text = snippet.text.clone();
             let title = snippet.title.clone();
             let snippet_id = snippet.id.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let _guard = RunClearGuard(run_id);
-                if let Err(error) = crate::delivery::deliver_text_with_permit(
+                if let Err(error) = crate::delivery::deliver_prepared(
                     permit,
-                    &text,
-                    "fast-type",
+                    &prepared,
                     options,
                     Some(cancel_token),
                 ) {

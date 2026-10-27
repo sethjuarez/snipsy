@@ -187,6 +187,7 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
         "text" => {
             let text = hk.text.clone().unwrap_or_default();
             let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+            let project_path = hk.project_path.clone();
             let (type_delay, typo_chance, type_variation) =
                 (hk.type_delay, hk.typo_chance, hk.type_variation);
             Some(std::sync::Arc::new(move || {
@@ -198,6 +199,7 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
                     type_delay,
                     typo_chance,
                     type_variation,
+                    project_path.clone(),
                     None,
                 ) {
                     tracing::error!(error = %e, "Text hotkey delivery failed");

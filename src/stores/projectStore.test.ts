@@ -90,7 +90,7 @@ describe("buildDemoHotkeys", () => {
       automations: [script("s", "Ctrl+3"), script("none")],
     });
     expect(hotkeys.map((h) => [h.id, h.snippetType])).toEqual([["t", "text"], ["v", "video"], ["s", "automation"]]);
-    expect(hotkeys[0]).toMatchObject({ text: "text t", delivery: "paste" });
+    expect(hotkeys[0]).toMatchObject({ text: "text t", delivery: "paste", projectPath: "C:/project" });
     expect(hotkeys[1]).toMatchObject({ projectPath: "C:/project", videoFile: "v.mp4" });
     expect(hotkeys[2]).toMatchObject({ projectPath: "C:/project", scriptId: "s" });
   });

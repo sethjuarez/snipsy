@@ -124,6 +124,7 @@ export function buildDemoHotkeys(
       typeDelay: s.typeDelay,
       typoChance: s.typoChance,
       typeVariation: s.typeVariation,
+      projectPath: projectPath ?? undefined,
     })),
     ...videoSnippets.map((s) => ({
       id: s.id,

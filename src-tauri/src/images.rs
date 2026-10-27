@@ -314,6 +314,38 @@ fn decode_image_data(data_base64: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Invalid image data: {e}"))
 }
 
+/// A stored image decoded to RGBA8, ready for the clipboard.
+pub struct DecodedImage {
+    pub width: usize,
+    pub height: usize,
+    pub rgba: Vec<u8>,
+}
+
+/// Loads and decodes a referenced image under the same limits as import.
+pub fn load_decoded(project_dir: &Path, key: &str) -> Result<DecodedImage, String> {
+    let path = resolve_image(project_dir, key)?;
+    let mut bytes = Vec::new();
+    File::open(&path)
+        .and_then(|file| file.take(MAX_IMAGE_BYTES + 1).read_to_end(&mut bytes))
+        .map_err(|e| format!("Could not read image {key}: {e}"))?;
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return Err(too_large());
+    }
+    let format = format_of_key(key).ok_or_else(|| format!("Invalid image reference: {key}"))?;
+    if detect_format(&bytes)?.0 != format {
+        return Err(format!("Image {key} does not match its file type."));
+    }
+    probe_image(ImageReader::with_format(Cursor::new(&bytes), format))?;
+    let mut reader = ImageReader::with_format(Cursor::new(&bytes), format);
+    reader.limits(limits(MAX_DECODED_BYTES));
+    let rgba = reader.decode().map_err(read_error)?.into_rgba8();
+    Ok(DecodedImage {
+        width: rgba.width() as usize,
+        height: rgba.height() as usize,
+        rgba: rgba.into_raw(),
+    })
+}
+
 fn import_image_file(project_dir: &Path, source: &Path) -> Result<ProjectImage, String> {
     let file =
         File::open(source).map_err(|e| format!("Could not open {}: {e}", source.display()))?;
@@ -667,6 +699,38 @@ mod tests {
         assert_eq!(photo.key, "photo.jpg");
         let mislabeled = import_image_bytes(dir.path(), "mislabeled.jpg", &png(1, 1, 0)).unwrap();
         assert_eq!(mislabeled.key, "mislabeled.png");
+    }
+
+    #[test]
+    fn stored_images_load_as_rgba() {
+        let dir = project();
+        let png_key = import_image_bytes(dir.path(), "logo.png", &png(3, 2, 7))
+            .unwrap()
+            .key;
+        let loaded = load_decoded(dir.path(), &png_key).unwrap();
+        assert_eq!((loaded.width, loaded.height), (3, 2));
+        assert_eq!(loaded.rgba.len(), 3 * 2 * 4);
+        assert_eq!(&loaded.rgba[..4], &[7, 0, 0, 255]);
+
+        let jpg_key = import_image_bytes(dir.path(), "photo.jpg", &jpeg(4, 4))
+            .unwrap()
+            .key;
+        let loaded = load_decoded(dir.path(), &jpg_key).unwrap();
+        assert_eq!(loaded.rgba.len(), 4 * 4 * 4);
+    }
+
+    #[test]
+    fn loading_rejects_missing_or_tampered_images() {
+        let dir = project();
+        assert!(load_decoded(dir.path(), "missing.png").is_err());
+        assert!(load_decoded(dir.path(), "../x.png").is_err());
+        let images = dir.path().join(IMAGES_DIR);
+        fs::create_dir_all(&images).unwrap();
+        fs::write(images.join("fake.png"), b"not really an image").unwrap();
+        assert!(load_decoded(dir.path(), "fake.png").is_err());
+        fs::write(images.join("swapped.png"), jpeg(1, 1)).unwrap();
+        let error = load_decoded(dir.path(), "swapped.png").err().unwrap();
+        assert!(error.contains("does not match"), "{error}");
     }
 
     #[test]
