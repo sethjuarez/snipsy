@@ -211,7 +211,7 @@ function DeleteImageDialog({ image, users, onCancel, onConfirm }: {
         <p className="text-base" style={{ color: "var(--color-text-secondary)" }}>
           This permanently deletes <strong>{image.key}</strong>.
           {users.length > 0 && (
-            <> <strong>{users.length}</strong> snippet{users.length === 1 ? "" : "s"} still reference it and will fail until fixed: {users.join(", ")}.</>
+            <> <strong>{users.length}</strong> snippet{users.length === 1 ? " still references" : "s still reference"} it and will fail until fixed: {users.join(", ")}.</>
           )}
         </p>
         <div className="flex gap-2 justify-end">

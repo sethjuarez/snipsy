@@ -80,7 +80,7 @@ describe("ImageList", () => {
 
     fireEvent.click(await screen.findByTestId("delete-image-0"));
     const dialog = screen.getByTestId("delete-image-dialog");
-    expect(within(dialog).getByText(/still reference it/).textContent).toContain("Intro");
+    expect(within(dialog).getByText(/still references it/).textContent).toContain("Intro");
 
     fireEvent.click(screen.getByTestId("confirm-delete-image"));
     await waitFor(() => expect(screen.getByTestId("no-images")).toBeTruthy());
