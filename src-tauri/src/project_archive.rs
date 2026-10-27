@@ -298,6 +298,8 @@ mod tests {
         fs::create_dir_all(dir.join("videos").join("thumbnails")).unwrap();
         fs::write(dir.join("videos").join("clip.mp4"), vec![7u8; 4096]).unwrap();
         fs::write(dir.join("videos").join("thumbnails").join("clip.jpg"), [1u8, 2, 3]).unwrap();
+        fs::create_dir_all(dir.join("images")).unwrap();
+        fs::write(dir.join("images").join("logo.png"), [9u8; 64]).unwrap();
         fs::create_dir_all(dir.join(".git")).unwrap();
         fs::write(dir.join(".git").join("HEAD"), "ref").unwrap();
     }
@@ -321,11 +323,12 @@ mod tests {
         let archive = out.path().join("demo.zip");
 
         let exported = write_project_archive(source.path(), &archive).unwrap();
-        assert_eq!(exported.file_count, 6);
+        assert_eq!(exported.file_count, 7);
 
         let dest = out.path().join("imported");
         let imported = extract_project_archive(&archive, &dest).unwrap();
-        assert_eq!(imported.file_count, 6);
+        assert_eq!(imported.file_count, 7);
+        assert_eq!(fs::read(dest.join("images").join("logo.png")).unwrap(), vec![9u8; 64]);
         assert_eq!(fs::read(dest.join("videos").join("clip.mp4")).unwrap(), vec![7u8; 4096]);
         assert_eq!(fs::read_to_string(dest.join("automations").join("a.json")).unwrap(), "{}");
         assert!(dest.join("videos").join("thumbnails").join("clip.jpg").is_file());
@@ -352,7 +355,7 @@ mod tests {
         let archive = source.path().join("demo.zip");
         write_project_archive(source.path(), &archive).unwrap();
         let summary = write_project_archive(source.path(), &archive).unwrap();
-        assert_eq!(summary.file_count, 6);
+        assert_eq!(summary.file_count, 7);
     }
 
     #[test]
