@@ -127,6 +127,7 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 - `typeDelay` (optional, fast-type only): Milliseconds between simulated keystrokes.
 - `typoChance` (optional, fast-type only): Percent chance (0–20) that a letter or digit is mistyped and corrected. Omitted means off.
 - `typeVariation` (optional, fast-type only): Percent (0–100) that key timing drifts from `typeDelay`. Omitted means off.
+- `shiftEnter` (optional, fast-type only): `true` types line breaks as Shift+Enter, so chat apps add a line instead of sending. Omitted means Enter.
 - `text` may contain `{{image:<key>}}` references to files in `images/` (lowercase `a-z0-9-` name, `.png`/`.jpg`/`.jpeg`). Fast-type only. Other `{{…}}` text is typed literally.
 
 ### Video Snippet Schema
