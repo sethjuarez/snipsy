@@ -3,15 +3,18 @@ mod delivery;
 mod demo;
 mod elevation;
 mod focus;
+mod images;
 mod keep_awake;
 mod keyboard_hook;
 mod models;
 mod playback;
 mod project_archive;
 mod scripting;
+mod snippet_text;
 mod stream_deck;
 mod stream_deck_control;
 mod tray;
+mod typing;
 mod video_meta;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -88,6 +91,10 @@ pub fn run() {
             commands::delete_video,
             commands::get_video_fps,
             commands::save_video_thumbnail,
+            images::import_image,
+            images::import_image_data,
+            images::list_project_images,
+            images::delete_project_image,
             commands::list_monitors,
             commands::capture_monitor_preview,
             commands::save_automation,
@@ -152,5 +159,19 @@ mod tests {
     #[test]
     fn app_initializes() {
         assert_eq!(2 + 2, 4);
+    }
+
+    // WebView2 "Suggestions" pop up over snippet fields and may ignore autocomplete="off".
+    #[test]
+    fn main_window_disables_browser_autofill() {
+        let config: tauri::utils::config::Config =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let main = config
+            .app
+            .windows
+            .iter()
+            .find(|window| window.label == "main")
+            .expect("main window is configured");
+        assert!(!main.general_autofill_enabled);
     }
 }

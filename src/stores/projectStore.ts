@@ -122,6 +122,10 @@ export function buildDemoHotkeys(
       text: s.text,
       delivery: s.delivery,
       typeDelay: s.typeDelay,
+      typoChance: s.typoChance,
+      typeVariation: s.typeVariation,
+      shiftEnter: s.shiftEnter,
+      projectPath: projectPath ?? undefined,
     })),
     ...videoSnippets.map((s) => ({
       id: s.id,

@@ -16,6 +16,8 @@ import ClipEditor, { type ClipEditorHandle, type ClipEditorSaveState } from "./c
 import { saveBlockerText } from "./hooks/useSaveTracking";
 import VideoSnippetList from "./components/VideoSnippetList";
 import ClipsTabs from "./components/ClipsTabs";
+import SnippetsTabs from "./components/SnippetsTabs";
+import ImageList, { type ImageListHandle, type ImageListToolbarState } from "./components/ImageList";
 import HotkeyOverview from "./components/HotkeyOverview";
 import VideoSnippetForm from "./components/VideoSnippetForm";
 import ScriptList, { type AutomationRunHistoryItem } from "./components/ScriptList";
@@ -100,6 +102,8 @@ function App() {
   const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const videoListRef = useRef<VideoListHandle>(null);
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
+  const imageListRef = useRef<ImageListHandle>(null);
+  const [imageListToolbarState, setImageListToolbarState] = useState<ImageListToolbarState>({ importing: false });
   const hotkeyOwners = collectHotkeyOwners(textSnippets, videoSnippets, automations);
 
   const toastTimersRef = useRef(new Map<string, number>());
@@ -176,6 +180,33 @@ function App() {
   const handleVideosChange = useCallback((relativePaths: string[]) => {
     if (projectPath) setVideoAvailability({ projectPath, files: new Set(relativePaths) });
   }, [projectPath]);
+
+  // Image keys, used to validate {{image:key}} references in snippets.
+  const [imageAvailability, setImageAvailability] = useState<{ projectPath: string; keys: ReadonlySet<string> } | null>(null);
+  useEffect(() => {
+    if (!projectPath) return;
+    let cancelled = false;
+    backend.listProjectImages(projectPath)
+      .then((images) => {
+        if (!cancelled) setImageAvailability({ projectPath, keys: new Set(images.map((image) => image.key)) });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath, activeView]);
+  const availableImageKeys = imageAvailability?.projectPath === projectPath ? imageAvailability.keys : null;
+  const handleImagesChange = useCallback((keys: string[]) => {
+    if (projectPath) setImageAvailability({ projectPath, keys: new Set(keys) });
+  }, [projectPath]);
+  const handleImageImported = useCallback((key: string) => {
+    if (!projectPath) return;
+    setImageAvailability((current) => ({
+      projectPath,
+      keys: new Set([...(current?.projectPath === projectPath ? current.keys : []), key]),
+    }));
+  }, [projectPath]);
+  const showError = useCallback((title: string, detail: string) => showToast(title, detail, "error"), [showToast]);
 
   // Auto-open last project on startup
   useEffect(() => {
@@ -404,8 +435,8 @@ function App() {
     backend.isElevated().then(setElevated).catch(() => setElevated(null));
   }, []);
   const preflight = useMemo(
-    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, elevated }),
-    [textSnippets, videoSnippets, automations, availableVideoFiles, elevated],
+    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, elevated }),
+    [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, elevated],
   );
   const blockingOverlay = confirmDialog !== null || demoStartOpen;
   const overlayOpen = paletteOpen || shortcutsOpen || settingsSection !== null || blockingOverlay;
@@ -686,6 +717,8 @@ function App() {
                     : undefined}
             videoImporting={videoListToolbarState.importing}
             onImportVideo={() => videoListRef.current?.importVideo()}
+            imageImporting={imageListToolbarState.importing}
+            onImportImage={() => imageListRef.current?.importImage()}
           />
 
           {/* Scrollable content — use overflow-hidden when clip editor is active */}
@@ -725,6 +758,26 @@ function App() {
               </div>
             )}
 
+            {(activeView === "images" || (activeView === "text-snippets" && !showForm)) && (
+              <SnippetsTabs
+                active={activeView}
+                snippetCount={textSnippets.length}
+                imageCount={availableImageKeys?.size}
+                onChange={changeView}
+              />
+            )}
+            {activeView === "images" && projectPath && (
+              <ImageList
+                ref={imageListRef}
+                projectPath={projectPath}
+                textSnippets={textSnippets}
+                onToolbarStateChange={setImageListToolbarState}
+                onImagesChange={handleImagesChange}
+                onError={showError}
+                onCopied={(token) => showToast("Reference copied", `Paste ${token} into a snippet's text.`, "success", "image-reference-copied")}
+              />
+            )}
+
             {activeView === "text-snippets" && (
               showForm ? (
                 <div className="rounded-lg p-5" style={{ backgroundColor: "var(--color-surface-alt)", border: "1px solid var(--color-border)" }}>
@@ -734,6 +787,10 @@ function App() {
                     onSave={handleSave}
                     hotkeyOwners={hotkeyOwners}
                     onSaveStateChange={setTextSnippetSaveState}
+                    projectPath={projectPath}
+                    availableImageKeys={availableImageKeys}
+                    onImageImported={handleImageImported}
+                    onError={showError}
                   />
                 </div>
               ) : (
@@ -885,6 +942,7 @@ function App() {
 const VIEW_LABELS: Record<AppView, string> = {
   home: "Overview",
   "text-snippets": "Snippets",
+  images: "Snippets",
   videos: "Clips",
   "video-snippets": "Clips",
   automations: "Automations",
@@ -901,6 +959,8 @@ function ContentHeader({
   saveAction,
   videoImporting,
   onImportVideo,
+  imageImporting,
+  onImportImage,
 }: {
   view: AppView;
   editLabel?: string;
@@ -909,6 +969,8 @@ function ContentHeader({
   onCloseForm: () => void;
   videoImporting?: boolean;
   onImportVideo?: () => void;
+  imageImporting?: boolean;
+  onImportImage?: () => void;
   saveAction?: {
     label: string;
     state: ClipEditorSaveState;
@@ -938,6 +1000,15 @@ function ContentHeader({
       onClick: onImportVideo,
       disabled: videoImporting,
       testId: "import-video",
+      tone: "primary",
+    }
+    : view === "images" && !showForm
+      ? {
+      label: imageImporting ? "Importing..." : "Import Image",
+      icon: <Upload size={12} />,
+      onClick: onImportImage,
+      disabled: imageImporting,
+      testId: "import-image",
       tone: "primary",
     }
     : canAdd && !showForm

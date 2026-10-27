@@ -121,11 +121,22 @@ pub async fn trigger_stream_deck_button(
 
     match action {
         StreamDeckAction::Text(snippet) => {
+            // Admit the delivery before publishing a run, so a busy press fails
+            // here, where the plugin can show it.
+            let permit = crate::delivery::try_begin_delivery()?;
+            let options = crate::typing::FastTypeOptions::new(
+                snippet.type_delay,
+                snippet.typo_chance,
+                snippet.type_variation,
+                snippet.shift_enter,
+            );
             if snippet.delivery == DeliveryMethod::Paste {
-                crate::delivery::deliver_text(
-                    snippet.text.clone(),
-                    delivery_method_name(&snippet.delivery).into(),
-                    snippet.type_delay,
+                crate::delivery::deliver_text_with_permit(
+                    permit,
+                    &snippet.text,
+                    delivery_method_name(&snippet.delivery),
+                    Some(project_path.as_str()),
+                    options,
                     None,
                 )?;
                 return Ok(trigger_result(
@@ -136,6 +147,13 @@ pub async fn trigger_stream_deck_button(
                 ));
             }
 
+            // Load images before publishing the run, so a missing image is
+            // reported on the key instead of only in the log.
+            let prepared = crate::delivery::prepare_text(
+                &snippet.text,
+                "fast-type",
+                Some(project_path.as_str()),
+            )?;
             let cancel_token = Arc::new(AtomicBool::new(false));
             let run_id = begin_run(
                 key,
@@ -144,18 +162,15 @@ pub async fn trigger_stream_deck_button(
                 None,
                 None,
             )?;
-            let text = snippet.text.clone();
             let title = snippet.title.clone();
             let snippet_id = snippet.id.clone();
-            let type_delay = snippet.type_delay;
             tauri::async_runtime::spawn_blocking(move || {
                 let _guard = RunClearGuard(run_id);
-                if let Err(error) = crate::delivery::deliver_text_with_cancel(
-                    text,
-                    "fast-type".into(),
-                    type_delay,
+                if let Err(error) = crate::delivery::deliver_prepared(
+                    permit,
+                    &prepared,
+                    options,
                     Some(cancel_token),
-                    None,
                 ) {
                     tracing::error!(error = %error, snippet = %snippet_id, title = %title, "Stream Deck fast-type delivery failed");
                 }
@@ -839,6 +854,9 @@ mod tests {
             hotkey: "Ctrl+Shift+1".into(),
             delivery: crate::models::DeliveryMethod::Paste,
             type_delay: None,
+            typo_chance: None,
+            type_variation: None,
+            shift_enter: None,
             stream_deck_icon: None,
         };
         let video = VideoSnippet {
@@ -921,6 +939,9 @@ mod tests {
             hotkey: "Ctrl+Shift+1".into(),
             delivery: crate::models::DeliveryMethod::Paste,
             type_delay: None,
+            typo_chance: None,
+            type_variation: None,
+            shift_enter: None,
             stream_deck_icon: None,
         };
         let data = ProjectData {

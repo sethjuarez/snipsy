@@ -15,6 +15,9 @@ pub struct SnippetHotkey {
     pub text: Option<String>,
     pub delivery: Option<String>,
     pub type_delay: Option<u32>,
+    pub typo_chance: Option<u32>,
+    pub type_variation: Option<u32>,
+    pub shift_enter: Option<bool>,
     // Video snippet playback data
     pub project_path: Option<String>,
     pub video_file: Option<String>,
@@ -178,8 +181,6 @@ fn partition_duplicate_hotkeys(
 
 type HotkeyAction = crate::keyboard_hook::HookCallback;
 
-static TEXT_DELIVERY_LOCK: Mutex<()> = Mutex::new(());
-
 /// Build the work a hotkey performs. Actions may block (fast-type), so callers
 /// must run them off the main and hook threads.
 fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAction> {
@@ -187,14 +188,22 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
         "text" => {
             let text = hk.text.clone().unwrap_or_default();
             let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
-            let type_delay = hk.type_delay;
+            let project_path = hk.project_path.clone();
+            let (type_delay, typo_chance, type_variation, shift_enter) =
+                (hk.type_delay, hk.typo_chance, hk.type_variation, hk.shift_enter);
             Some(std::sync::Arc::new(move || {
-                // Serialize deliveries so rapid presses can't interleave keystrokes
-                // or release another delivery's input block early.
-                let _guard = TEXT_DELIVERY_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-                if let Err(e) =
-                    crate::delivery::deliver_text(text.clone(), delivery.clone(), type_delay, None)
-                {
+                // The shared delivery gate rejects presses while another
+                // delivery runs, so keystrokes never interleave.
+                if let Err(e) = crate::delivery::deliver_text(
+                    text.clone(),
+                    delivery.clone(),
+                    type_delay,
+                    typo_chance,
+                    type_variation,
+                    shift_enter,
+                    project_path.clone(),
+                    None,
+                ) {
                     tracing::error!(error = %e, "Text hotkey delivery failed");
                 }
             }))
@@ -341,6 +350,9 @@ mod tests {
             text: None,
             delivery: None,
             type_delay: None,
+            typo_chance: None,
+            type_variation: None,
+            shift_enter: None,
             project_path: None,
             video_file: None,
             start_time: None,
@@ -406,6 +418,9 @@ mod tests {
             text: Some("hello world".into()),
             delivery: Some("fast-type".into()),
             type_delay: Some(30),
+            typo_chance: Some(3),
+            type_variation: Some(40),
+            shift_enter: None,
             project_path: None,
             video_file: None,
             start_time: None,
@@ -426,6 +441,36 @@ mod tests {
         assert_eq!(deserialized.id, "ts-1");
         assert_eq!(deserialized.snippet_type, "text");
         assert_eq!(deserialized.text.unwrap(), "hello world");
+        assert_eq!(deserialized.typo_chance, Some(3));
+        assert_eq!(deserialized.type_variation, Some(40));
+    }
+
+    #[test]
+    fn text_hotkey_reads_frontend_typing_fields() {
+        let hotkey: SnippetHotkey = serde_json::from_value(serde_json::json!({
+            "id": "ts-1",
+            "hotkey": "CmdOrControl+Shift+1",
+            "snippetType": "text",
+            "text": "hello",
+            "delivery": "fast-type",
+            "typeDelay": 20,
+            "typoChance": 5,
+            "typeVariation": 60,
+            "shiftEnter": true
+        }))
+        .unwrap();
+        assert_eq!(hotkey.type_delay, Some(20));
+        assert_eq!(hotkey.typo_chance, Some(5));
+        assert_eq!(hotkey.type_variation, Some(60));
+        assert_eq!(hotkey.shift_enter, Some(true));
+
+        let legacy: SnippetHotkey = serde_json::from_value(serde_json::json!({
+            "id": "ts-2",
+            "hotkey": "CmdOrControl+Shift+2",
+            "snippetType": "text"
+        }))
+        .unwrap();
+        assert_eq!((legacy.typo_chance, legacy.type_variation), (None, None));
     }
 
     #[test]
@@ -437,6 +482,9 @@ mod tests {
             text: None,
             delivery: None,
             type_delay: None,
+            typo_chance: None,
+            type_variation: None,
+            shift_enter: None,
             project_path: Some("/path/to/project".into()),
             video_file: Some("videos/demo.mp4".into()),
             start_time: Some(5.0),

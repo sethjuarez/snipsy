@@ -59,6 +59,13 @@ export async function auditaurInvoke<T>(
   return rawInvoke<T>(command, args);
 }
 
+// Auditaur's frontend span stores an args summary (up to maxPayloadBytes) even with
+// captureFullPayloads off, so commands carrying user content such as image bytes
+// bypass it. The backend still records these calls with the payload skipped.
+export function untracedInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return rawInvoke<T>(command, args);
+}
+
 export async function auditaurListen<T>(
   event: string,
   handler: (event: { event: string; id: number; payload: T }) => void,

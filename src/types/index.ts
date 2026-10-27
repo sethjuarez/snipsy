@@ -37,6 +37,12 @@ export interface TextSnippet {
   hotkey: string;
   delivery: DeliveryMethod;
   typeDelay?: number;
+  /** Fast-type only: percent chance each letter (A–Z) or digit is mistyped, then fixed. */
+  typoChance?: number;
+  /** Fast-type only: percent of random variation in key timing. */
+  typeVariation?: number;
+  /** Fast-type only: type line breaks as Shift+Enter so chat apps add a line instead of sending. */
+  shiftEnter?: boolean;
   streamDeckIcon?: StreamDeckIcon;
 }
 
@@ -146,6 +152,16 @@ export interface ImportedVideo {
   relativePath: string;
   absolutePath: string;
   thumbnailPath: string | null;
+}
+
+/** An image in the project's `images/` folder; text snippets embed it as `{{image:<key>}}`. */
+export interface ProjectImage {
+  /** File name inside `images/`, e.g. `logo.png`. */
+  key: string;
+  absolutePath: string;
+  width: number;
+  height: number;
+  bytes: number;
 }
 
 /** Result of exporting or importing a project archive. */

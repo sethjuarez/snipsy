@@ -24,6 +24,9 @@ Click the **+** button in the Snippets view header. Fill in:
 | **Text** | The content to deliver |
 | **Delivery** | `fast-type` or `paste` (see below) |
 | **Type Delay** | Milliseconds between keystrokes (fast-type only) |
+| **Typos** | Chance (0–20%) a letter or digit is mistyped, then fixed (fast-type only) |
+| **Rhythm Variation** | How much (0–100%) key timing drifts (fast-type only) |
+| **Type line breaks as Shift+Enter** | For chat apps where Enter sends (fast-type only) |
 
 <Screenshot src="/images/text-form.png" alt="Text snippet editing form" caption="Editing a text snippet — configure hotkey, text, and delivery method" />
 
@@ -36,6 +39,38 @@ Simulates individual keystrokes as if you're typing. This looks natural to your 
 - **Type Delay** controls speed (default: 30ms between keys)
 - Works with any application that accepts keyboard input
 - Best for: code demos, terminal commands, live coding
+
+#### Humanize
+
+Two optional settings make fast-type look less robotic. Both are re-randomized on every run, and the final text always matches the snippet.
+
+| Setting | Effect |
+|---------|--------|
+| **Typos** | Mistypes a letter or digit (nearby key, doubled, swapped, or skipped), pauses as if noticing, then fixes it with Backspace. Mistakes never span a space, symbol, or line break. |
+| **Rhythm Variation** | Uneven key timing, with short pauses after spaces and line breaks. |
+
+<Aside type="caution">
+Turn **Typos** off for fields that react to each keystroke, like browser address bars and spreadsheet cells with inline autocomplete, or masked inputs. A mistyped key can accept a suggestion that Backspace doesn't undo.
+</Aside>
+
+#### Chat Apps
+
+In Slack, Teams, Copilot chat, and similar apps, Enter sends the message. Turn on **Type line breaks as Shift+Enter** so multi-line snippets arrive as one message. Leave it off for editors and terminals, where Shift+Enter can mean something else.
+
+#### Images
+
+Fast-type snippets can paste images mid-text. Add a reference like `{{image:logo.png}}` where the image should appear; Snipsy types the text before it, pastes the image from the clipboard, then keeps typing. Images are never humanized.
+
+| Where | How |
+|-------|-----|
+| **Snippets → Images** tab | **Import Image** (PNG or JPEG), **Copy reference**, or delete. Each row shows how many snippets use it. |
+| Snippet editor | **Insert image** picks an existing image; **Import image…** adds a file; pasting an image into the text adds it too. |
+
+Images are copied into the project's `images/` folder, so they travel with exports. The editor and pre-demo checklist flag malformed references, missing images, and snippets set to **Paste** (paste delivery can't include images).
+
+<Aside type="tip">
+The target app must accept pasted images (e.g. Word, Teams, Slack, Paint). Plain-text editors ignore them.
+</Aside>
 
 ### Paste
 

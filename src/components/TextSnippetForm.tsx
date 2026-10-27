@@ -1,18 +1,106 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { ImagePlus } from "lucide-react";
 import type { TextSnippet, DeliveryMethod, StreamDeckIcon } from "../types";
+import { getBackend } from "../services";
+import { imageRefProblems, imageToken } from "../utils/snippetText";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import IconEditor from "./IconEditor";
+
+// Match the clamps in src-tauri/src/typing.rs.
+const MAX_TYPO_CHANCE = 20;
+const MAX_TYPE_VARIATION = 100;
+
+/** A whole percent within 0..max; missing or invalid values read as off. */
+function toPercent(value: number | undefined, max: number): number {
+  const percent = Math.round(Number(value ?? 0));
+  return Number.isFinite(percent) ? Math.min(max, Math.max(0, percent)) : 0;
+}
+
+const formatPercent = (value: number) => (value === 0 ? "Off" : `${value}%`);
+
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
+
+function readBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the image"));
+    reader.readAsDataURL(file);
+  });
+}
+
+interface PercentSliderProps {
+  id: string;
+  label: string;
+  hint: string;
+  warning?: string;
+  value: number;
+  max: number;
+  onChange: (value: number) => void;
+}
+
+function PercentSlider({ id, label, hint, warning, value, max, onChange }: PercentSliderProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+        {label}
+      </label>
+      <div className="flex items-center gap-3">
+        <input
+          id={id}
+          type="range"
+          min={0}
+          max={max}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="w-48 accent-[var(--color-accent)]"
+          aria-valuetext={formatPercent(value)}
+          aria-describedby={`${id}-hint`}
+          data-testid={id}
+        />
+        <span className="w-10 tabular-nums text-base" style={{ color: "var(--color-text)" }} data-testid={`${id}-label`}>
+          {formatPercent(value)}
+        </span>
+      </div>
+      <p id={`${id}-hint`} className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+        {hint}
+        {warning && (
+          <span className="block mt-1" style={{ color: "var(--color-warning)" }} data-testid={`${id}-warning`}>
+            {warning}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
 
 interface TextSnippetFormProps {
   snippet?: TextSnippet;
   onSave: (snippet: TextSnippet) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
   onSaveStateChange?: (state: EditorSaveState) => void;
+  /** Needed to add images; without it the image tools are hidden. */
+  projectPath?: string | null;
+  /** Keys of the project's images; null while loading. */
+  availableImageKeys?: ReadonlySet<string> | null;
+  /** Called after an image is added to the project from this form. */
+  onImageImported?: (key: string) => void;
+  onError?: (title: string, detail: string) => void;
 }
 
-function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange }: TextSnippetFormProps) {
+function TextSnippetForm({
+  snippet,
+  onSave,
+  hotkeyOwners = [],
+  onSaveStateChange,
+  projectPath,
+  availableImageKeys = null,
+  onImageImported,
+  onError,
+}: TextSnippetFormProps) {
   const [title, setTitle] = useState(snippet?.title ?? "");
   const [description, setDescription] = useState(snippet?.description ?? "");
   const [text, setText] = useState(snippet?.text ?? "");
@@ -23,8 +111,13 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   const [typeDelay, setTypeDelay] = useState<number>(
     snippet?.typeDelay ?? 30,
   );
+  const [typoChance, setTypoChance] = useState(() => toPercent(snippet?.typoChance, MAX_TYPO_CHANCE));
+  const [typeVariation, setTypeVariation] = useState(() => toPercent(snippet?.typeVariation, MAX_TYPE_VARIATION));
+  const [shiftEnter, setShiftEnter] = useState(snippet?.shiftEnter ?? false);
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [importingImage, setImportingImage] = useState(false);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const { saveStatus, hasUnsavedChanges, runSave } = useSaveTracking({
     title: title.trim(),
     description: description.trim(),
@@ -32,6 +125,9 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
     hotkey,
     delivery,
     typeDelay,
+    typoChance,
+    typeVariation,
+    shiftEnter,
     streamDeckIcon,
   });
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
@@ -42,6 +138,55 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       !title.trim() ? "Title" : null,
       hotkeyStatus.state !== "available" ? "Hotkey" : null,
     ].filter(Boolean).join(", ")}`;
+  const imageProblem = imageRefProblems(text, delivery, availableImageKeys);
+
+  /** Inserts at a selection captured before any async work, so later typing isn't clobbered. */
+  const insertAt = (start: number, end: number, insert: string) => {
+    setText((current) => current.slice(0, start) + insert + current.slice(end));
+    requestAnimationFrame(() => {
+      const el = textRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(start + insert.length, start + insert.length);
+    });
+  };
+  const selection = () => {
+    const el = textRef.current;
+    return el ? [el.selectionStart, el.selectionEnd] as const : [text.length, text.length] as const;
+  };
+
+  const addImage = async (load: () => Promise<{ key: string } | null>) => {
+    const [start, end] = selection();
+    setImportingImage(true);
+    try {
+      const image = await load();
+      if (!image) return;
+      onImageImported?.(image.key);
+      insertAt(start, end, imageToken(image.key));
+    } catch (error) {
+      onError?.("Could not add image", String(error));
+    } finally {
+      setImportingImage(false);
+    }
+  };
+
+  const importImageFile = () => {
+    if (!projectPath) return;
+    void addImage(async () => {
+      const filePath = await getBackend().selectImageFile();
+      return filePath ? getBackend().importImage(projectPath, filePath) : null;
+    });
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const file = Array.from(e.clipboardData?.files ?? []).find((f) => IMAGE_TYPES.has(f.type));
+    if (!file || !projectPath) return;
+    e.preventDefault();
+    // Clipboard screenshots are usually named "image.png"; the title makes a friendlier key.
+    const name = file.name && file.name.toLowerCase() !== "image.png" ? file.name : title.trim() || "pasted-image";
+    void addImage(async () => getBackend().importImageData(projectPath, name, await readBase64(file)));
+  };
+
   const handleHotkeyCapture = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       e.preventDefault();
@@ -59,6 +204,7 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
   const saveSnippet = () => {
     if (!canSave) return;
 
+    const fastType = delivery === "fast-type";
     void runSave(() => onSave({
       id: snippet?.id ?? crypto.randomUUID(),
       title: title.trim(),
@@ -66,7 +212,10 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       text,
       hotkey,
       delivery,
-      typeDelay: delivery === "fast-type" ? typeDelay : undefined,
+      typeDelay: fastType ? typeDelay : undefined,
+      typoChance: fastType && typoChance > 0 ? typoChance : undefined,
+      typeVariation: fastType && typeVariation > 0 ? typeVariation : undefined,
+      shiftEnter: fastType && shiftEnter ? true : undefined,
       streamDeckIcon,
     }));
   };
@@ -135,10 +284,53 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
           onChange={(e) => setText(e.target.value)}
           placeholder="The text to deliver..."
           rows={5}
+          ref={textRef}
+          onPaste={handlePaste}
           className="w-full px-3 py-2 rounded font-mono text-md"
           style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+          aria-describedby={imageProblem ? "snippet-image-problem" : undefined}
           data-testid="snippet-text"
         />
+        {projectPath && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Insert image"
+              value=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const [start, end] = selection();
+                insertAt(start, end, imageToken(e.target.value));
+              }}
+              disabled={!availableImageKeys || availableImageKeys.size === 0}
+              className="px-2 py-1 rounded text-sm"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+              data-testid="snippet-insert-image"
+            >
+              <option value="">{availableImageKeys && availableImageKeys.size > 0 ? "Insert image…" : "No images yet"}</option>
+              {[...(availableImageKeys ?? [])].sort().map((key) => (
+                <option key={key} value={key}>{key}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={importImageFile}
+              disabled={importingImage}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}
+              data-testid="snippet-import-image"
+            >
+              <ImagePlus size={12} aria-hidden="true" /> {importingImage ? "Adding…" : "Import image…"}
+            </button>
+            <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              Or paste one. Images paste as-is in Fast Type and are never humanized.
+            </span>
+          </div>
+        )}
+        {imageProblem && (
+          <p id="snippet-image-problem" className="mt-1 text-sm" style={{ color: "var(--color-danger)" }} data-testid="snippet-image-problem">
+            {imageProblem}
+          </p>
+        )}
       </div>
 
       <div>
@@ -211,22 +403,65 @@ function TextSnippetForm({ snippet, onSave, hotkeyOwners = [], onSaveStateChange
       </div>
 
       {delivery === "fast-type" && (
-        <div>
-          <label htmlFor="snippet-type-delay" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
-            Type Delay (ms)
-          </label>
-          <input
-            id="snippet-type-delay"
-            type="number"
-            value={typeDelay}
-            onChange={(e) => setTypeDelay(Number(e.target.value))}
-            min={1}
-            max={500}
-            className="w-32 px-3 py-2 rounded text-md"
-            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-            data-testid="snippet-type-delay"
+        <>
+          <div>
+            <label htmlFor="snippet-type-delay" className="block font-medium mb-1 text-base" style={{ color: "var(--color-text-secondary)" }}>
+              Type Delay (ms)
+            </label>
+            <input
+              id="snippet-type-delay"
+              type="number"
+              value={typeDelay}
+              onChange={(e) => setTypeDelay(Number(e.target.value))}
+              min={1}
+              max={500}
+              className="w-32 px-3 py-2 rounded text-md"
+              style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+              data-testid="snippet-type-delay"
+            />
+          </div>
+
+          <PercentSlider
+            id="snippet-typo-chance"
+            label="Typos"
+            hint="Chance each letter (A–Z) or digit is mistyped, then fixed with Backspace."
+            warning={typoChance > 0
+              ? "Turn off for fields with inline autocomplete, like browser address bars and spreadsheet cells."
+              : undefined}
+            value={typoChance}
+            max={MAX_TYPO_CHANCE}
+            onChange={setTypoChance}
           />
-        </div>
+
+          <PercentSlider
+            id="snippet-type-variation"
+            label="Rhythm Variation"
+            hint="Uneven key timing, with short pauses after spaces and line breaks."
+            value={typeVariation}
+            max={MAX_TYPE_VARIATION}
+            onChange={setTypeVariation}
+          />
+
+          <div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="snippet-shift-enter"
+                checked={shiftEnter}
+                onChange={(e) => setShiftEnter(e.target.checked)}
+                className="rounded"
+                aria-describedby="snippet-shift-enter-hint"
+                data-testid="snippet-shift-enter"
+              />
+              <label htmlFor="snippet-shift-enter" className="font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
+                Type line breaks as Shift+Enter
+              </label>
+            </div>
+            <p id="snippet-shift-enter-hint" className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              For chat apps like Slack, Teams, and Copilot, where Enter sends the message.
+            </p>
+          </div>
+        </>
       )}
 
       <IconEditor
