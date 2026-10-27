@@ -160,4 +160,18 @@ mod tests {
     fn app_initializes() {
         assert_eq!(2 + 2, 4);
     }
+
+    // WebView2 "Suggestions" pop up over snippet fields and may ignore autocomplete="off".
+    #[test]
+    fn main_window_disables_browser_autofill() {
+        let config: tauri::utils::config::Config =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let main = config
+            .app
+            .windows
+            .iter()
+            .find(|window| window.label == "main")
+            .expect("main window is configured");
+        assert!(!main.general_autofill_enabled);
+    }
 }
