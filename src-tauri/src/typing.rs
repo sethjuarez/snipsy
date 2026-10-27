@@ -438,7 +438,10 @@ mod tests {
 
     #[test]
     fn options_default_and_clamp() {
-        assert_eq!(FastTypeOptions::new(None, None, None, None), options(30, 0, 0));
+        assert_eq!(
+            FastTypeOptions::new(None, None, None, None),
+            options(30, 0, 0)
+        );
         assert_eq!(
             FastTypeOptions::new(Some(5), Some(250), Some(101), None),
             options(5, 20, 100)
