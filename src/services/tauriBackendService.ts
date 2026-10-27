@@ -1,6 +1,6 @@
-import { auditaurInvoke as invoke } from "./auditaur";
+import { auditaurInvoke as invoke, untracedInvoke } from "./auditaur";
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
-import type { ArchiveSummary, Project, ProjectData, MonitorInfo, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, Project, ProjectData, MonitorInfo, ProjectImage, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -89,6 +89,32 @@ export class TauriBackendService implements BackendService {
     jpegBase64: string,
   ): Promise<string> {
     return invoke<string>("save_video_thumbnail", { projectPath, relativePath, jpegBase64 });
+  }
+
+  async importImage(projectPath: string, sourceFilePath: string): Promise<ProjectImage> {
+    return invoke<ProjectImage>("import_image", { projectPath, sourceFilePath });
+  }
+
+  async importImageData(projectPath: string, name: string, dataBase64: string): Promise<ProjectImage> {
+    return untracedInvoke<ProjectImage>("import_image_data", { projectPath, name, dataBase64 });
+  }
+
+  async listProjectImages(projectPath: string): Promise<ProjectImage[]> {
+    return invoke<ProjectImage[]>("list_project_images", { projectPath });
+  }
+
+  async deleteProjectImage(projectPath: string, key: string): Promise<void> {
+    return invoke("delete_project_image", { projectPath, key });
+  }
+
+  async selectImageFile(): Promise<string | null> {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const result = await open({
+      multiple: false,
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
+    });
+    if (Array.isArray(result)) return result[0] ?? null;
+    return result;
   }
 
   async playVideo(

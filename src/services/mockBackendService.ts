@@ -1,7 +1,36 @@
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
-import type { ArchiveSummary, Project, ProjectData, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { ArchiveSummary, Project, ProjectData, ProjectImage, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
+
+const UNSUPPORTED_IMAGE = "Only PNG and JPEG images are supported.";
+
+/** Mirrors the backend's file-name slugs, e.g. "Screenshot 10.30.12.png" → "screenshot-10-30-12". */
+function mockImageSlug(nameHint: string): string {
+  const fileName = nameHint.split(/[\\/]/).pop() ?? "";
+  // Lowercase last: some non-ASCII letters, like the Kelvin sign, lowercase to ASCII.
+  const slug = fileName
+    .replace(/\.(png|jpe?g)$/i, "")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, 48)
+    .replace(/-+$/, "")
+    .toLowerCase();
+  if (!slug) return "image";
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/.test(slug) ? `${slug}-image` : slug;
+}
+
+/** The backend sniffs file contents; the mock checks base64 signatures or file extensions instead. */
+function mockImageExtension(source: { dataBase64: string } | { path: string }): "png" | "jpg" {
+  if ("dataBase64" in source) {
+    if (source.dataBase64.startsWith("iVBORw0KGgo")) return "png";
+    if (source.dataBase64.startsWith("/9j/")) return "jpg";
+  } else {
+    if (/\.png$/i.test(source.path)) return "png";
+    if (/\.jpe?g$/i.test(source.path)) return "jpg";
+  }
+  throw new Error(UNSUPPORTED_IMAGE);
+}
 
 const FIXTURE_PROJECT: ProjectData = {
   project: {
@@ -74,11 +103,17 @@ const FIXTURE_PROJECT: ProjectData = {
   ],
 };
 
+interface MockArchive {
+  data: ProjectData;
+  images: ProjectImage[];
+  imageSources: [string, string][];
+}
+
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
   private _keepAwake = false;
-  private archives = new Map<string, ProjectData>();
+  private archives = new Map<string, MockArchive>();
   private _automations: Script[] = [
     {
       id: "sc-1",
@@ -107,6 +142,8 @@ export class MockBackendService implements BackendService {
       textSnippets: [],
       videoSnippets: [],
     };
+    this._projectImages = [];
+    this._imageSources = new Map();
     return structuredClone(this.data);
   }
 
@@ -122,14 +159,23 @@ export class MockBackendService implements BackendService {
   }
 
   async exportProject(_projectPath: string, archivePath: string): Promise<ArchiveSummary> {
-    const fileCount = 3 + this._automations.length + this._importedVideos.length;
-    this.archives.set(archivePath, structuredClone(this.data));
+    const fileCount =
+      3 + this._automations.length + this._importedVideos.length + this._projectImages.length;
+    this.archives.set(archivePath, {
+      data: structuredClone(this.data),
+      images: structuredClone(this._projectImages),
+      imageSources: [...this._imageSources],
+    });
     return { path: archivePath, fileCount };
   }
 
   async importProject(archivePath: string, destinationPath: string): Promise<ArchiveSummary> {
     const archived = this.archives.get(archivePath);
-    if (archived) this.data = structuredClone(archived);
+    if (archived) {
+      this.data = structuredClone(archived.data);
+      this._projectImages = structuredClone(archived.images);
+      this._imageSources = new Map(archived.imageSources);
+    }
     return { path: destinationPath, fileCount: 3 };
   }
 
@@ -224,6 +270,63 @@ export class MockBackendService implements BackendService {
     const stem = video.name.replace(/\.[^.]+$/, "");
     video.thumbnailPath = `/mock/project/videos/thumbnails/${stem}.jpg`;
     return video.thumbnailPath;
+  }
+
+  private _projectImages: ProjectImage[] = [];
+  /** Source (file path or base64 data) → stored key; stands in for the backend's byte comparison. */
+  private _imageSources = new Map<string, string>();
+  private _imageFileCounter = 0;
+
+  async importImage(_projectPath: string, sourceFilePath: string): Promise<ProjectImage> {
+    return this.storeMockImage(
+      `path:${sourceFilePath}`,
+      sourceFilePath,
+      mockImageExtension({ path: sourceFilePath }),
+    );
+  }
+
+  async importImageData(_projectPath: string, name: string, dataBase64: string): Promise<ProjectImage> {
+    return this.storeMockImage(`data:${dataBase64}`, name, mockImageExtension({ dataBase64 }));
+  }
+
+  private storeMockImage(source: string, nameHint: string, extension: "png" | "jpg"): ProjectImage {
+    const existing = this._projectImages.find((image) => image.key === this._imageSources.get(source));
+    if (existing) return structuredClone(existing);
+    const slug = mockImageSlug(nameHint);
+    let key = `${slug}.${extension}`;
+    for (let n = 2; this._projectImages.some((image) => image.key === key); n++) {
+      key = `${slug}-${n}.${extension}`;
+    }
+    const image: ProjectImage = {
+      key,
+      absolutePath: `/mock/project/images/${key}`,
+      width: 640,
+      height: 360,
+      bytes: 2048,
+    };
+    this._projectImages.push(image);
+    this._imageSources.set(source, key);
+    return structuredClone(image);
+  }
+
+  async listProjectImages(_projectPath: string): Promise<ProjectImage[]> {
+    const sorted = [...this._projectImages].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    return structuredClone(sorted);
+  }
+
+  async deleteProjectImage(_projectPath: string, key: string): Promise<void> {
+    if (!this._projectImages.some((image) => image.key === key)) {
+      throw new Error(`Image not found: ${key}`);
+    }
+    this._projectImages = this._projectImages.filter((image) => image.key !== key);
+    for (const [source, stored] of this._imageSources) {
+      if (stored === key) this._imageSources.delete(source);
+    }
+  }
+
+  async selectImageFile(): Promise<string | null> {
+    this._imageFileCounter++;
+    return `/mock/images/mock-image-${this._imageFileCounter}.png`;
   }
 
   async playVideo(

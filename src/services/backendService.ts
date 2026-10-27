@@ -5,6 +5,7 @@ import type {
   ImportedVideo,
   MonitorInfo,
   PauseStop,
+  ProjectImage,
   Script,
   StreamDeckButton,
   TextSnippet,
@@ -87,6 +88,14 @@ export interface BackendService {
     relativePath: string,
     jpegBase64: string,
   ): Promise<string>;
+  /** Copy a PNG or JPEG into the project's `images/` folder; identical images are reused. */
+  importImage(projectPath: string, sourceFilePath: string): Promise<ProjectImage>;
+  /** Store base64 PNG or JPEG bytes, such as a pasted screenshot, in the project. */
+  importImageData(projectPath: string, name: string, dataBase64: string): Promise<ProjectImage>;
+  listProjectImages(projectPath: string): Promise<ProjectImage[]>;
+  deleteProjectImage(projectPath: string, key: string): Promise<void>;
+  /** Ask for a PNG or JPEG file; null when cancelled. */
+  selectImageFile(): Promise<string | null>;
   playVideo(
     projectPath: string | null,
     videoFile: string,

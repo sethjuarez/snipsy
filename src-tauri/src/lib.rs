@@ -3,6 +3,7 @@ mod delivery;
 mod demo;
 mod elevation;
 mod focus;
+mod images;
 mod keep_awake;
 mod keyboard_hook;
 mod models;
@@ -89,6 +90,10 @@ pub fn run() {
             commands::delete_video,
             commands::get_video_fps,
             commands::save_video_thumbnail,
+            images::import_image,
+            images::import_image_data,
+            images::list_project_images,
+            images::delete_project_image,
             commands::list_monitors,
             commands::capture_monitor_preview,
             commands::save_automation,
