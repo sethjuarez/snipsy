@@ -163,6 +163,28 @@ struct EnigoOutput {
     enigo: Enigo,
     focus_ctx: Option<focus::FocusContext>,
     clipboard: Option<arboard::Clipboard>,
+    shift_enter: bool,
+}
+
+/// How one planned character reaches the target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Keystroke {
+    Text(char),
+    Key(Key),
+    /// Shift+key, e.g. Shift+Enter for a line break chat apps won't send.
+    ShiftKey(Key),
+    /// Sends nothing: the `\r` of a CRLF when line breaks are Shift+Enter.
+    Skip,
+}
+
+fn keystroke_for(ch: char, shift_enter: bool) -> Keystroke {
+    match ch {
+        '\n' if shift_enter => Keystroke::ShiftKey(Key::Return),
+        '\r' if shift_enter => Keystroke::Skip,
+        '\n' => Keystroke::Key(Key::Return),
+        '\t' => Keystroke::Key(Key::Tab),
+        _ => Keystroke::Text(ch),
+    }
 }
 
 impl EnigoOutput {
@@ -181,19 +203,30 @@ impl EnigoOutput {
 impl KeyOutput for EnigoOutput {
     fn type_char(&mut self, ch: char) -> Result<(), String> {
         self.ensure_focused()?;
-        match ch {
-            '\n' => self
-                .enigo
-                .key(Key::Return, Direction::Click)
-                .map_err(|e| format!("Failed to press Return: {e}")),
-            '\t' => self
-                .enigo
-                .key(Key::Tab, Direction::Click)
-                .map_err(|e| format!("Failed to press Tab: {e}")),
-            _ => self
+        match keystroke_for(ch, self.shift_enter) {
+            Keystroke::Text(ch) => self
                 .enigo
                 .text(&ch.to_string())
                 .map_err(|e| format!("Failed to type character '{ch}': {e}")),
+            Keystroke::Key(key) => self
+                .enigo
+                .key(key, Direction::Click)
+                .map_err(|e| format!("Failed to press {key:?}: {e}")),
+            Keystroke::ShiftKey(key) => {
+                self.enigo
+                    .key(Key::Shift, Direction::Press)
+                    .map_err(|e| format!("Failed to press Shift: {e}"))?;
+                let pressed = self
+                    .enigo
+                    .key(key, Direction::Click)
+                    .map_err(|e| format!("Failed to press Shift+{key:?}: {e}"));
+                let released = self
+                    .enigo
+                    .key(Key::Shift, Direction::Release)
+                    .map_err(|e| format!("Failed to release Shift: {e}"));
+                pressed.and(released)
+            }
+            Keystroke::Skip => Ok(()),
         }
     }
 
@@ -319,6 +352,7 @@ fn deliver_fast_type_with_cancel(
         delay_ms = options.delay_ms,
         typo_chance = options.typo_chance,
         variation = options.variation,
+        shift_enter = options.shift_enter,
         "Fast-type planned"
     );
 
@@ -338,6 +372,7 @@ fn deliver_fast_type_with_cancel(
         enigo,
         focus_ctx,
         clipboard: None,
+        shift_enter: options.shift_enter,
     };
     let cleanup_delay_ms = u64::from(options.delay_ms.min(MAX_CLEANUP_DELAY_MS));
     let started = std::time::Instant::now();
@@ -541,6 +576,7 @@ pub fn deliver_text(
     type_delay: Option<u32>,
     typo_chance: Option<u32>,
     type_variation: Option<u32>,
+    shift_enter: Option<bool>,
     project_path: Option<String>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
@@ -549,7 +585,7 @@ pub fn deliver_text(
         &text,
         &method,
         project_path.as_deref(),
-        FastTypeOptions::new(type_delay, typo_chance, type_variation),
+        FastTypeOptions::new(type_delay, typo_chance, type_variation, shift_enter),
         None,
     )
 }
@@ -576,6 +612,7 @@ mod tests {
         let result = deliver_text(
             "hello".into(),
             "unknown".into(),
+            None,
             None,
             None,
             None,
@@ -624,10 +661,21 @@ mod tests {
     fn failed_delivery_releases_the_gate() {
         static GATE: DeliveryGate = DeliveryGate::new();
         let permit = GATE.try_enter().unwrap();
-        let options = FastTypeOptions::new(None, None, None);
+        let options = FastTypeOptions::new(None, None, None, None);
         let result = deliver_text_with_permit(permit, "hello", "unknown", None, options, None);
         assert!(result.unwrap_err().contains("Unknown delivery method"));
         assert!(GATE.try_enter().is_ok());
+    }
+
+    #[test]
+    fn line_breaks_press_enter_or_shift_enter() {
+        assert_eq!(keystroke_for('\n', false), Keystroke::Key(Key::Return));
+        assert_eq!(keystroke_for('\n', true), Keystroke::ShiftKey(Key::Return));
+        assert_eq!(keystroke_for('\r', true), Keystroke::Skip);
+        for shift_enter in [false, true] {
+            assert_eq!(keystroke_for('\t', shift_enter), Keystroke::Key(Key::Tab));
+            assert_eq!(keystroke_for('a', shift_enter), Keystroke::Text('a'));
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -699,6 +747,7 @@ mod tests {
             delay_ms: 0,
             typo_chance: 40,
             variation: 0,
+            shift_enter: false,
         };
         let steps = typing::plan(TEXT, &options, &mut fastrand::Rng::with_seed(11));
         assert!(steps.iter().any(|step| step.action == Action::Backspace));
@@ -788,6 +837,7 @@ mod tests {
             delay_ms: 0,
             typo_chance: 30,
             variation: 100,
+            shift_enter: false,
         };
         let ops = plan_ops_with(
             &segments,

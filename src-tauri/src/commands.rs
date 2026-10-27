@@ -617,6 +617,7 @@ mod tests {
             type_delay: Some(30),
             typo_chance: Some(3),
             type_variation: Some(40),
+            shift_enter: None,
             stream_deck_icon: Some(StreamDeckIcon::Preset {
                 value: "code".into(),
                 background: Some("#111827".into()),

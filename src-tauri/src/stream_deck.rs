@@ -128,6 +128,7 @@ pub async fn trigger_stream_deck_button(
                 snippet.type_delay,
                 snippet.typo_chance,
                 snippet.type_variation,
+                snippet.shift_enter,
             );
             if snippet.delivery == DeliveryMethod::Paste {
                 crate::delivery::deliver_text_with_permit(
@@ -855,6 +856,7 @@ mod tests {
             type_delay: None,
             typo_chance: None,
             type_variation: None,
+            shift_enter: None,
             stream_deck_icon: None,
         };
         let video = VideoSnippet {
@@ -939,6 +941,7 @@ mod tests {
             type_delay: None,
             typo_chance: None,
             type_variation: None,
+            shift_enter: None,
             stream_deck_icon: None,
         };
         let data = ProjectData {

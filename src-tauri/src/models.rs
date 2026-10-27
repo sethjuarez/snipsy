@@ -23,6 +23,9 @@ pub struct TextSnippet {
     /// Percent of random variation in fast-type key timing.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_variation: Option<u32>,
+    /// Type line breaks as Shift+Enter so chat apps don't send (fast-type only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shift_enter: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_deck_icon: Option<StreamDeckIcon>,
 }
@@ -234,7 +237,8 @@ mod tests {
             "delivery": "fast-type",
             "typeDelay": 30,
             "typoChance": 3,
-            "typeVariation": 40
+            "typeVariation": 40,
+            "shiftEnter": true
         }"#;
         let snippet: TextSnippet = serde_json::from_str(json).unwrap();
         assert_eq!(snippet.id, "unique-id");
@@ -242,6 +246,7 @@ mod tests {
         assert_eq!(snippet.type_delay, Some(30));
         assert_eq!(snippet.typo_chance, Some(3));
         assert_eq!(snippet.type_variation, Some(40));
+        assert_eq!(snippet.shift_enter, Some(true));
 
         let re_json = serde_json::to_string(&snippet).unwrap();
         let re_snippet: TextSnippet = serde_json::from_str(&re_json).unwrap();
@@ -263,9 +268,10 @@ mod tests {
         assert_eq!(snippet.type_delay, None);
         assert_eq!(snippet.typo_chance, None);
         assert_eq!(snippet.type_variation, None);
+        assert_eq!(snippet.shift_enter, None);
 
         let saved = serde_json::to_value(&snippet).unwrap();
-        for key in ["typeDelay", "typoChance", "typeVariation"] {
+        for key in ["typeDelay", "typoChance", "typeVariation", "shiftEnter"] {
             assert!(saved.get(key).is_none(), "{key} should be omitted");
         }
     }

@@ -17,6 +17,7 @@ pub struct SnippetHotkey {
     pub type_delay: Option<u32>,
     pub typo_chance: Option<u32>,
     pub type_variation: Option<u32>,
+    pub shift_enter: Option<bool>,
     // Video snippet playback data
     pub project_path: Option<String>,
     pub video_file: Option<String>,
@@ -188,8 +189,8 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
             let text = hk.text.clone().unwrap_or_default();
             let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
             let project_path = hk.project_path.clone();
-            let (type_delay, typo_chance, type_variation) =
-                (hk.type_delay, hk.typo_chance, hk.type_variation);
+            let (type_delay, typo_chance, type_variation, shift_enter) =
+                (hk.type_delay, hk.typo_chance, hk.type_variation, hk.shift_enter);
             Some(std::sync::Arc::new(move || {
                 // The shared delivery gate rejects presses while another
                 // delivery runs, so keystrokes never interleave.
@@ -199,6 +200,7 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
                     type_delay,
                     typo_chance,
                     type_variation,
+                    shift_enter,
                     project_path.clone(),
                     None,
                 ) {
@@ -350,6 +352,7 @@ mod tests {
             type_delay: None,
             typo_chance: None,
             type_variation: None,
+            shift_enter: None,
             project_path: None,
             video_file: None,
             start_time: None,
@@ -417,6 +420,7 @@ mod tests {
             type_delay: Some(30),
             typo_chance: Some(3),
             type_variation: Some(40),
+            shift_enter: None,
             project_path: None,
             video_file: None,
             start_time: None,
@@ -451,12 +455,14 @@ mod tests {
             "delivery": "fast-type",
             "typeDelay": 20,
             "typoChance": 5,
-            "typeVariation": 60
+            "typeVariation": 60,
+            "shiftEnter": true
         }))
         .unwrap();
         assert_eq!(hotkey.type_delay, Some(20));
         assert_eq!(hotkey.typo_chance, Some(5));
         assert_eq!(hotkey.type_variation, Some(60));
+        assert_eq!(hotkey.shift_enter, Some(true));
 
         let legacy: SnippetHotkey = serde_json::from_value(serde_json::json!({
             "id": "ts-2",
@@ -478,6 +484,7 @@ mod tests {
             type_delay: None,
             typo_chance: None,
             type_variation: None,
+            shift_enter: None,
             project_path: Some("/path/to/project".into()),
             video_file: Some("videos/demo.mp4".into()),
             start_time: Some(5.0),

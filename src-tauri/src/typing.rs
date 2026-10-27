@@ -19,6 +19,8 @@ pub struct FastTypeOptions {
     pub typo_chance: u32,
     /// Percent the delay between keys may drift from `delay_ms`.
     pub variation: u32,
+    /// Type line breaks as Shift+Enter, so chat apps add a line instead of sending.
+    pub shift_enter: bool,
 }
 
 impl FastTypeOptions {
@@ -26,11 +28,13 @@ impl FastTypeOptions {
         type_delay: Option<u32>,
         typo_chance: Option<u32>,
         type_variation: Option<u32>,
+        shift_enter: Option<bool>,
     ) -> Self {
         Self {
             delay_ms: type_delay.unwrap_or(DEFAULT_TYPE_DELAY_MS),
             typo_chance: typo_chance.unwrap_or(0).min(MAX_TYPO_CHANCE),
             variation: type_variation.unwrap_or(0).min(MAX_TYPE_VARIATION),
+            shift_enter: shift_enter.unwrap_or(false),
         }
     }
 }
@@ -315,6 +319,7 @@ mod tests {
             delay_ms,
             typo_chance,
             variation,
+            shift_enter: false,
         }
     }
 
@@ -397,7 +402,7 @@ mod tests {
         let text = "Hi there,\n\tworld! 🎉";
         let steps = plan(
             text,
-            &FastTypeOptions::new(Some(45), None, None),
+            &FastTypeOptions::new(Some(45), None, None, None),
             &mut Rng::with_seed(7),
         );
         let legacy: Vec<Step> = text
@@ -433,11 +438,12 @@ mod tests {
 
     #[test]
     fn options_default_and_clamp() {
-        assert_eq!(FastTypeOptions::new(None, None, None), options(30, 0, 0));
+        assert_eq!(FastTypeOptions::new(None, None, None, None), options(30, 0, 0));
         assert_eq!(
-            FastTypeOptions::new(Some(5), Some(250), Some(101)),
+            FastTypeOptions::new(Some(5), Some(250), Some(101), None),
             options(5, 20, 100)
         );
+        assert!(FastTypeOptions::new(None, None, None, Some(true)).shift_enter);
     }
 
     #[test]
