@@ -18,6 +18,7 @@ describe("TextSnippetForm", () => {
     typeDelay: 12,
     typoChance: 3,
     typeVariation: 40,
+    shiftEnter: true,
     streamDeckIcon: { kind: "preset", value: "code", background: "#000000", foreground: "#ffffff" },
   };
 
@@ -82,6 +83,30 @@ describe("TextSnippetForm", () => {
     expect(saved.typeDelay).toBeUndefined();
     expect(saved.typoChance).toBeUndefined();
     expect(saved.typeVariation).toBeUndefined();
+    expect(saved.shiftEnter).toBeUndefined();
+  });
+
+  it("saves the Shift+Enter toggle and omits it when off", async () => {
+    const onSave = vi.fn();
+    render(<TextSnippetForm snippet={{ ...fastType, shiftEnter: undefined }} onSave={onSave} />);
+    const toggle = screen.getByTestId("snippet-shift-enter") as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("snippet-form").getAttribute("data-unsaved")).toBe("true");
+    expect((await submit(onSave)).shiftEnter).toBe(true);
+
+    cleanup();
+    const onSaveOff = vi.fn();
+    render(<TextSnippetForm snippet={fastType} onSave={onSaveOff} />);
+    fireEvent.click(screen.getByTestId("snippet-shift-enter"));
+    expect((await submit(onSaveOff)).shiftEnter).toBeUndefined();
+  });
+
+  it("shows the Shift+Enter toggle only for fast-type", () => {
+    render(<TextSnippetForm snippet={fastType} onSave={vi.fn()} />);
+    expect((screen.getByTestId("snippet-shift-enter") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByTestId("delivery-paste"));
+    expect(screen.queryByTestId("snippet-shift-enter")).toBeNull();
   });
 
   it("brings out-of-range settings back into the slider range", async () => {

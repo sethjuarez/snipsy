@@ -104,6 +104,7 @@ describe("buildDemoHotkeys", () => {
         typeDelay: 20,
         typoChance: 4,
         typeVariation: 50,
+        shiftEnter: true,
       }],
       videoSnippets: [],
       automations: [],
@@ -113,6 +114,7 @@ describe("buildDemoHotkeys", () => {
       typeDelay: 20,
       typoChance: 4,
       typeVariation: 50,
+      shiftEnter: true,
     });
   });
 });

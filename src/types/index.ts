@@ -41,6 +41,8 @@ export interface TextSnippet {
   typoChance?: number;
   /** Fast-type only: percent of random variation in key timing. */
   typeVariation?: number;
+  /** Fast-type only: type line breaks as Shift+Enter so chat apps add a line instead of sending. */
+  shiftEnter?: boolean;
   streamDeckIcon?: StreamDeckIcon;
 }
 

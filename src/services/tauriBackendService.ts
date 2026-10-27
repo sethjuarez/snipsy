@@ -68,6 +68,7 @@ export class TauriBackendService implements BackendService {
     typeDelay?: number,
     typoChance?: number,
     typeVariation?: number,
+    shiftEnter?: boolean,
     projectPath?: string,
   ): Promise<void> {
     return invoke("deliver_text", {
@@ -76,6 +77,7 @@ export class TauriBackendService implements BackendService {
       typeDelay,
       typoChance,
       typeVariation,
+      shiftEnter,
       projectPath,
     });
   }

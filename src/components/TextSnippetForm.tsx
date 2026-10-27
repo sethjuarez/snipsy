@@ -113,6 +113,7 @@ function TextSnippetForm({
   );
   const [typoChance, setTypoChance] = useState(() => toPercent(snippet?.typoChance, MAX_TYPO_CHANCE));
   const [typeVariation, setTypeVariation] = useState(() => toPercent(snippet?.typeVariation, MAX_TYPE_VARIATION));
+  const [shiftEnter, setShiftEnter] = useState(snippet?.shiftEnter ?? false);
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [importingImage, setImportingImage] = useState(false);
@@ -126,6 +127,7 @@ function TextSnippetForm({
     typeDelay,
     typoChance,
     typeVariation,
+    shiftEnter,
     streamDeckIcon,
   });
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
@@ -213,6 +215,7 @@ function TextSnippetForm({
       typeDelay: fastType ? typeDelay : undefined,
       typoChance: fastType && typoChance > 0 ? typoChance : undefined,
       typeVariation: fastType && typeVariation > 0 ? typeVariation : undefined,
+      shiftEnter: fastType && shiftEnter ? true : undefined,
       streamDeckIcon,
     }));
   };
@@ -438,6 +441,26 @@ function TextSnippetForm({
             max={MAX_TYPE_VARIATION}
             onChange={setTypeVariation}
           />
+
+          <div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="snippet-shift-enter"
+                checked={shiftEnter}
+                onChange={(e) => setShiftEnter(e.target.checked)}
+                className="rounded"
+                aria-describedby="snippet-shift-enter-hint"
+                data-testid="snippet-shift-enter"
+              />
+              <label htmlFor="snippet-shift-enter" className="font-medium text-base" style={{ color: "var(--color-text-secondary)" }}>
+                Type line breaks as Shift+Enter
+              </label>
+            </div>
+            <p id="snippet-shift-enter-hint" className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              For chat apps like Slack, Teams, and Copilot, where Enter sends the message.
+            </p>
+          </div>
         </>
       )}
 

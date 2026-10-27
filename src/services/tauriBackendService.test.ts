@@ -37,7 +37,7 @@ describe("TauriBackendService images", () => {
     const backend = new TauriBackendService();
     invoke.mockResolvedValue(undefined);
 
-    await backend.deliverText("a {{image:logo.png}}", "fast-type", 10, 2, 30, "C:/demo");
+    await backend.deliverText("a {{image:logo.png}}", "fast-type", 10, 2, 30, true, "C:/demo");
 
     expect(invoke).toHaveBeenCalledWith("deliver_text", {
       text: "a {{image:logo.png}}",
@@ -45,6 +45,7 @@ describe("TauriBackendService images", () => {
       typeDelay: 10,
       typoChance: 2,
       typeVariation: 30,
+      shiftEnter: true,
       projectPath: "C:/demo",
     });
   });

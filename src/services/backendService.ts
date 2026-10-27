@@ -23,6 +23,7 @@ export interface SnippetHotkey {
   typeDelay?: number;
   typoChance?: number;
   typeVariation?: number;
+  shiftEnter?: boolean;
   // Video snippet fields
   projectPath?: string;
   videoFile?: string;
@@ -79,6 +80,7 @@ export interface BackendService {
     typeDelay?: number,
     typoChance?: number,
     typeVariation?: number,
+    shiftEnter?: boolean,
     /** Needed when the text references `{{image:key}}` images. */
     projectPath?: string,
   ): Promise<void>;
