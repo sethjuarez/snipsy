@@ -206,11 +206,30 @@ describe("ScriptForm", () => {
         expect(handle.getAttribute("aria-label")).toBe("Drag to reorder Second");
         await keyboardDrag(handle, ["ArrowUp"]);
         expect(onSave).not.toHaveBeenCalled();
+        expect(document.body.textContent).toContain("Dropped step 2, Second at step position 1.");
 
         const groups = await savedGroups(onSave);
         expect(groups).toEqual([ordered.contributionGroups![1], ordered.contributionGroups![0]]);
         expect(groups[0]).toBe(ordered.contributionGroups![1]);
         expect(groups[1]).toBe(ordered.contributionGroups![0]);
+      });
+
+      it("moves a tall step below a short one from the keyboard", async () => {
+        const onSave = vi.fn();
+        const many = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, kind: "openSite", title: `T${i}`, url: `https://t${i}.test` }) as OpenSiteContribution);
+        const tall: Script = {
+          ...automation,
+          contributionGroups: [
+            { id: "tall", title: "Tall", contributions: many },
+            { id: "short", title: "Short", contributions: [other] },
+          ],
+        };
+        render(<ScriptForm script={tall} onSave={onSave} />);
+        await keyboardDrag(screen.getByTestId("drag-group-0"), ["ArrowDown"]);
+
+        const groups = await savedGroups(onSave);
+        expect(groups.map((group) => group.id)).toEqual(["short", "tall"]);
+        expect(groups[1]).toBe(tall.contributionGroups![0]);
       });
 
       it("drags an action into another step and keeps the whole object", async () => {

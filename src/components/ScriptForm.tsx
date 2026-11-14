@@ -12,6 +12,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type KeyboardCoordinateGetter,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -37,6 +38,30 @@ function defaultContributionGroups(script?: Script): AutomationContributionGroup
 type ContributionControl = "up" | "down" | "url";
 type DragKind = "group" | "contribution";
 const GROUP_DROP_SUFFIX = ":drop";
+
+/**
+ * Steps vary in height, and the default sortable getter bottom-aligns a step dragged downward, so a tall
+ * step's center can stay closest to its own slot. Center the dragged step on the neighboring step instead.
+ */
+const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
+  const { active, collisionRect, droppableRects, droppableContainers } = args.context;
+  const direction = event.code === "ArrowDown" ? 1 : event.code === "ArrowUp" ? -1 : 0;
+  if (!direction || !active || !collisionRect || active.data.current?.kind !== "group") {
+    return sortableKeyboardCoordinates(event, args);
+  }
+  event.preventDefault();
+  const center = collisionRect.top + collisionRect.height / 2;
+  let targetCenter: number | null = null;
+  for (const container of droppableContainers.getEnabled()) {
+    if (container.data.current?.kind !== "group") continue;
+    const rect = droppableRects.get(container.id);
+    if (!rect) continue;
+    const candidate = rect.top + rect.height / 2;
+    if ((candidate - center) * direction < 1) continue;
+    if (targetCenter === null || Math.abs(candidate - center) < Math.abs(targetCenter - center)) targetCenter = candidate;
+  }
+  return targetCenter === null ? undefined : { x: collisionRect.left, y: targetCenter - collisionRect.height / 2 };
+};
 
 function newOpenSiteContribution(): AutomationContribution {
   return { id: crypto.randomUUID(), kind: "openSite", title: "Open site", url: "https://" };
@@ -367,7 +392,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
 
   const [dragKind, setDragKind] = useState<DragKind | null>(null);
@@ -452,10 +477,30 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
     return `action ${contributionGroups.indexOf(group) + 1}.${found.index + 1}, ${contribution.title?.trim() || contribution.url}`;
   };
 
+  // Describes where a drop lands; state hasn't committed yet, so name the destination rather than the moved item's old slot.
+  const describeDrop = (activeId: UniqueIdentifier, overId: UniqueIdentifier) => {
+    const item = describeDragItem(activeId);
+    const key = String(overId);
+    if (key.endsWith(GROUP_DROP_SUFFIX)) {
+      const groupIndex = contributionGroups.findIndex((group) => group.id === key.slice(0, -GROUP_DROP_SUFFIX.length));
+      return `Dropped ${item} into step ${groupIndex + 1}.`;
+    }
+    const groupIndex = contributionGroups.findIndex((group) => group.id === key);
+    if (groupIndex >= 0) return `Dropped ${item} at step position ${groupIndex + 1}.`;
+    const found = findContribution(contributionGroups, key);
+    if (!found) return `Dropped ${item}.`;
+    const stepNumber = contributionGroups.findIndex((group) => group.id === found.groupId) + 1;
+    return `Dropped ${item} at position ${stepNumber}.${found.index + 1}.`;
+  };
+
   const announcements: Announcements = {
     onDragStart: ({ active }) => `Picked up ${describeDragItem(active.id)}.`,
     onDragOver: ({ active, over }) => over ? `${describeDragItem(active.id)} is over ${describeDragItem(over.id)}.` : `${describeDragItem(active.id)} is no longer over a drop target.`,
-    onDragEnd: ({ active, over }) => over ? `Dropped ${describeDragItem(active.id)}.` : `Dropped ${describeDragItem(active.id)} in place.`,
+    onDragEnd: ({ active, over }) => {
+      if (!over) return `Dropped ${describeDragItem(active.id)} in place.`;
+      // After a cross-step move the item is over itself, and its description already reflects the new slot.
+      return over.id === active.id ? `Dropped ${describeDragItem(active.id)}.` : describeDrop(active.id, over.id);
+    },
     onDragCancel: ({ active }) => `Cancelled moving ${describeDragItem(active.id)}.`,
   };
 
