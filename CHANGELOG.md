@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/sethjuarez/snipsy/compare/v0.25.0...v0.26.0) (2026-11-14)
+
+
+### Features
+
+* **automations:** reorder Open site actions and steps ([#43](https://github.com/sethjuarez/snipsy/issues/43)) ([d8376b0](https://github.com/sethjuarez/snipsy/commit/d8376b0ac8575e7ceab78448e5610a8d89de4c01))
+
 ## [0.25.0](https://github.com/sethjuarez/snipsy/compare/v0.24.0...v0.25.0) (2026-10-27)
 
 
