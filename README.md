@@ -65,6 +65,7 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
   1. Runs each contribution group in order.
   2. Skips sites whose URL already opened in the same automation execution.
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
+- The editor reorders steps and actions with move buttons, insert-below, and drag and drop (pointer or keyboard), including moving actions between steps. Order in the editor is execution order.
 - Automations are stored as human-editable JSON files within the project folder.
 
 ### Hotkeys View

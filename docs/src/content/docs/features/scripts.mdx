@@ -1,6 +1,6 @@
 ---
-title: Scripts
-description: Automate desktop interactions and record screen captures.
+title: Automations
+description: Build ordered steps of actions that prepare your demo, and reorder them in the editor.
 sidebar:
   order: 7
   badge:
@@ -8,43 +8,41 @@ sidebar:
     variant: caution
 ---
 
-import { Aside, Badge } from '@astrojs/starlight/components';
-import Screenshot from '../../../components/Screenshot.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+Automations prepare the machine before or during a demo. Today an automation opens sites in your default browser, so one key press can put every tab you need in place.
 
 <Aside type="caution" title="Experimental Feature">
-Script recording and playback is experimental and still under active development. The functionality may change, and edge cases may not be fully handled yet.
+Automations are an Advanced-mode feature and still evolving. Open site is the only action kind for now.
 </Aside>
 
-Scripts let you automate desktop interactions — launching apps, typing text, pressing keys, clicking, and scrolling — and optionally record the screen while the script runs.
+## Steps and actions
 
-<Screenshot src="/images/script-list.png" alt="Script list" caption="The scripts view showing automation scripts" />
+An automation is a list of **steps**, and each step holds **actions**. Snipsy runs the steps top to bottom, and the actions inside each step top to bottom. What you see in the editor is the order they run in. Each action shows its position, such as `2.1` for the first action in step 2.
 
-## Script Steps
+| Action | What it does |
+|--------|--------------|
+| **Open site** | Opens an `http://` or `https://` URL in the default browser. If the same URL appears more than once in an automation, it only opens the first time. |
 
-A script is a sequence of steps, each performing a specific action:
+## Creating an automation
 
-| Step Type | Description | Parameters |
-|-----------|-------------|------------|
-| **launch** | Open an application or URL | `target` |
-| **type** | Type text into the active window | `text`, `delay` (ms) |
-| **keypress** | Press a keyboard shortcut | `keys` |
-| **click** | Click at screen coordinates | `x`, `y`, `relative` |
-| **scroll** | Scroll in the active window | `direction`, `amount` |
-| **move** | Move the cursor | `x`, `y` |
+Open **Automations** and click **Add**. Give it a name, and if you like, a hotkey so it runs during demo mode. Then:
 
-## Creating a Script
+1. Click **+ Add step** and name the step.
+2. Click **+ Add action** on the step and fill in the URL. The URL field gets focus, so you can start typing right away.
+3. Click **Create** (**Update** when editing) or press **Ctrl/Cmd+S** to save.
 
-Navigate to the **Scripts** view and click **+**. Add steps in order — they'll execute sequentially when you run the script.
+## Reordering steps and actions
 
-## Recording Scripts
+You can change the order without retyping anything. Every move keeps the action's settings as they are.
 
-Snipsy can **record your interactions** as you perform them:
+- **Move up / Move down** arrows on an action move it one place within its step. The arrows on a step header move the whole step.
+- **+** on an action inserts a new Open site action right below it.
+- **Drag** the grip handle to the left of an action to drop it anywhere, including in another step. Drag the handle on a step header to move the step and all its actions. An empty step shows a drop area you can drag actions into.
+- **Keyboard**: focus a grip handle, press **Space** to pick it up, use the **arrow keys** to move it, then press **Space** to drop it or **Esc** to cancel.
 
-1. Click the **record button** to start capturing
-2. Perform your actions normally — Snipsy records mouse clicks, keystrokes, and cursor movement
-3. Click **stop** to finish recording
-4. The recorded steps appear as a script you can edit and replay
+Reordering counts as an unsaved change. Moving something back where it started clears the change.
 
-## Platform Notes
+## Running an automation
 
-Scripts include a `platform` field indicating which OS they were recorded on. Since screen coordinates and application paths differ between platforms, scripts are generally platform-specific.
+Run an automation with **Run** on its row in the list, with its hotkey during demo mode, from the command palette, or from a Stream Deck key. Automations are saved as JSON files in the project's `automations/` folder.
