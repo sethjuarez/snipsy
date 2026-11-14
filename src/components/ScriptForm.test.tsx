@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenSiteContribution, Script } from "../types";
 import ScriptForm from "./ScriptForm";
 
@@ -122,6 +122,64 @@ describe("ScriptForm", () => {
       expect(lastState().hasUnsavedChanges).toBe(true);
       fireEvent.click(screen.getByTestId("move-contribution-up-0-1"));
       expect(lastState().hasUnsavedChanges).toBe(false);
+    });
+
+    describe("drag handle", () => {
+      // jsdom has no layout; give each action row a stacked rect so dnd-kit can measure droppables.
+      let restoreRects: () => void;
+      beforeEach(() => {
+        const original = Element.prototype.getBoundingClientRect;
+        Element.prototype.getBoundingClientRect = function (this: Element) {
+          const rows = Array.from(document.querySelectorAll("[data-contribution-id]"));
+          const row = this.closest("[data-contribution-id]");
+          const index = row ? rows.indexOf(row) : -1;
+          const top = index * 40;
+          return { x: 0, y: top, top, left: 0, width: 300, height: index < 0 ? 0 : 30, right: 300, bottom: top + 30, toJSON: () => ({}) } as DOMRect;
+        };
+        restoreRects = () => { Element.prototype.getBoundingClientRect = original; };
+      });
+      afterEach(() => restoreRects());
+
+      const keyboardDrag = async (handle: HTMLElement, steps: string[]) => {
+        handle.focus();
+        fireEvent.keyDown(handle, { code: "Space", key: " " });
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+        for (const code of steps) {
+          fireEvent.keyDown(handle, { code, key: code });
+          await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+        }
+        fireEvent.keyDown(handle, { code: "Space", key: " " });
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+      };
+
+      it("reorders within a step from the keyboard and keeps other steps untouched", async () => {
+        const onSave = vi.fn();
+        render(<ScriptForm script={ordered} onSave={onSave} />);
+        await keyboardDrag(screen.getByTestId("drag-contribution-0-0"), ["ArrowDown", "ArrowDown"]);
+        expect(onSave).not.toHaveBeenCalled();
+
+        const groups = await savedGroups(onSave);
+        expect(groups[0].contributions).toEqual([siteB, siteC, siteA]);
+        expect(groups[0].contributions[2]).toBe(siteA);
+        expect(groups[1]).toBe(ordered.contributionGroups![1]);
+      });
+
+      it("is a labeled non-submitting button and leaves inputs out of the drag activator", () => {
+        const onSave = vi.fn();
+        render(<ScriptForm script={ordered} onSave={onSave} />);
+        const handle = screen.getByTestId("drag-contribution-0-1");
+        expect(handle.getAttribute("type")).toBe("button");
+        expect(handle.getAttribute("aria-label")).toBe("Drag to reorder B");
+        expect(handle.contains(screen.getByTestId("contribution-title-0-1"))).toBe(false);
+        expect(screen.getByTestId("contribution-title-0-1").getAttribute("aria-roledescription")).toBeNull();
+
+        fireEvent.click(handle);
+        fireEvent.keyDown(screen.getByTestId("contribution-title-0-1"), { code: "Space", key: " " });
+        fireEvent.change(screen.getByTestId("contribution-title-0-1"), { target: { value: "B edited" } });
+        expect(onSave).not.toHaveBeenCalled();
+        expect((screen.getByTestId("contribution-title-0-1") as HTMLInputElement).value).toBe("B edited");
+        expect(screen.getByTestId("contribution-0-0").getAttribute("data-contribution-id")).toBe("a");
+      });
     });
   });
 });

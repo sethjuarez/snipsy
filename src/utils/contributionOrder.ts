@@ -1,5 +1,13 @@
 import type { AutomationContribution, AutomationContributionGroup } from "../types";
 
+export function findContribution(groups: AutomationContributionGroup[], contributionId: string): { groupId: string; index: number } | null {
+  for (const group of groups) {
+    const index = group.contributions.findIndex((contribution) => contribution.id === contributionId);
+    if (index >= 0) return { groupId: group.id, index };
+  }
+  return null;
+}
+
 /** Array order is execution order, so these helpers only reorder; contribution objects are reused as-is. */
 export function moveContributionWithinGroup(
   groups: AutomationContributionGroup[],

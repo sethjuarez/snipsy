@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { AutomationContribution, AutomationContributionGroup, Script, StreamDeckIcon } from "../types";
-import { insertContributionAfter, moveContributionWithinGroup } from "../utils/contributionOrder";
+import { findContribution, insertContributionAfter, moveContributionWithinGroup } from "../utils/contributionOrder";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
@@ -22,6 +33,126 @@ type ContributionControl = "up" | "down" | "url";
 
 function newOpenSiteContribution(): AutomationContribution {
   return { id: crypto.randomUUID(), kind: "openSite", title: "Open site", url: "https://" };
+}
+
+interface ContributionRowProps {
+  contribution: AutomationContribution;
+  groupIndex: number;
+  contributionIndex: number;
+  isLast: boolean;
+  controlRef: (contributionId: string, control: ContributionControl) => (element: HTMLElement | null) => void;
+  onChange: (field: "title" | "url", value: string) => void;
+  onMove: (direction: -1 | 1) => void;
+  onInsertBelow: () => void;
+  onRemove: () => void;
+}
+
+const inputStyle = { backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" };
+
+function SortableContributionRow({ contribution, groupIndex, contributionIndex, isLast, controlRef, onChange, onMove, onInsertBelow, onRemove }: ContributionRowProps) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: contribution.id });
+  const stepLabel = `${groupIndex + 1}.${contributionIndex + 1}`;
+  const actionName = contribution.title?.trim() || contribution.url || `action ${stepLabel}`;
+  const testSuffix = `${groupIndex}-${contributionIndex}`;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="grid grid-cols-[auto_auto_1fr_2fr_auto] items-center gap-2 mb-2"
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: "relative", zIndex: isDragging ? 1 : undefined }}
+      data-testid={`contribution-${testSuffix}`}
+      data-contribution-id={contribution.id}
+    >
+      {/* Drag listeners live only on this handle so the inputs keep normal text editing and selection. */}
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="p-1 rounded cursor-grab active:cursor-grabbing touch-none"
+        style={{ color: "var(--color-text-secondary)" }}
+        aria-label={`Drag to reorder ${actionName}`}
+        title="Drag to reorder"
+        data-testid={`drag-contribution-${testSuffix}`}
+      >
+        <GripVertical size={14} />
+      </button>
+      <span className="text-sm font-mono tabular-nums min-w-[2.5rem]" style={{ color: "var(--color-text-secondary)" }} aria-hidden="true" data-testid={`contribution-number-${testSuffix}`}>
+        {stepLabel}
+      </span>
+      <input
+        type="text"
+        value={contribution.title ?? ""}
+        onChange={(e) => onChange("title", e.target.value)}
+        placeholder="Title"
+        className="px-2 py-1 rounded text-base"
+        style={inputStyle}
+        aria-label={`Action ${stepLabel} title`}
+        data-testid={`contribution-title-${testSuffix}`}
+      />
+      <input
+        ref={controlRef(contribution.id, "url")}
+        type="url"
+        value={contribution.url}
+        onChange={(e) => onChange("url", e.target.value)}
+        placeholder="https://example.com"
+        className="px-2 py-1 rounded text-base"
+        style={inputStyle}
+        aria-label={`Action ${stepLabel} URL`}
+        data-testid={`contribution-url-${testSuffix}`}
+      />
+      <div className="flex items-center gap-1">
+        <button
+          ref={controlRef(contribution.id, "up")}
+          type="button"
+          onClick={() => onMove(-1)}
+          disabled={contributionIndex === 0}
+          className="p-1 rounded disabled:opacity-30"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label={`Move ${actionName} up`}
+          title="Move up"
+          data-testid={`move-contribution-up-${testSuffix}`}
+        >
+          <ArrowUp size={14} />
+        </button>
+        <button
+          ref={controlRef(contribution.id, "down")}
+          type="button"
+          onClick={() => onMove(1)}
+          disabled={isLast}
+          className="p-1 rounded disabled:opacity-30"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label={`Move ${actionName} down`}
+          title="Move down"
+          data-testid={`move-contribution-down-${testSuffix}`}
+        >
+          <ArrowDown size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onInsertBelow}
+          className="p-1 rounded"
+          style={{ color: "var(--color-accent)" }}
+          aria-label={`Insert action below ${actionName}`}
+          title="Insert below"
+          data-testid={`insert-contribution-below-${testSuffix}`}
+        >
+          <Plus size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 rounded"
+          style={{ color: "var(--color-danger)" }}
+          aria-label={`Remove ${actionName}`}
+          title="Remove"
+          data-testid={`remove-contribution-${testSuffix}`}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: ScriptFormProps) {
@@ -98,6 +229,21 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
     const atEdge = direction === -1 ? toIndex === 0 : toIndex === count - 1;
     const control: ContributionControl = direction === -1 ? (atEdge ? "down" : "up") : (atEdge ? "up" : "down");
     setPendingFocus({ contributionId, control });
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleContributionDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    setContributionGroups((groups) => {
+      const from = findContribution(groups, String(active.id));
+      const to = findContribution(groups, String(over.id));
+      if (!from || !to || from.groupId !== to.groupId) return groups;
+      return moveContributionWithinGroup(groups, from.groupId, String(active.id), to.index);
+    });
   };
 
   const removeContribution = (groupId: string, contributionId: string) => {
@@ -250,6 +396,8 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
             No steps yet. Add a step, then add the actions it should run.
           </p>
         )}
+        {contributionGroups.length > 0 && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleContributionDragEnd}>
         {contributionGroups.map((group, groupIndex) => (
           <div key={group.id} className="mb-3 p-3 rounded" style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border-subtle)" }} data-testid={`contribution-group-${groupIndex}`}>
             <div className="flex items-center gap-2 mb-2">
@@ -269,92 +417,26 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                 Remove
               </button>
             </div>
-            {group.contributions.map((contribution, contributionIndex) => {
-              const stepLabel = `${groupIndex + 1}.${contributionIndex + 1}`;
-              const actionName = contribution.title?.trim() || contribution.url || `action ${stepLabel}`;
-              const isFirst = contributionIndex === 0;
-              const isLast = contributionIndex === group.contributions.length - 1;
-              return (
-              <div key={contribution.id} className="grid grid-cols-[auto_1fr_2fr_auto] items-center gap-2 mb-2" data-testid={`contribution-${groupIndex}-${contributionIndex}`} data-contribution-id={contribution.id}>
-                <span className="text-sm font-mono tabular-nums min-w-[2.5rem]" style={{ color: "var(--color-text-secondary)" }} aria-hidden="true" data-testid={`contribution-number-${groupIndex}-${contributionIndex}`}>
-                  {stepLabel}
-                </span>
-                <input
-                  type="text"
-                  value={contribution.title ?? ""}
-                  onChange={(e) => updateOpenSiteContribution(group.id, contribution.id, "title", e.target.value)}
-                  placeholder="Title"
-                  className="px-2 py-1 rounded text-base"
-                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-                  aria-label={`Action ${stepLabel} title`}
-                  data-testid={`contribution-title-${groupIndex}-${contributionIndex}`}
+            <SortableContext items={group.contributions.map((contribution) => contribution.id)} strategy={verticalListSortingStrategy}>
+              {group.contributions.map((contribution, contributionIndex) => (
+                <SortableContributionRow
+                  key={contribution.id}
+                  contribution={contribution}
+                  groupIndex={groupIndex}
+                  contributionIndex={contributionIndex}
+                  isLast={contributionIndex === group.contributions.length - 1}
+                  controlRef={controlRef}
+                  onChange={(field, value) => updateOpenSiteContribution(group.id, contribution.id, field, value)}
+                  onMove={(direction) => moveContribution(group.id, contribution.id, contributionIndex, direction, group.contributions.length)}
+                  onInsertBelow={() => insertOpenSiteContributionBelow(group.id, contribution.id)}
+                  onRemove={() => removeContribution(group.id, contribution.id)}
                 />
-                <input
-                  ref={controlRef(contribution.id, "url")}
-                  type="url"
-                  value={contribution.url}
-                  onChange={(e) => updateOpenSiteContribution(group.id, contribution.id, "url", e.target.value)}
-                  placeholder="https://example.com"
-                  className="px-2 py-1 rounded text-base"
-                  style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-                  aria-label={`Action ${stepLabel} URL`}
-                  data-testid={`contribution-url-${groupIndex}-${contributionIndex}`}
-                />
-                <div className="flex items-center gap-1">
-                  <button
-                    ref={controlRef(contribution.id, "up")}
-                    type="button"
-                    onClick={() => moveContribution(group.id, contribution.id, contributionIndex, -1, group.contributions.length)}
-                    disabled={isFirst}
-                    className="p-1 rounded disabled:opacity-30"
-                    style={{ color: "var(--color-text-secondary)" }}
-                    aria-label={`Move ${actionName} up`}
-                    title="Move up"
-                    data-testid={`move-contribution-up-${groupIndex}-${contributionIndex}`}
-                  >
-                    <ArrowUp size={14} />
-                  </button>
-                  <button
-                    ref={controlRef(contribution.id, "down")}
-                    type="button"
-                    onClick={() => moveContribution(group.id, contribution.id, contributionIndex, 1, group.contributions.length)}
-                    disabled={isLast}
-                    className="p-1 rounded disabled:opacity-30"
-                    style={{ color: "var(--color-text-secondary)" }}
-                    aria-label={`Move ${actionName} down`}
-                    title="Move down"
-                    data-testid={`move-contribution-down-${groupIndex}-${contributionIndex}`}
-                  >
-                    <ArrowDown size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertOpenSiteContributionBelow(group.id, contribution.id)}
-                    className="p-1 rounded"
-                    style={{ color: "var(--color-accent)" }}
-                    aria-label={`Insert action below ${actionName}`}
-                    title="Insert below"
-                    data-testid={`insert-contribution-below-${groupIndex}-${contributionIndex}`}
-                  >
-                    <Plus size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeContribution(group.id, contribution.id)}
-                    className="p-1 rounded"
-                    style={{ color: "var(--color-danger)" }}
-                    aria-label={`Remove ${actionName}`}
-                    title="Remove"
-                    data-testid={`remove-contribution-${groupIndex}-${contributionIndex}`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-              );
-            })}
+              ))}
+            </SortableContext>
           </div>
         ))}
+        </DndContext>
+        )}
       </div>
 
       <IconEditor
