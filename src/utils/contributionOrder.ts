@@ -40,3 +40,36 @@ export function insertContributionAfter(
     return { ...group, contributions };
   });
 }
+
+/** Moves a contribution into another (or the same) group at `toIndex`, clamped to the target's bounds. */
+export function moveContributionToGroup(
+  groups: AutomationContributionGroup[],
+  contributionId: string,
+  targetGroupId: string,
+  toIndex: number,
+): AutomationContributionGroup[] {
+  const from = findContribution(groups, contributionId);
+  if (!from || !groups.some((group) => group.id === targetGroupId)) return groups;
+  if (from.groupId === targetGroupId) return moveContributionWithinGroup(groups, targetGroupId, contributionId, toIndex);
+  const moved = groups.find((group) => group.id === from.groupId)!.contributions[from.index];
+  return groups.map((group) => {
+    if (group.id === from.groupId) {
+      return { ...group, contributions: group.contributions.filter((contribution) => contribution.id !== contributionId) };
+    }
+    if (group.id === targetGroupId) {
+      const contributions = [...group.contributions];
+      contributions.splice(Math.max(0, Math.min(toIndex, contributions.length)), 0, moved);
+      return { ...group, contributions };
+    }
+    return group;
+  });
+}
+
+export function moveGroup(groups: AutomationContributionGroup[], groupId: string, toIndex: number): AutomationContributionGroup[] {
+  const fromIndex = groups.findIndex((group) => group.id === groupId);
+  if (fromIndex < 0 || toIndex < 0 || toIndex >= groups.length || fromIndex === toIndex) return groups;
+  const next = [...groups];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}

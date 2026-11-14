@@ -125,31 +125,48 @@ describe("ScriptForm", () => {
     });
 
     describe("drag handle", () => {
-      // jsdom has no layout; give each action row a stacked rect so dnd-kit can measure droppables.
+      // jsdom has no layout; stack steps, action rows, and empty-step drop zones so dnd-kit can measure droppables.
       let restoreRects: () => void;
       beforeEach(() => {
         const original = Element.prototype.getBoundingClientRect;
+        const layout = () => {
+          const rects = new Map<Element, { top: number; height: number }>();
+          let y = 0;
+          for (const group of Array.from(document.querySelectorAll("[data-group-id]"))) {
+            const groupTop = y;
+            y += 40;
+            for (const item of Array.from(group.querySelectorAll("[data-contribution-id], [data-testid^='contribution-group-drop-']"))) {
+              rects.set(item, { top: y, height: 30 });
+              y += 40;
+            }
+            rects.set(group, { top: groupTop, height: y - groupTop });
+            y += 10;
+          }
+          return rects;
+        };
         Element.prototype.getBoundingClientRect = function (this: Element) {
-          const rows = Array.from(document.querySelectorAll("[data-contribution-id]"));
-          const row = this.closest("[data-contribution-id]");
-          const index = row ? rows.indexOf(row) : -1;
-          const top = index * 40;
-          return { x: 0, y: top, top, left: 0, width: 300, height: index < 0 ? 0 : 30, right: 300, bottom: top + 30, toJSON: () => ({}) } as DOMRect;
+          const rect = layout().get(this);
+          const top = rect?.top ?? 0;
+          const height = rect?.height ?? 0;
+          return { x: 0, y: top, top, left: 0, width: 300, height, right: 300, bottom: top + height, toJSON: () => ({}) } as DOMRect;
         };
         restoreRects = () => { Element.prototype.getBoundingClientRect = original; };
       });
       afterEach(() => restoreRects());
 
-      const keyboardDrag = async (handle: HTMLElement, steps: string[]) => {
+      const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+      // Rows remount when they change step, so later keys go wherever focus is, as in a real browser.
+      const keyTarget = () => (document.activeElement && document.activeElement.isConnected ? document.activeElement : document.body) as HTMLElement;
+      const keyboardDrag = async (handle: HTMLElement, steps: string[], finish = "Space") => {
         handle.focus();
         fireEvent.keyDown(handle, { code: "Space", key: " " });
-        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+        await settle();
         for (const code of steps) {
-          fireEvent.keyDown(handle, { code, key: code });
-          await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+          fireEvent.keyDown(keyTarget(), { code, key: code });
+          await settle();
         }
-        fireEvent.keyDown(handle, { code: "Space", key: " " });
-        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+        fireEvent.keyDown(keyTarget(), { code: finish, key: finish === "Space" ? " " : finish });
+        await settle();
       };
 
       it("reorders within a step from the keyboard and keeps other steps untouched", async () => {
@@ -180,6 +197,82 @@ describe("ScriptForm", () => {
         expect((screen.getByTestId("contribution-title-0-1") as HTMLInputElement).value).toBe("B edited");
         expect(screen.getByTestId("contribution-0-0").getAttribute("data-contribution-id")).toBe("a");
       });
+
+      it("reorders whole steps from the keyboard without touching their actions", async () => {
+        const onSave = vi.fn();
+        render(<ScriptForm script={ordered} onSave={onSave} />);
+        const handle = screen.getByTestId("drag-group-1");
+        expect(handle.getAttribute("type")).toBe("button");
+        expect(handle.getAttribute("aria-label")).toBe("Drag to reorder Second");
+        await keyboardDrag(handle, ["ArrowUp"]);
+        expect(onSave).not.toHaveBeenCalled();
+
+        const groups = await savedGroups(onSave);
+        expect(groups).toEqual([ordered.contributionGroups![1], ordered.contributionGroups![0]]);
+        expect(groups[0]).toBe(ordered.contributionGroups![1]);
+        expect(groups[1]).toBe(ordered.contributionGroups![0]);
+      });
+
+      it("drags an action into another step and keeps the whole object", async () => {
+        const onSave = vi.fn();
+        render(<ScriptForm script={ordered} onSave={onSave} />);
+        await keyboardDrag(screen.getByTestId("drag-contribution-1-0"), ["ArrowUp"]);
+        expect(screen.getByTestId("contribution-number-0-2").textContent).toBe("1.3");
+
+        const groups = await savedGroups(onSave);
+        expect(groups[0].contributions.map((c) => c.id)).toEqual(["a", "b", "z", "c"]);
+        expect(groups[0].contributions[2]).toBe(other);
+        expect(groups[0].contributions[0]).toBe(siteA);
+        expect(groups[1]).toEqual({ id: "g2", title: "Second", contributions: [] });
+      });
+
+      it("drops an action into an empty step", async () => {
+        const onSave = vi.fn();
+        const withEmpty: Script = {
+          ...ordered,
+          contributionGroups: [
+            ordered.contributionGroups![0],
+            { id: "g3", title: "Empty", contributions: [] },
+          ],
+        };
+        render(<ScriptForm script={withEmpty} onSave={onSave} />);
+        expect(screen.getByTestId("contribution-group-drop-1")).toBeTruthy();
+        await keyboardDrag(screen.getByTestId("drag-contribution-0-0"), ["ArrowDown", "ArrowDown", "ArrowDown"]);
+        expect(screen.queryByTestId("contribution-group-drop-1")).toBeNull();
+
+        const groups = await savedGroups(onSave);
+        expect(groups[0].contributions).toEqual([siteB, siteC]);
+        expect(groups[1].contributions).toEqual([siteA]);
+        expect(groups[1].contributions[0]).toBe(siteA);
+      });
+
+      it("restores the original order when a cross-step drag is cancelled", async () => {
+        const onSaveStateChange = vi.fn();
+        render(<ScriptForm script={ordered} onSave={vi.fn()} onSaveStateChange={onSaveStateChange} />);
+        await keyboardDrag(screen.getByTestId("drag-contribution-1-0"), ["ArrowUp"], "Escape");
+        expect(screen.getByTestId("contribution-1-0").getAttribute("data-contribution-id")).toBe("z");
+        expect(screen.getByTestId("contribution-0-2").getAttribute("data-contribution-id")).toBe("c");
+        expect(onSaveStateChange.mock.lastCall![0].hasUnsavedChanges).toBe(false);
+      });
+    });
+
+    it("moves whole steps with buttons, keeps focus, and never submits", async () => {
+      const onSave = vi.fn();
+      render(<ScriptForm script={ordered} onSave={onSave} />);
+      expect((screen.getByTestId("move-group-up-0") as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByTestId("move-group-down-1") as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId("move-group-down-0").getAttribute("type")).toBe("button");
+
+      fireEvent.click(screen.getByTestId("move-group-down-0"));
+      expect(onSave).not.toHaveBeenCalled();
+      expect(screen.getByTestId("contribution-group-title-0")).toHaveProperty("value", "Second");
+      expect(document.activeElement).toBe(screen.getByTestId("move-group-up-1"));
+      expect(screen.getByTestId("contribution-number-0-0").textContent).toBe("1.1");
+      expect(screen.getByTestId("contribution-number-1-0").textContent).toBe("2.1");
+
+      const groups = await savedGroups(onSave);
+      expect(groups[0]).toBe(ordered.contributionGroups![1]);
+      expect(groups[1]).toBe(ordered.contributionGroups![0]);
     });
   });
 });

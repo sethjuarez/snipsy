@@ -1,18 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { AutomationContribution, AutomationContributionGroup, Script, StreamDeckIcon } from "../types";
-import { findContribution, insertContributionAfter, moveContributionWithinGroup } from "../utils/contributionOrder";
+import { findContribution, insertContributionAfter, moveContributionToGroup, moveContributionWithinGroup, moveGroup } from "../utils/contributionOrder";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
@@ -30,6 +35,8 @@ function defaultContributionGroups(script?: Script): AutomationContributionGroup
 }
 
 type ContributionControl = "up" | "down" | "url";
+type DragKind = "group" | "contribution";
+const GROUP_DROP_SUFFIX = ":drop";
 
 function newOpenSiteContribution(): AutomationContribution {
   return { id: crypto.randomUUID(), kind: "openSite", title: "Open site", url: "https://" };
@@ -40,6 +47,7 @@ interface ContributionRowProps {
   groupIndex: number;
   contributionIndex: number;
   isLast: boolean;
+  dragKind: DragKind | null;
   controlRef: (contributionId: string, control: ContributionControl) => (element: HTMLElement | null) => void;
   onChange: (field: "title" | "url", value: string) => void;
   onMove: (direction: -1 | 1) => void;
@@ -49,8 +57,13 @@ interface ContributionRowProps {
 
 const inputStyle = { backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" };
 
-function SortableContributionRow({ contribution, groupIndex, contributionIndex, isLast, controlRef, onChange, onMove, onInsertBelow, onRemove }: ContributionRowProps) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: contribution.id });
+function SortableContributionRow({ contribution, groupIndex, contributionIndex, isLast, dragKind, controlRef, onChange, onMove, onInsertBelow, onRemove }: ContributionRowProps) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: contribution.id,
+    data: { kind: "contribution" },
+    // Rows are not drop targets while a whole step is being dragged.
+    disabled: { draggable: false, droppable: dragKind === "group" },
+  });
   const stepLabel = `${groupIndex + 1}.${contributionIndex + 1}`;
   const actionName = contribution.title?.trim() || contribution.url || `action ${stepLabel}`;
   const testSuffix = `${groupIndex}-${contributionIndex}`;
@@ -155,6 +168,127 @@ function SortableContributionRow({ contribution, groupIndex, contributionIndex, 
   );
 }
 
+interface SortableGroupProps {
+  group: AutomationContributionGroup;
+  groupIndex: number;
+  groupCount: number;
+  dragKind: DragKind | null;
+  controlRef: (id: string, control: ContributionControl) => (element: HTMLElement | null) => void;
+  onTitleChange: (value: string) => void;
+  onMove: (direction: -1 | 1) => void;
+  onAddAction: () => void;
+  onRemove: () => void;
+  children: ReactNode;
+}
+
+function SortableGroup({ group, groupIndex, groupCount, dragKind, controlRef, onTitleChange, onMove, onAddAction, onRemove, children }: SortableGroupProps) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: group.id,
+    data: { kind: "group" },
+    // Steps only act as drop targets for other steps, so actions land on rows or empty-step zones.
+    disabled: { draggable: false, droppable: dragKind === "contribution" },
+  });
+  const isEmpty = group.contributions.length === 0;
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `${group.id}${GROUP_DROP_SUFFIX}`,
+    data: { kind: "groupDrop", groupId: group.id },
+    disabled: !isEmpty || dragKind === "group",
+  });
+  const stepName = group.title.trim() || `step ${groupIndex + 1}`;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="mb-3 p-3 rounded"
+      style={{
+        backgroundColor: "var(--color-surface-inset)",
+        border: "1px solid var(--color-border-subtle)",
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        position: "relative",
+        zIndex: isDragging ? 1 : undefined,
+      }}
+      data-testid={`contribution-group-${groupIndex}`}
+      data-group-id={group.id}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="p-1 rounded cursor-grab active:cursor-grabbing touch-none"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label={`Drag to reorder ${stepName}`}
+          title="Drag to reorder step"
+          data-testid={`drag-group-${groupIndex}`}
+        >
+          <GripVertical size={14} />
+        </button>
+        <span className="text-sm font-mono tabular-nums" style={{ color: "var(--color-text-secondary)" }} aria-hidden="true" data-testid={`contribution-group-number-${groupIndex}`}>
+          {groupIndex + 1}
+        </span>
+        <input
+          type="text"
+          value={group.title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          className="flex-1 px-2 py-1 rounded text-base"
+          style={inputStyle}
+          aria-label={`Step ${groupIndex + 1} name`}
+          data-testid={`contribution-group-title-${groupIndex}`}
+        />
+        <button
+          ref={controlRef(group.id, "up")}
+          type="button"
+          onClick={() => onMove(-1)}
+          disabled={groupIndex === 0}
+          className="p-1 rounded disabled:opacity-30"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label={`Move ${stepName} up`}
+          title="Move step up"
+          data-testid={`move-group-up-${groupIndex}`}
+        >
+          <ArrowUp size={14} />
+        </button>
+        <button
+          ref={controlRef(group.id, "down")}
+          type="button"
+          onClick={() => onMove(1)}
+          disabled={groupIndex === groupCount - 1}
+          className="p-1 rounded disabled:opacity-30"
+          style={{ color: "var(--color-text-secondary)" }}
+          aria-label={`Move ${stepName} down`}
+          title="Move step down"
+          data-testid={`move-group-down-${groupIndex}`}
+        >
+          <ArrowDown size={14} />
+        </button>
+        <button type="button" onClick={onAddAction} className="text-base font-medium" style={{ color: "var(--color-accent)" }} title="Add an Open site action" data-testid={`add-open-site-${groupIndex}`}>
+          + Add action
+        </button>
+        <button type="button" onClick={onRemove} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-group-${groupIndex}`}>
+          Remove
+        </button>
+      </div>
+      {children}
+      {isEmpty && (
+        <div
+          ref={setDropRef}
+          className="px-3 py-2 rounded text-sm"
+          style={{
+            border: `1px dashed ${isOver ? "var(--color-accent)" : "var(--color-border)"}`,
+            color: "var(--color-text-secondary)",
+          }}
+          data-testid={`contribution-group-drop-${groupIndex}`}
+        >
+          No actions yet. Add one, or drag an action here.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: ScriptFormProps) {
   const [title, setTitle] = useState(script?.title ?? "");
   const [description, setDescription] = useState(script?.description ?? "");
@@ -236,14 +370,93 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleContributionDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
+  const [dragKind, setDragKind] = useState<DragKind | null>(null);
+  const dragSnapshot = useRef<AutomationContributionGroup[] | null>(null);
+
+  const moveContributionGroup = (groupId: string, fromIndex: number, direction: -1 | 1, count: number) => {
+    const toIndex = fromIndex + direction;
+    if (toIndex < 0 || toIndex >= count) return;
+    setContributionGroups((groups) => moveGroup(groups, groupId, toIndex));
+    const atEdge = direction === -1 ? toIndex === 0 : toIndex === count - 1;
+    const control: ContributionControl = direction === -1 ? (atEdge ? "down" : "up") : (atEdge ? "up" : "down");
+    setPendingFocus({ contributionId: groupId, control });
+  };
+
+  const kindOf = (data: { current?: Record<string, unknown> } | undefined) => data?.current?.kind as string | undefined;
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    dragSnapshot.current = contributionGroups;
+    setDragKind(kindOf(active.data) === "group" ? "group" : "contribution");
+  };
+
+  // Moves an action into another step while it is dragged, so it can be dropped anywhere in that step.
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over || kindOf(active.data) !== "contribution") return;
+    const activeId = String(active.id);
     setContributionGroups((groups) => {
-      const from = findContribution(groups, String(active.id));
+      const from = findContribution(groups, activeId);
+      if (!from) return groups;
+      if (kindOf(over.data) === "groupDrop") {
+        const targetGroupId = String(over.data.current?.groupId);
+        return targetGroupId === from.groupId ? groups : moveContributionToGroup(groups, activeId, targetGroupId, 0);
+      }
       const to = findContribution(groups, String(over.id));
-      if (!from || !to || from.groupId !== to.groupId) return groups;
-      return moveContributionWithinGroup(groups, from.groupId, String(active.id), to.index);
+      if (!to || to.groupId === from.groupId) return groups;
+      // Take the hovered row's slot; the keyboard sensor snaps to that row, so the drop then lands in place.
+      return moveContributionToGroup(groups, activeId, to.groupId, to.index);
     });
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setDragKind(null);
+    dragSnapshot.current = null;
+    if (!over || active.id === over.id) return;
+    const activeId = String(active.id);
+    if (kindOf(active.data) === "group") {
+      setContributionGroups((groups) => {
+        const toIndex = groups.findIndex((group) => group.id === String(over.id));
+        return toIndex < 0 ? groups : moveGroup(groups, activeId, toIndex);
+      });
+      return;
+    }
+    setContributionGroups((groups) => {
+      const from = findContribution(groups, activeId);
+      if (!from) return groups;
+      if (kindOf(over.data) === "groupDrop") {
+        return moveContributionToGroup(groups, activeId, String(over.data.current?.groupId), Number.MAX_SAFE_INTEGER);
+      }
+      const to = findContribution(groups, String(over.id));
+      if (!to) return groups;
+      return moveContributionToGroup(groups, activeId, to.groupId, to.index);
+    });
+  };
+
+  const handleDragCancel = () => {
+    if (dragSnapshot.current) setContributionGroups(dragSnapshot.current);
+    dragSnapshot.current = null;
+    setDragKind(null);
+  };
+
+  const describeDragItem = (id: UniqueIdentifier) => {
+    const key = String(id);
+    const groupId = key.endsWith(GROUP_DROP_SUFFIX) ? key.slice(0, -GROUP_DROP_SUFFIX.length) : key;
+    const groupIndex = contributionGroups.findIndex((group) => group.id === groupId);
+    if (groupIndex >= 0) {
+      const name = contributionGroups[groupIndex].title.trim() || `step ${groupIndex + 1}`;
+      return key === groupId ? `step ${groupIndex + 1}, ${name}` : `empty step ${groupIndex + 1}, ${name}`;
+    }
+    const found = findContribution(contributionGroups, key);
+    if (!found) return "item";
+    const group = contributionGroups.find((candidate) => candidate.id === found.groupId)!;
+    const contribution = group.contributions[found.index];
+    return `action ${contributionGroups.indexOf(group) + 1}.${found.index + 1}, ${contribution.title?.trim() || contribution.url}`;
+  };
+
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Picked up ${describeDragItem(active.id)}.`,
+    onDragOver: ({ active, over }) => over ? `${describeDragItem(active.id)} is over ${describeDragItem(over.id)}.` : `${describeDragItem(active.id)} is no longer over a drop target.`,
+    onDragEnd: ({ active, over }) => over ? `Dropped ${describeDragItem(active.id)}.` : `Dropped ${describeDragItem(active.id)} in place.`,
+    onDragCancel: ({ active }) => `Cancelled moving ${describeDragItem(active.id)}.`,
   };
 
   const removeContribution = (groupId: string, contributionId: string) => {
@@ -397,26 +610,29 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
           </p>
         )}
         {contributionGroups.length > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleContributionDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+          accessibility={{ announcements }}
+        >
+        <SortableContext items={contributionGroups.map((group) => group.id)} strategy={verticalListSortingStrategy}>
         {contributionGroups.map((group, groupIndex) => (
-          <div key={group.id} className="mb-3 p-3 rounded" style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border-subtle)" }} data-testid={`contribution-group-${groupIndex}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <input
-                type="text"
-                value={group.title}
-                onChange={(e) => updateContributionGroupTitle(group.id, e.target.value)}
-                className="flex-1 px-2 py-1 rounded text-base"
-                style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
-                aria-label={`Step ${groupIndex + 1} name`}
-                data-testid={`contribution-group-title-${groupIndex}`}
-              />
-              <button type="button" onClick={() => addOpenSiteContribution(group.id)} className="text-base font-medium" style={{ color: "var(--color-accent)" }} title="Add an Open site action" data-testid={`add-open-site-${groupIndex}`}>
-                + Add action
-              </button>
-              <button type="button" onClick={() => removeContributionGroup(group.id)} className="text-base" style={{ color: "var(--color-danger)" }} data-testid={`remove-contribution-group-${groupIndex}`}>
-                Remove
-              </button>
-            </div>
+          <SortableGroup
+            key={group.id}
+            group={group}
+            groupIndex={groupIndex}
+            groupCount={contributionGroups.length}
+            dragKind={dragKind}
+            controlRef={controlRef}
+            onTitleChange={(value) => updateContributionGroupTitle(group.id, value)}
+            onMove={(direction) => moveContributionGroup(group.id, groupIndex, direction, contributionGroups.length)}
+            onAddAction={() => addOpenSiteContribution(group.id)}
+            onRemove={() => removeContributionGroup(group.id)}
+          >
             <SortableContext items={group.contributions.map((contribution) => contribution.id)} strategy={verticalListSortingStrategy}>
               {group.contributions.map((contribution, contributionIndex) => (
                 <SortableContributionRow
@@ -425,6 +641,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                   groupIndex={groupIndex}
                   contributionIndex={contributionIndex}
                   isLast={contributionIndex === group.contributions.length - 1}
+                  dragKind={dragKind}
                   controlRef={controlRef}
                   onChange={(field, value) => updateOpenSiteContribution(group.id, contribution.id, field, value)}
                   onMove={(direction) => moveContribution(group.id, contribution.id, contributionIndex, direction, group.contributions.length)}
@@ -433,8 +650,9 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                 />
               ))}
             </SortableContext>
-          </div>
+          </SortableGroup>
         ))}
+        </SortableContext>
         </DndContext>
         )}
       </div>
