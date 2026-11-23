@@ -36,6 +36,22 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - Fast-type snippets can embed **images** with `{{image:<key>}}` (e.g. `{{image:logo.png}}`). Each image is pasted from the clipboard at that point; images are never humanized. Paste delivery can't include images.
   - Manage images on the **Images** tab under Snippets (import, copy reference, delete). In the snippet editor, **Insert image**, **Import image…**, or paste an image into the text to add it.
   - The editor and pre-demo checklist flag malformed, missing, or paste-mode references.
+- Snippets can include **tokens** that Snipsy fills in when it delivers. Use **Insert token…** in the editor to add them:
+
+  | Token | Becomes |
+  | --- | --- |
+  | `{{cursor}}` | Where the caret ends up after delivery (Snipsy presses Left). One per snippet. |
+  | `{{var:<name>}}` | The value of a project variable (Settings → Project → Variables). |
+  | `{{date}}` / `{{date:<preset>}}` | Today's date. Presets: `short` (the default, locale short date), `long`, `month`, `weekday` (locale-aware), `iso` (`2025-03-14`), `us` (`03/14/2025`), `eu` (`14/03/2025`), `year`. |
+  | `{{time}}` | The current time in the locale's short format. |
+  | `{{clipboard}}` | The clipboard text from *before* Snipsy touched it. |
+  | `{{random:<N>}}` | N (1–64) random lowercase letters and digits. The same `N` repeats the same value across snippets for the whole demo session; outside demo mode it's new on every run. |
+
+  - Tokens must match exactly: lowercase, no spaces inside the braces. Anything else stays literal, so `{{ cursor }}`, `{{name}}`, `{{count}}`, JSX `style={{cursor:'pointer'}}`, and `${{ secrets.X }}` are typed as written.
+  - A known token with a bad argument (an unknown date preset, an undefined variable, `{{random:0}}`) is an error. The editor and pre-demo checklist show it, and delivery refuses to start, so nothing is half-typed.
+  - **Type literally** turns tokens off for a snippet. There's no escape syntax.
+  - `{{cursor}}` counts characters after it, so editors that auto-indent or auto-close brackets can leave the caret in the wrong place. It can't come before an image.
+- **Clipboard protection.** Paste delivery and pasted images use the clipboard. Snipsy saves the clipboard once per delivery and puts it back afterward (all formats on Windows; text and images elsewhere). If you copy something while Snipsy is delivering, your copy wins and nothing is restored. On Windows, Snipsy's own clipboard writes stay out of clipboard history (Win+V) and cloud sync.
 
 ### Video Snippets
 
@@ -82,8 +98,9 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 ### Settings
 
 - The title-bar gear (or **Ctrl/Cmd+,**) opens Settings, with or without a project. Search filters its sections.
-- **Project** (rename the open project or edit its description; also **Rename project** in the palette), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
+- **Project** (rename the open project or edit its description, also **Rename project** in the palette; edit project **Variables** for `{{var:<name>}}`), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off; **Restore clipboard after paste**, on by default, and the **restore delay**, 100–5000 ms, default 500, which slow targets like browsers or remote sessions may need raised), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
 - The title-bar shield, shown when Snipsy isn't elevated, opens Permissions.
+- App-wide settings that the backend needs (clipboard restore) live in `settings.json` in Snipsy's app data folder, not in a project.
 
 ## Data Model
 
@@ -124,12 +141,31 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 }
 ```
 
+- `raw` (optional): `true` types the text exactly as written, without filling in tokens. Omitted means tokens are filled in.
+
 - `delivery`: `"fast-type"` or `"paste"`.
 - `typeDelay` (optional, fast-type only): Milliseconds between simulated keystrokes.
 - `typoChance` (optional, fast-type only): Percent chance (0–20) that a letter or digit is mistyped and corrected. Omitted means off.
 - `typeVariation` (optional, fast-type only): Percent (0–100) that key timing drifts from `typeDelay`. Omitted means off.
 - `shiftEnter` (optional, fast-type only): `true` types line breaks as Shift+Enter, so chat apps add a line instead of sending. Omitted means Enter.
-- `text` may contain `{{image:<key>}}` references to files in `images/` (lowercase `a-z0-9-` name, `.png`/`.jpg`/`.jpeg`). Fast-type only. Other `{{…}}` text is typed literally.
+- `text` may contain `{{image:<key>}}` references to files in `images/` (lowercase `a-z0-9-` name, `.png`/`.jpg`/`.jpeg`). Fast-type only.
+- `text` may also contain the tokens listed under [Text Snippets](#text-snippets). Other `{{…}}` text is typed literally.
+
+### Project Schema
+
+```json
+{
+  "name": "Contoso keynote",
+  "description": "Build 2025 demo",
+  "tokenGrammar": 1,
+  "variables": [
+    { "name": "host", "value": "contoso.example.com", "description": "Demo tenant" }
+  ]
+}
+```
+
+- `variables` (optional): Values for `{{var:<name>}}`. Names are lowercase `a-z0-9`, `-`, or `_`, start with a letter or digit, are at most 64 characters, and must be unique. Values are inserted as written.
+- `tokenGrammar` (optional): The token version the project was saved with. Snipsy warns in the pre-demo checklist when a project comes from a newer version. Unknown fields are kept when Snipsy saves.
 
 ### Video Snippet Schema
 
