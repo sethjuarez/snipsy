@@ -550,7 +550,7 @@ pub fn prepare_text(
         raw,
         clipboard_guard::system(),
         app_settings::current(),
-        &mut tokens::random_value,
+        &mut tokens::random_for_delivery(),
     )
 }
 

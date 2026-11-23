@@ -118,15 +118,30 @@ impl ClipboardGuard {
     pub fn write_text(&mut self, text: &str) -> Result<(), String> {
         self.note_external_change();
         self.wrote = true;
-        self.written = self.backend.write_text(text)?;
-        Ok(())
+        let result = self.backend.write_text(text);
+        self.record_write(result)
     }
 
     pub fn write_image(&mut self, image: &DecodedImage) -> Result<(), String> {
         self.note_external_change();
         self.wrote = true;
-        self.written = self.backend.write_image(image)?;
-        Ok(())
+        let result = self.backend.write_image(image);
+        self.record_write(result)
+    }
+
+    /// A failed write may already have emptied the clipboard, so remember
+    /// where it stands now; `finish` can still put the snapshot back.
+    fn record_write(&mut self, result: Result<Option<u64>, String>) -> Result<(), String> {
+        match result {
+            Ok(sequence) => {
+                self.written = sequence;
+                Ok(())
+            }
+            Err(error) => {
+                self.written = self.backend.sequence();
+                Err(error)
+            }
+        }
     }
 
     /// Call right before pressing paste.
@@ -676,6 +691,8 @@ pub mod fake {
         pub sequence: u64,
         pub restores: usize,
         pub fail_snapshot: bool,
+        /// Empties the clipboard, then fails, like `SetClipboardData` can.
+        pub fail_write: bool,
     }
 
     impl State {
@@ -729,6 +746,11 @@ pub mod fake {
 
         fn write_text(&mut self, text: &str) -> Result<Option<u64>, String> {
             let mut state = self.0.lock().unwrap();
+            if state.fail_write {
+                state.contents.clear();
+                state.sequence += 1;
+                return Err("SetClipboardData failed".into());
+            }
             state.copy(text);
             Ok(Some(state.sequence))
         }
@@ -804,6 +826,17 @@ mod tests {
         guard.finish();
         assert_eq!(state.lock().unwrap().text().as_deref(), Some("mine"));
         assert_eq!(state.lock().unwrap().restores, 1);
+    }
+
+    #[test]
+    fn restores_after_a_write_that_emptied_the_clipboard_then_failed() {
+        let state = Arc::new(Mutex::new(State::with_text("mine")));
+        let mut guard = guard(&state, true, false).unwrap();
+        state.lock().unwrap().fail_write = true;
+        assert!(guard.write_text("snippet").is_err());
+        assert_eq!(state.lock().unwrap().text(), None);
+        guard.finish();
+        assert_eq!(state.lock().unwrap().text().as_deref(), Some("mine"));
     }
 
     #[test]

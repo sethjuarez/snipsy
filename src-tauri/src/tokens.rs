@@ -92,7 +92,13 @@ pub fn resolve(
                 .unwrap_or_default(),
             Segment::Date(preset) => format_date(preset, &values.now),
             Segment::Time => format_time(&values.now),
-            Segment::Clipboard => values.clipboard.ok_or(NO_CLIPBOARD_TEXT)?.to_string(),
+            // Windows clipboard text uses CRLF; snippets use LF, and a typed
+            // CR would add a second line break.
+            Segment::Clipboard => values
+                .clipboard
+                .ok_or(NO_CLIPBOARD_TEXT)?
+                .replace("\r\n", "\n")
+                .replace('\r', "\n"),
             Segment::Random(length) => random(*length),
         };
         if let Some(tail) = after_cursor.as_mut() {
@@ -140,6 +146,18 @@ pub fn start_demo_session() {
 pub fn end_demo_session() {
     if let Ok(mut session) = DEMO_RANDOM.lock() {
         *session = None;
+    }
+}
+
+/// One value per length for a single delivery, so repeated `{{random:N}}`
+/// tokens agree even outside a demo session.
+pub fn random_for_delivery() -> impl FnMut(u32) -> String {
+    let mut values: HashMap<u32, String> = HashMap::new();
+    move |length| {
+        values
+            .entry(length)
+            .or_insert_with(|| random_value(length))
+            .clone()
     }
 }
 
@@ -429,6 +447,31 @@ mod tests {
             String::new()
         });
         assert_eq!(err.unwrap_err(), NO_CLIPBOARD_TEXT);
+    }
+
+    #[test]
+    fn clipboard_line_endings_become_lf() {
+        let values = Values {
+            variables: &[],
+            now: now(),
+            clipboard: Some("one\r\ntwo\rthree"),
+        };
+        let resolved = resolve(
+            &parse("{{cursor}}{{clipboard}}").unwrap(),
+            &values,
+            &mut |_| String::new(),
+        )
+        .unwrap();
+        assert_eq!(resolved.text(), "one\ntwo\nthree");
+        assert_eq!(resolved.cursor_back, 13);
+    }
+
+    #[test]
+    fn repeated_random_tokens_agree_within_one_delivery() {
+        let mut random = random_for_delivery();
+        let first = random(8);
+        assert_eq!(first, random(8));
+        assert_eq!(random(6).len(), 6);
     }
 
     #[test]
