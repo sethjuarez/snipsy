@@ -1,5 +1,4 @@
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-use std::borrow::Cow;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -8,9 +7,12 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 
+use crate::app_settings::{self, AppSettings};
+use crate::clipboard_guard::{self, Clipboard, ClipboardGuard};
 use crate::focus;
 use crate::images::{self, DecodedImage};
 use crate::snippet_text::{self, Segment};
+use crate::tokens::{self, Piece, Resolved};
 use crate::typing::{self, Action, FastTypeOptions, Step};
 use tauri_plugin_auditaur::IpcTraceContext;
 
@@ -139,6 +141,8 @@ trait KeyOutput {
     fn type_char(&mut self, ch: char) -> Result<(), String>;
     fn backspace(&mut self) -> Result<(), String>;
     fn paste_image(&mut self, image: &DecodedImage) -> Result<(), String>;
+    /// Moves the caret one character left, for `{{cursor}}`.
+    fn move_left(&mut self) -> Result<(), String>;
 }
 
 /// Presses Ctrl+V (Cmd+V on macOS).
@@ -159,10 +163,10 @@ fn press_paste(enigo: &mut Enigo) -> Result<(), String> {
     pressed.and(released)
 }
 
-struct EnigoOutput {
+struct EnigoOutput<'a> {
     enigo: Enigo,
     focus_ctx: Option<focus::FocusContext>,
-    clipboard: Option<arboard::Clipboard>,
+    clipboard: &'a mut ClipboardGuard,
     shift_enter: bool,
 }
 
@@ -187,7 +191,7 @@ fn keystroke_for(ch: char, shift_enter: bool) -> Keystroke {
     }
 }
 
-impl EnigoOutput {
+impl EnigoOutput<'_> {
     /// Refocuses the target if another window took focus. Fails rather than
     /// send keys to the wrong window when the target can't be brought back.
     fn ensure_focused(&self) -> Result<(), String> {
@@ -200,7 +204,7 @@ impl EnigoOutput {
     }
 }
 
-impl KeyOutput for EnigoOutput {
+impl KeyOutput for EnigoOutput<'_> {
     fn type_char(&mut self, ch: char) -> Result<(), String> {
         self.ensure_focused()?;
         match keystroke_for(ch, self.shift_enter) {
@@ -239,25 +243,20 @@ impl KeyOutput for EnigoOutput {
 
     fn paste_image(&mut self, image: &DecodedImage) -> Result<(), String> {
         self.ensure_focused()?;
-        if self.clipboard.is_none() {
-            self.clipboard = Some(
-                arboard::Clipboard::new()
-                    .map_err(|e| format!("Failed to access clipboard: {e}"))?,
-            );
-        }
-        let clipboard = self.clipboard.as_mut().expect("clipboard was just set");
-        clipboard
-            .set_image(arboard::ImageData {
-                width: image.width,
-                height: image.height,
-                bytes: Cow::Borrowed(&image.rgba),
-            })
-            .map_err(|e| format!("Failed to copy image to the clipboard: {e}"))?;
+        self.clipboard.write_image(image)?;
+        self.clipboard.pasting();
         press_paste(&mut self.enigo)?;
         // Not cancellable: the target must read the clipboard before anything
         // else can replace it.
         thread::sleep(Duration::from_millis(IMAGE_SETTLE_MS));
         Ok(())
+    }
+
+    fn move_left(&mut self) -> Result<(), String> {
+        self.ensure_focused()?;
+        self.enigo
+            .key(Key::LeftArrow, Direction::Click)
+            .map_err(|e| format!("Failed to press Left: {e}"))
     }
 }
 
@@ -272,22 +271,22 @@ enum Op {
     Image(usize),
 }
 
-fn plan_ops(segments: &[Segment], image_index: &[String], options: &FastTypeOptions) -> Vec<Op> {
+fn plan_ops(pieces: &[Piece], image_index: &[String], options: &FastTypeOptions) -> Vec<Op> {
     let mut rng = fastrand::Rng::new();
-    plan_ops_with(segments, image_index, options, &mut rng)
+    plan_ops_with(pieces, image_index, options, &mut rng)
 }
 
 fn plan_ops_with(
-    segments: &[Segment],
+    pieces: &[Piece],
     image_index: &[String],
     options: &FastTypeOptions,
     rng: &mut fastrand::Rng,
 ) -> Vec<Op> {
-    segments
+    pieces
         .iter()
-        .map(|segment| match segment {
-            Segment::Text(text) => Op::Keys(typing::plan(text, options, rng)),
-            Segment::Image(key) => Op::Image(
+        .map(|piece| match piece {
+            Piece::Text(text) => Op::Keys(typing::plan(text, options, rng)),
+            Piece::Image(key) => Op::Image(
                 image_index
                     .iter()
                     .position(|loaded| loaded == key)
@@ -318,14 +317,40 @@ fn run_ops(
     Ok(())
 }
 
-fn deliver_fast_type_with_cancel(
-    segments: &[Segment],
-    image_keys: &[String],
+/// Runs the ops, then moves the caret back to `{{cursor}}`. The caret only
+/// moves after the whole snippet is typed, never after a stop or failure.
+fn run_ops_then_place_cursor(
+    ops: &[Op],
     images: &[DecodedImage],
+    cursor_back: usize,
+    output: &mut impl KeyOutput,
+    cancel_token: Option<&Arc<AtomicBool>>,
+    cleanup_delay_ms: u64,
+) -> Result<(), String> {
+    run_ops(ops, images, output, cancel_token, cleanup_delay_ms)?;
+    move_cursor_back(cursor_back, output, cancel_token)
+}
+
+fn move_cursor_back(
+    count: usize,
+    output: &mut impl KeyOutput,
+    cancel_token: Option<&Arc<AtomicBool>>,
+) -> Result<(), String> {
+    for _ in 0..count {
+        if is_cancelled(cancel_token) {
+            return Ok(());
+        }
+        output.move_left()?;
+    }
+    Ok(())
+}
+
+fn deliver_fast_type_with_cancel(
+    prepared: &mut PreparedText,
     options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
 ) -> Result<(), String> {
-    let ops = plan_ops(segments, image_keys, &options);
+    let ops = plan_ops(&prepared.resolved.pieces, &prepared.image_keys, &options);
     let steps: Vec<Step> = ops
         .iter()
         .filter_map(|op| match op {
@@ -336,15 +361,10 @@ fn deliver_fast_type_with_cancel(
         .copied()
         .collect();
     let summary = typing::summarize(&steps);
-    let chars: usize = segments
-        .iter()
-        .map(|segment| match segment {
-            Segment::Text(text) => text.chars().count(),
-            Segment::Image(_) => 0,
-        })
-        .sum();
+    let chars = prepared.resolved.text().chars().count();
     tracing::info!(
         chars,
+        cursor_back = prepared.resolved.cursor_back,
         images = ops.iter().filter(|op| matches!(op, Op::Image(_))).count(),
         keystrokes = summary.keystrokes,
         typos = summary.typos,
@@ -371,14 +391,15 @@ fn deliver_fast_type_with_cancel(
     let mut output = EnigoOutput {
         enigo,
         focus_ctx,
-        clipboard: None,
+        clipboard: &mut prepared.clipboard,
         shift_enter: options.shift_enter,
     };
     let cleanup_delay_ms = u64::from(options.delay_ms.min(MAX_CLEANUP_DELAY_MS));
     let started = std::time::Instant::now();
-    let result = run_ops(
+    let result = run_ops_then_place_cursor(
         &ops,
-        images,
+        &prepared.images,
+        prepared.resolved.cursor_back,
         &mut output,
         cancel_token.as_ref(),
         cleanup_delay_ms,
@@ -463,12 +484,8 @@ const PASTE_SETTLE_MS: u64 = 200;
 
 /// Deliver text using paste (clipboard + Ctrl+V).
 /// Blocks user input briefly during the paste action.
-fn deliver_paste(text: &str) -> Result<(), String> {
-    let mut clipboard =
-        arboard::Clipboard::new().map_err(|e| format!("Failed to access clipboard: {e}"))?;
-    clipboard
-        .set_text(text)
-        .map_err(|e| format!("Failed to set clipboard text: {e}"))?;
+fn deliver_paste(prepared: &mut PreparedText) -> Result<(), String> {
+    prepared.clipboard.write_text(&prepared.resolved.text())?;
 
     let focus_ctx = focus::capture_focused_window();
     if let Some(ref ctx) = focus_ctx {
@@ -482,9 +499,15 @@ fn deliver_paste(text: &str) -> Result<(), String> {
 
     // Release any held modifier keys from the hotkey trigger
     release_modifiers(&mut enigo);
+    prepared.clipboard.pasting();
     press_paste(&mut enigo)?;
 
     thread::sleep(Duration::from_millis(PASTE_SETTLE_MS));
+    for _ in 0..prepared.resolved.cursor_back {
+        enigo
+            .key(Key::LeftArrow, Direction::Click)
+            .map_err(|e| format!("Failed to press Left: {e}"))?;
+    }
     // _guard drops here → unblocks input
     Ok(())
 }
@@ -494,77 +517,113 @@ pub const PASTE_WITH_IMAGES: &str =
     "Paste delivery can't include images. Switch this snippet to Fast-type.";
 const IMAGES_NEED_PROJECT: &str = "Images can only be delivered from an open project.";
 
+const VARIABLES_NEED_PROJECT: &str = "Variables can only be delivered from an open project.";
+
 enum Method {
     FastType,
     Paste,
 }
 
-/// Snippet text checked and ready to deliver, with every referenced image
-/// already loaded, so missing or broken images fail before any keystroke.
+/// Snippet text checked and ready to deliver: tokens resolved and every
+/// referenced image loaded, so problems fail before any keystroke.
 pub struct PreparedText {
     method: Method,
-    text: String,
-    segments: Vec<Segment>,
+    resolved: Resolved,
     image_keys: Vec<String>,
     images: Vec<DecodedImage>,
+    /// Holds the clipboard as it was before delivery, restored afterwards.
+    clipboard: ClipboardGuard,
 }
 
+/// Call while holding the delivery permit: it saves the clipboard, which the
+/// delivery will restore.
 pub fn prepare_text(
     text: &str,
     method: &str,
     project_path: Option<&str>,
+    raw: bool,
+) -> Result<PreparedText, String> {
+    prepare_with(
+        text,
+        method,
+        project_path,
+        raw,
+        clipboard_guard::system(),
+        app_settings::current(),
+        &mut tokens::random_value,
+    )
+}
+
+fn prepare_with(
+    text: &str,
+    method: &str,
+    project_path: Option<&str>,
+    raw: bool,
+    clipboard: Box<dyn Clipboard>,
+    settings: AppSettings,
+    random: &mut impl FnMut(u32) -> String,
 ) -> Result<PreparedText, String> {
     let method = match method {
         "fast-type" => Method::FastType,
         "paste" => Method::Paste,
         _ => return Err(format!("Unknown delivery method: {method}")),
     };
-    let segments = snippet_text::parse(text)?;
+    let segments = snippet_text::parse_snippet(text, raw)?;
+    let project_dir = project_path.filter(|path| !path.trim().is_empty());
     let mut image_keys: Vec<String> = Vec::new();
     for key in snippet_text::image_keys(&segments) {
         if !image_keys.iter().any(|loaded| loaded == key) {
             image_keys.push(key.to_string());
         }
     }
+    if !image_keys.is_empty() && matches!(method, Method::Paste) {
+        return Err(PASTE_WITH_IMAGES.into());
+    }
+    let variables = if segments.iter().any(|s| matches!(s, Segment::Var(_))) {
+        let dir = project_dir.ok_or(VARIABLES_NEED_PROJECT)?;
+        crate::commands::load_project_variables(Path::new(dir))?
+    } else {
+        Vec::new()
+    };
     let mut images = Vec::new();
     if !image_keys.is_empty() {
-        if matches!(method, Method::Paste) {
-            return Err(PASTE_WITH_IMAGES.into());
-        }
-        let project_dir = project_path
-            .filter(|path| !path.trim().is_empty())
-            .ok_or(IMAGES_NEED_PROJECT)?;
+        let dir = project_dir.ok_or(IMAGES_NEED_PROJECT)?;
         for key in &image_keys {
-            images.push(images::load_decoded(Path::new(project_dir), key)?);
+            images.push(images::load_decoded(Path::new(dir), key)?);
         }
     }
+    let will_write = matches!(method, Method::Paste) || !images.is_empty();
+    let needs_text = segments.iter().any(|s| matches!(s, Segment::Clipboard));
+    let clipboard = ClipboardGuard::begin(clipboard, settings, will_write, needs_text)?;
+    let values = tokens::Values {
+        variables: &variables,
+        now: chrono::Local::now(),
+        clipboard: clipboard.text(),
+    };
+    let resolved = tokens::resolve(&segments, &values, random)?;
     Ok(PreparedText {
         method,
-        text: text.to_string(),
-        segments,
+        resolved,
         image_keys,
         images,
+        clipboard,
     })
 }
 
 /// Delivers prepared text under a permit the caller already holds. The
-/// permit is released when delivery returns.
+/// clipboard is restored, and then the permit released, before returning.
 pub fn deliver_prepared(
     _permit: DeliveryPermit,
-    prepared: &PreparedText,
+    mut prepared: PreparedText,
     options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
 ) -> Result<(), String> {
-    match prepared.method {
-        Method::FastType => deliver_fast_type_with_cancel(
-            &prepared.segments,
-            &prepared.image_keys,
-            &prepared.images,
-            options,
-            cancel_token,
-        ),
-        Method::Paste => deliver_paste(&prepared.text),
-    }
+    let result = match prepared.method {
+        Method::FastType => deliver_fast_type_with_cancel(&mut prepared, options, cancel_token),
+        Method::Paste => deliver_paste(&mut prepared),
+    };
+    prepared.clipboard.finish();
+    result
 }
 
 #[tauri::command]
@@ -578,6 +637,7 @@ pub fn deliver_text(
     type_variation: Option<u32>,
     shift_enter: Option<bool>,
     project_path: Option<String>,
+    raw: Option<bool>,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<(), String> {
     deliver_text_with_permit(
@@ -585,6 +645,7 @@ pub fn deliver_text(
         &text,
         &method,
         project_path.as_deref(),
+        raw.unwrap_or(false),
         FastTypeOptions::new(type_delay, typo_chance, type_variation, shift_enter),
         None,
     )
@@ -596,11 +657,12 @@ pub fn deliver_text_with_permit(
     text: &str,
     method: &str,
     project_path: Option<&str>,
+    raw: bool,
     options: FastTypeOptions,
     cancel_token: Option<Arc<AtomicBool>>,
 ) -> Result<(), String> {
-    let prepared = prepare_text(text, method, project_path)?;
-    deliver_prepared(permit, &prepared, options, cancel_token)
+    let prepared = prepare_text(text, method, project_path, raw)?;
+    deliver_prepared(permit, prepared, options, cancel_token)
 }
 
 #[cfg(test)]
@@ -612,6 +674,7 @@ mod tests {
         let result = deliver_text(
             "hello".into(),
             "unknown".into(),
+            None,
             None,
             None,
             None,
@@ -662,7 +725,8 @@ mod tests {
         static GATE: DeliveryGate = DeliveryGate::new();
         let permit = GATE.try_enter().unwrap();
         let options = FastTypeOptions::new(None, None, None, None);
-        let result = deliver_text_with_permit(permit, "hello", "unknown", None, options, None);
+        let result =
+            deliver_text_with_permit(permit, "hello", "unknown", None, false, options, None);
         assert!(result.unwrap_err().contains("Unknown delivery method"));
         assert!(GATE.try_enter().is_ok());
     }
@@ -687,6 +751,7 @@ mod tests {
     #[derive(Default)]
     struct FakeOutput {
         screen: Vec<Cell>,
+        lefts: usize,
         keystrokes: usize,
         cancel_after: Option<usize>,
         fail_at: Option<usize>,
@@ -736,6 +801,12 @@ mod tests {
         fn paste_image(&mut self, image: &DecodedImage) -> Result<(), String> {
             self.press()?;
             self.screen.push(Cell::Image(image.width));
+            Ok(())
+        }
+
+        fn move_left(&mut self) -> Result<(), String> {
+            self.press()?;
+            self.lefts += 1;
             Ok(())
         }
     }
@@ -831,7 +902,15 @@ mod tests {
     }
 
     fn image_plan(seed: u64) -> (Vec<Op>, Vec<DecodedImage>, Vec<Cell>) {
-        let segments = snippet_text::parse(IMAGE_TEXT).unwrap();
+        let segments: Vec<Piece> = snippet_text::parse(IMAGE_TEXT)
+            .unwrap()
+            .into_iter()
+            .map(|segment| match segment {
+                Segment::Text(text) => Piece::Text(text),
+                Segment::Image(key) => Piece::Image(key),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
         let keys = vec!["one.png".to_string(), "two.png".to_string()];
         let options = FastTypeOptions {
             delay_ms: 0,
@@ -848,8 +927,8 @@ mod tests {
         let expected = segments
             .iter()
             .flat_map(|segment| match segment {
-                Segment::Text(text) => text.chars().map(Cell::Char).collect::<Vec<_>>(),
-                Segment::Image(key) => {
+                Piece::Text(text) => text.chars().map(Cell::Char).collect::<Vec<_>>(),
+                Piece::Image(key) => {
                     vec![Cell::Image(keys.iter().position(|k| k == key).unwrap())]
                 }
             })
@@ -917,7 +996,11 @@ mod tests {
 
     fn project_with_image() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("project.json"), r#"{"name":"Demo"}"#).unwrap();
+        std::fs::write(
+            dir.path().join("project.json"),
+            r#"{"name":"Demo","variables":[{"name":"host","value":"contoso.com"}]}"#,
+        )
+        .unwrap();
         let images_dir = dir.path().join(images::IMAGES_DIR);
         std::fs::create_dir_all(&images_dir).unwrap();
         image::RgbaImage::from_pixel(2, 3, image::Rgba([1, 2, 3, 255]))
@@ -926,12 +1009,40 @@ mod tests {
         dir
     }
 
+    type FakeState = std::sync::Arc<std::sync::Mutex<clipboard_guard::fake::State>>;
+
+    fn prepare_on(
+        state: &FakeState,
+        text: &str,
+        method: &str,
+        path: Option<&str>,
+        raw: bool,
+    ) -> Result<PreparedText, String> {
+        prepare_with(
+            text,
+            method,
+            path,
+            raw,
+            Box::new(clipboard_guard::fake::FakeClipboard(state.clone())),
+            AppSettings {
+                restore_clipboard: true,
+                clipboard_restore_delay_ms: 0,
+            },
+            &mut |n| "x".repeat(n as usize),
+        )
+    }
+
+    fn prepare(text: &str, method: &str, path: Option<&str>) -> Result<PreparedText, String> {
+        let state = FakeState::new(clipboard_guard::fake::State::with_text("copied").into());
+        prepare_on(&state, text, method, path, false)
+    }
+
     #[test]
     fn prepare_loads_each_referenced_image_once() {
         let dir = project_with_image();
         let path = dir.path().to_str();
         let prepared =
-            prepare_text("a{{image:logo.png}}b{{image:logo.png}}", "fast-type", path).unwrap();
+            prepare("a{{image:logo.png}}b{{image:logo.png}}", "fast-type", path).unwrap();
         assert_eq!(prepared.image_keys, ["logo.png"]);
         assert_eq!(prepared.images.len(), 1);
         assert_eq!(
@@ -945,7 +1056,7 @@ mod tests {
         let dir = project_with_image();
         let path = dir.path().to_str();
         let error = |text: &str, method: &str, path: Option<&str>| {
-            prepare_text(text, method, path).err().unwrap()
+            prepare(text, method, path).err().unwrap()
         };
         assert_eq!(
             error("{{image:logo.png}}", "paste", path),
@@ -963,8 +1074,94 @@ mod tests {
     #[test]
     fn prepare_accepts_plain_text_without_a_project() {
         for method in ["fast-type", "paste"] {
-            let prepared = prepare_text("Hello {{name}}", method, None).unwrap();
+            let prepared = prepare("Hello {{name}}", method, None).unwrap();
             assert!(prepared.images.is_empty());
+            assert_eq!(prepared.resolved.text(), "Hello {{name}}");
         }
+    }
+
+    #[test]
+    fn prepare_resolves_tokens_before_any_keystroke() {
+        let dir = project_with_image();
+        let path = dir.path().to_str();
+        let prepared = prepare(
+            "https://{{var:host}}/{{random:4}}?q={{clipboard}}&n={{cursor}}{{random:4}}",
+            "paste",
+            path,
+        )
+        .unwrap();
+        assert_eq!(
+            prepared.resolved.text(),
+            "https://contoso.com/xxxx?q=copied&n=xxxx"
+        );
+        assert_eq!(prepared.resolved.cursor_back, 4);
+
+        assert_eq!(
+            prepare("{{var:host}}", "paste", None).err().unwrap(),
+            VARIABLES_NEED_PROJECT
+        );
+        assert!(prepare("{{var:nope}}", "fast-type", path)
+            .err()
+            .unwrap()
+            .contains("Undefined variable: nope"));
+        assert!(prepare("{{date:fancy}}", "fast-type", None).is_err());
+    }
+
+    #[test]
+    fn raw_snippets_deliver_tokens_literally() {
+        let state = FakeState::new(clipboard_guard::fake::State::with_text("copied").into());
+        let prepared = prepare_on(&state, "{{cursor}}{{var:x}}", "paste", None, true).unwrap();
+        assert_eq!(prepared.resolved.text(), "{{cursor}}{{var:x}}");
+        assert_eq!(prepared.resolved.cursor_back, 0);
+    }
+
+    #[test]
+    fn clipboard_token_reads_the_clipboard_before_snipsy_writes() {
+        let state = FakeState::new(clipboard_guard::fake::State::with_text("before").into());
+        let mut prepared = prepare_on(&state, "[{{clipboard}}]", "paste", None, false).unwrap();
+        assert_eq!(prepared.resolved.text(), "[before]");
+        prepared.clipboard.write_text("[before]").unwrap();
+        prepared.clipboard.finish();
+        assert_eq!(state.lock().unwrap().text().as_deref(), Some("before"));
+
+        let empty = FakeState::default();
+        assert_eq!(
+            prepare_on(&empty, "{{clipboard}}", "fast-type", None, false)
+                .err()
+                .unwrap(),
+            clipboard_guard::NO_CLIPBOARD_TEXT
+        );
+    }
+
+    #[test]
+    fn the_caret_moves_back_only_after_a_complete_run() {
+        let options = FastTypeOptions {
+            delay_ms: 0,
+            typo_chance: 0,
+            variation: 0,
+            shift_enter: false,
+        };
+        let ops = plan_ops(&[Piece::Text("f(x)".into())], &[], &options);
+
+        let mut output = FakeOutput::default();
+        run_ops_then_place_cursor(&ops, &[], 2, &mut output, None, 0).unwrap();
+        assert_eq!((output.typed().as_str(), output.lefts), ("f(x)", 2));
+
+        for cancel_after in 1..=4 {
+            let mut output = FakeOutput {
+                cancel_after: Some(cancel_after),
+                ..FakeOutput::default()
+            };
+            let cancel = output.cancel.clone();
+            run_ops_then_place_cursor(&ops, &[], 2, &mut output, Some(&cancel), 0).unwrap();
+            assert_eq!(output.lefts, 0, "cancelled after {cancel_after}");
+        }
+
+        let mut output = FakeOutput {
+            fail_at: Some(1),
+            ..FakeOutput::default()
+        };
+        assert!(run_ops_then_place_cursor(&ops, &[], 2, &mut output, None, 0).is_err());
+        assert_eq!(output.lefts, 0);
     }
 }

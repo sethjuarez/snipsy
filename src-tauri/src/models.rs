@@ -1,9 +1,27 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Token grammar version this build understands. A project saved by a newer
+/// Snipsy may use tokens this build would type literally.
+pub const TOKEN_GRAMMAR: u32 = 1;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Project {
     pub name: String,
     pub description: String,
+    /// Values for `{{var:name}}` tokens.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<ProjectVariable>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_grammar: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProjectVariable {
+    pub name: String,
+    pub value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -26,6 +44,9 @@ pub struct TextSnippet {
     /// Type line breaks as Shift+Enter so chat apps don't send (fast-type only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shift_enter: Option<bool>,
+    /// "Type literally": deliver `{{...}}` tokens as written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_deck_icon: Option<StreamDeckIcon>,
 }
@@ -220,10 +241,28 @@ mod tests {
         let project = Project {
             name: "My Demo".into(),
             description: "A test project".into(),
+            variables: vec![ProjectVariable {
+                name: "host".into(),
+                value: "contoso.com".into(),
+                description: None,
+            }],
+            token_grammar: Some(TOKEN_GRAMMAR),
         };
         let json = serde_json::to_string(&project).unwrap();
+        assert!(json.contains("\"tokenGrammar\":1"), "{json}");
         let deserialized: Project = serde_json::from_str(&json).unwrap();
         assert_eq!(project, deserialized);
+    }
+
+    #[test]
+    fn older_projects_load_without_variables() {
+        let project: Project = serde_json::from_str(r#"{"name":"Old","description":""}"#).unwrap();
+        assert!(project.variables.is_empty());
+        assert_eq!(project.token_grammar, None);
+        assert_eq!(
+            serde_json::to_string(&project).unwrap(),
+            r#"{"name":"Old","description":""}"#
+        );
     }
 
     #[test]
