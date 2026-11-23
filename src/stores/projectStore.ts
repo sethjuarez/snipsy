@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ProjectData,
+  ProjectVariable,
   Script,
   TextSnippet,
   VideoSnippet,
@@ -48,6 +49,8 @@ interface ProjectState {
   projectPath: string | null;
   projectName: string | null;
   projectDescription: string | null;
+  projectVariables: ProjectVariable[];
+  projectTokenGrammar: number | null;
   textSnippets: TextSnippet[];
   videoSnippets: VideoSnippet[];
   automations: Script[];
@@ -62,6 +65,8 @@ interface ProjectState {
   openProject: (path: string) => Promise<void>;
   /** Rename the open project or change its description. */
   updateProject: (name: string, description: string) => Promise<void>;
+  /** Replace the project's `{{var:name}}` values. */
+  setProjectVariables: (variables: ProjectVariable[]) => Promise<void>;
   closeProject: () => void;
   autoOpenLastProject: () => Promise<boolean>;
   loadRecentProjects: () => void;
@@ -97,6 +102,8 @@ function applyProjectData(
     projectPath: path,
     projectName: data.project.name,
     projectDescription: data.project.description,
+    projectVariables: data.project.variables ?? [],
+    projectTokenGrammar: data.project.tokenGrammar ?? null,
     textSnippets: data.textSnippets,
     videoSnippets: data.videoSnippets,
   });
@@ -125,6 +132,7 @@ export function buildDemoHotkeys(
       typoChance: s.typoChance,
       typeVariation: s.typeVariation,
       shiftEnter: s.shiftEnter,
+      raw: s.raw,
       projectPath: projectPath ?? undefined,
     })),
     ...videoSnippets.map((s) => ({
@@ -168,6 +176,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectPath: null,
   projectName: null,
   projectDescription: null,
+  projectVariables: [],
+  projectTokenGrammar: null,
   textSnippets: [],
   videoSnippets: [],
   automations: [],
@@ -210,6 +220,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
+  setProjectVariables: async (variables) => {
+    const path = get().projectPath;
+    if (!path) throw new Error("No project is open.");
+    const project = await backend.saveProjectVariables(path, variables);
+    set({ projectVariables: project.variables ?? [] });
+  },
+
   closeProject: () => {
     void publishStreamDeckActiveProject(null);
     if (get().demoMode) {
@@ -219,6 +236,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectPath: null,
       projectName: null,
       projectDescription: null,
+      projectVariables: [],
+      projectTokenGrammar: null,
       textSnippets: [],
       videoSnippets: [],
       automations: [],

@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke, untracedInvoke } from "./auditaur";
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
-import type { ArchiveSummary, Project, ProjectData, MonitorInfo, ProjectImage, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { AppSettings, ArchiveSummary, Project, ProjectData, ProjectVariable, MonitorInfo, ProjectImage, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -17,6 +17,18 @@ export class TauriBackendService implements BackendService {
 
   async saveProject(path: string, name: string, description: string): Promise<Project> {
     return invoke<Project>("save_project", { path, name, description });
+  }
+
+  async saveProjectVariables(path: string, variables: ProjectVariable[]): Promise<Project> {
+    return invoke<Project>("save_project_variables", { path, variables });
+  }
+
+  async getAppSettings(): Promise<AppSettings> {
+    return invoke<AppSettings>("get_app_settings");
+  }
+
+  async setAppSettings(settings: AppSettings): Promise<AppSettings> {
+    return invoke<AppSettings>("set_app_settings", { settings });
   }
 
   async exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary> {
@@ -70,6 +82,7 @@ export class TauriBackendService implements BackendService {
     typeVariation?: number,
     shiftEnter?: boolean,
     projectPath?: string,
+    raw?: boolean,
   ): Promise<void> {
     return invoke("deliver_text", {
       text,
@@ -79,6 +92,7 @@ export class TauriBackendService implements BackendService {
       typeVariation,
       shiftEnter,
       projectPath,
+      raw,
     });
   }
 

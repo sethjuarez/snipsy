@@ -68,6 +68,8 @@ function App() {
   const projectPath = useProjectStore((s) => s.projectPath);
   const projectDescription = useProjectStore((s) => s.projectDescription);
   const updateProject = useProjectStore((s) => s.updateProject);
+  const projectVariables = useProjectStore((s) => s.projectVariables);
+  const setProjectVariables = useProjectStore((s) => s.setProjectVariables);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
@@ -119,6 +121,10 @@ function App() {
     setToasts((current) => upsertToast(current, { id, title, detail, tone, shownAt: Date.now() }));
     toastTimersRef.current.set(id, window.setTimeout(() => dismissToast(id), toastDuration(tone, detail)));
   }, [dismissToast]);
+  const settingsError = useCallback(
+    (title: string, detail: string) => showToast(title, detail, "error", "app-settings"),
+    [showToast],
+  );
 
   // Demo mode hides the window, so hotkey problems stay until dismissed and
   // update in place as snippets are edited.
@@ -434,9 +440,11 @@ function App() {
   useEffect(() => {
     backend.isElevated().then(setElevated).catch(() => setElevated(null));
   }, []);
+  const projectTokenGrammar = useProjectStore((s) => s.projectTokenGrammar);
+  const variableNames = useMemo(() => new Set(projectVariables.map((variable) => variable.name)), [projectVariables]);
   const preflight = useMemo(
-    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, elevated }),
-    [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, elevated],
+    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, tokenGrammar: projectTokenGrammar, elevated }),
+    [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, projectTokenGrammar, elevated],
   );
   const blockingOverlay = confirmDialog !== null || demoStartOpen;
   const overlayOpen = paletteOpen || shortcutsOpen || settingsSection !== null || blockingOverlay;
@@ -626,6 +634,15 @@ function App() {
           throw error;
         },
       ) : undefined}
+      variables={projectVariables}
+      onSaveVariables={projectName ? (variables) => setProjectVariables(variables).then(
+        () => showToast("Saved variables", undefined, "success", "project-variables-save"),
+        (error: unknown) => {
+          showToast("Couldn't save variables", String(error), "error", "project-variables-save");
+          throw error;
+        },
+      ) : undefined}
+      onError={settingsError}
     />
   );
 

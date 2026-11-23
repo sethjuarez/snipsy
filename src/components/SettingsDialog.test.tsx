@@ -6,6 +6,12 @@ import { filterSettingsSections } from "../utils/settings";
 const updater = vi.hoisted(() => ({ check: vi.fn() }));
 vi.mock("@tauri-apps/plugin-updater", () => updater);
 
+const backend = vi.hoisted(() => ({
+  getAppSettings: vi.fn(),
+  setAppSettings: vi.fn(),
+}));
+vi.mock("../services", () => ({ getBackend: () => backend }));
+
 const systemDark = vi.hoisted(() => ({ value: false }));
 Object.defineProperty(window, "matchMedia", {
   configurable: true,
@@ -23,6 +29,8 @@ function renderDialog(props: Partial<Parameters<typeof SettingsDialog>[0]> = {})
 }
 
 beforeEach(() => {
+  backend.getAppSettings.mockReset().mockResolvedValue({ restoreClipboard: true, clipboardRestoreDelayMs: 500 });
+  backend.setAppSettings.mockReset().mockImplementation(async (settings) => settings);
   localStorage.clear();
   systemDark.value = false;
   useThemeStore.getState().setPreference("system");
@@ -236,5 +244,67 @@ describe("Project settings", () => {
     await waitFor(() => expect(onSaveProject).toHaveBeenCalled());
     await waitFor(() => expect((screen.getByTestId("settings-project-save") as HTMLButtonElement).disabled).toBe(false));
     expect((screen.getByTestId("settings-project-name") as HTMLInputElement).value).toBe("Renamed");
+  });
+});
+
+describe("Clipboard settings", () => {
+  it("saves the restore toggle and clamps the delay", async () => {
+    renderDialog({ initialSection: "demo" });
+    const toggle = (await screen.findByTestId("settings-restore-clipboard")) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+
+    const delay = screen.getByTestId("settings-restore-delay") as HTMLInputElement;
+    fireEvent.change(delay, { target: { value: "99999" } });
+    fireEvent.blur(delay);
+    await waitFor(() => expect(backend.setAppSettings).toHaveBeenLastCalledWith({ restoreClipboard: true, clipboardRestoreDelayMs: 5000 }));
+    expect(delay.value).toBe("5000");
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(backend.setAppSettings).toHaveBeenLastCalledWith({ restoreClipboard: false, clipboardRestoreDelayMs: 5000 }));
+    expect(screen.queryByTestId("settings-restore-delay")).toBeNull();
+  });
+
+  it("rolls back and reports a failed save", async () => {
+    const onError = vi.fn();
+    backend.setAppSettings.mockRejectedValue(new Error("read-only"));
+    renderDialog({ initialSection: "demo", onError });
+    const toggle = (await screen.findByTestId("settings-restore-clipboard")) as HTMLInputElement;
+    fireEvent.click(toggle);
+    await waitFor(() => expect(onError).toHaveBeenCalledWith("Couldn't save settings", "Error: read-only"));
+    expect(toggle.checked).toBe(true);
+  });
+});
+
+describe("Project variables", () => {
+  const project = { name: "Demo", description: "" };
+
+  it("adds, validates, and saves variables", async () => {
+    const onSaveVariables = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ initialSection: "project", project, onSaveProject: vi.fn(), variables: [{ name: "host", value: "contoso.com" }], onSaveVariables });
+    const save = screen.getByTestId("settings-variables-save") as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+
+    fireEvent.click(screen.getByTestId("settings-variable-add"));
+    const names = screen.getAllByTestId("settings-variable-name");
+    fireEvent.change(names[1], { target: { value: "host" } });
+    expect(screen.getByTestId("settings-variables-problem").textContent).toContain('"host" is defined twice');
+    expect(save.disabled).toBe(true);
+
+    fireEvent.change(names[1], { target: { value: "Region" } });
+    fireEvent.change(screen.getAllByTestId("settings-variable-value")[1], { target: { value: "West US" } });
+    expect(screen.queryByTestId("settings-variables-problem")).toBeNull();
+    fireEvent.click(save);
+    await waitFor(() => expect(onSaveVariables).toHaveBeenCalledWith([
+      { name: "host", value: "contoso.com" },
+      { name: "region", value: "West US" },
+    ]));
+  });
+
+  it("removes a variable", async () => {
+    const onSaveVariables = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ initialSection: "project", project, onSaveProject: vi.fn(), variables: [{ name: "host", value: "x" }], onSaveVariables });
+    fireEvent.click(screen.getByTestId("settings-variable-remove"));
+    fireEvent.click(screen.getByTestId("settings-variables-save"));
+    await waitFor(() => expect(onSaveVariables).toHaveBeenCalledWith([]));
   });
 });

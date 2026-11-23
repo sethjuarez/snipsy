@@ -2,11 +2,23 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { ImagePlus } from "lucide-react";
 import type { TextSnippet, DeliveryMethod, StreamDeckIcon } from "../types";
 import { getBackend } from "../services";
-import { imageRefProblems, imageToken } from "../utils/snippetText";
+import { imageToken, recognizedTokens, snippetTextProblems } from "../utils/snippetText";
+import { useProjectStore } from "../stores/projectStore";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
 import { useSaveTracking, type EditorSaveState } from "../hooks/useSaveTracking";
 import IconEditor from "./IconEditor";
+
+/** Built-in tokens offered by the Insert token menu. */
+const BUILT_IN_TOKENS: { token: string; label: string }[] = [
+  { token: "{{cursor}}", label: "Cursor position" },
+  { token: "{{date}}", label: "Date (short)" },
+  { token: "{{date:long}}", label: "Date (long)" },
+  { token: "{{date:iso}}", label: "Date (ISO 2025-01-31)" },
+  { token: "{{time}}", label: "Time" },
+  { token: "{{clipboard}}", label: "Clipboard text" },
+  { token: "{{random:6}}", label: "Random (6 characters)" },
+];
 
 // Match the clamps in src-tauri/src/typing.rs.
 const MAX_TYPO_CHANCE = 20;
@@ -114,6 +126,8 @@ function TextSnippetForm({
   const [typoChance, setTypoChance] = useState(() => toPercent(snippet?.typoChance, MAX_TYPO_CHANCE));
   const [typeVariation, setTypeVariation] = useState(() => toPercent(snippet?.typeVariation, MAX_TYPE_VARIATION));
   const [shiftEnter, setShiftEnter] = useState(snippet?.shiftEnter ?? false);
+  const [raw, setRaw] = useState(snippet?.raw ?? false);
+  const projectVariables = useProjectStore((state) => state.projectVariables);
   const [streamDeckIcon, setStreamDeckIcon] = useState<StreamDeckIcon>(snippet?.streamDeckIcon ?? defaultStreamDeckIcon("text"));
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [importingImage, setImportingImage] = useState(false);
@@ -128,6 +142,7 @@ function TextSnippetForm({
     typoChance,
     typeVariation,
     shiftEnter,
+    raw,
     streamDeckIcon,
   });
   const hotkeyStatus = validateHotkey(hotkey, hotkeyOwners, snippet?.id);
@@ -138,7 +153,13 @@ function TextSnippetForm({
       !title.trim() ? "Title" : null,
       hotkeyStatus.state !== "available" ? "Hotkey" : null,
     ].filter(Boolean).join(", ")}`;
-  const imageProblem = imageRefProblems(text, delivery, availableImageKeys);
+  const imageProblem = snippetTextProblems(text, {
+    delivery,
+    raw,
+    images: availableImageKeys,
+    variables: projectPath ? new Set(projectVariables.map((variable) => variable.name)) : null,
+  });
+  const filledTokens = imageProblem ? [] : recognizedTokens(text, raw).filter((token) => !token.startsWith("{{image:"));
 
   /** Inserts at a selection captured before any async work, so later typing isn't clobbered. */
   const insertAt = (start: number, end: number, insert: string) => {
@@ -216,6 +237,7 @@ function TextSnippetForm({
       typoChance: fastType && typoChance > 0 ? typoChance : undefined,
       typeVariation: fastType && typeVariation > 0 ? typeVariation : undefined,
       shiftEnter: fastType && shiftEnter ? true : undefined,
+      raw: raw ? true : undefined,
       streamDeckIcon,
     }));
   };
@@ -291,6 +313,48 @@ function TextSnippetForm({
           aria-describedby={imageProblem ? "snippet-image-problem" : undefined}
           data-testid="snippet-text"
         />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Insert token"
+            value=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const [start, end] = selection();
+              insertAt(start, end, e.target.value);
+            }}
+            disabled={raw}
+            className="px-2 py-1 rounded text-sm"
+            style={{ backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" }}
+            data-testid="snippet-insert-token"
+          >
+            <option value="">Insert token…</option>
+            {BUILT_IN_TOKENS.map(({ token, label }) => (
+              <option key={token} value={token}>{label}</option>
+            ))}
+            {projectVariables.length > 0 && (
+              <optgroup label="Project variables">
+                {projectVariables.map((variable) => (
+                  <option key={variable.name} value={`{{var:${variable.name}}}`}>{variable.name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <label className="flex items-center gap-1.5 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            <input
+              type="checkbox"
+              checked={raw}
+              onChange={(e) => setRaw(e.target.checked)}
+              className="rounded"
+              data-testid="snippet-raw"
+            />
+            Type literally (ignore {"{{…}}"} tokens)
+          </label>
+        </div>
+        {filledTokens.length > 0 && (
+          <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }} data-testid="snippet-tokens">
+            Snipsy fills in {filledTokens.join(", ")} when it types. Check Type literally to keep them as written.
+          </p>
+        )}
         {projectPath && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <select

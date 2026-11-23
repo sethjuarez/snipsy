@@ -15,6 +15,8 @@ export type Segment =
 export const DATE_PRESETS = ["iso", "short", "long", "us", "eu", "year", "month", "weekday"] as const;
 export type DatePreset = (typeof DATE_PRESETS)[number];
 export const MAX_RANDOM_LENGTH = 64;
+/** Token grammar version this build understands; mirrors TOKEN_GRAMMAR in src-tauri/src/models.rs. */
+export const TOKEN_GRAMMAR = 1;
 
 const CLOSE = "}}";
 const BARE: [string, () => Segment][] = [
@@ -175,6 +177,21 @@ export function snippetTextProblems(text: string, options: TokenCheckOptions): s
     return `Undefined ${undefinedNames.length === 1 ? "variable" : "variables"}: ${undefinedNames.join(", ")}. Add ${undefinedNames.length === 1 ? "it" : "them"} in Settings → Project.`;
   }
   return null;
+}
+
+/** Mirrors the backend check on save: valid, unique names. Returns every problem found. */
+export function projectVariableProblems(variables: readonly { name: string }[]): string[] {
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const { name } of variables) {
+    if (!isVariableName(name)) {
+      problems.push(`Invalid variable name "${name}": use a-z, 0-9, - and _, starting with a letter or digit.`);
+    } else if (seen.has(name)) {
+      problems.push(`Variable "${name}" is defined twice.`);
+    }
+    seen.add(name);
+  }
+  return problems;
 }
 
 /** Image-only problems; kept for callers that only care about images. */

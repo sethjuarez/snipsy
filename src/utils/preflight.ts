@@ -1,11 +1,11 @@
 import type { Script, TextSnippet, VideoSnippet } from "../types";
 import { assignHotkeys, collectHotkeyOwners } from "./hotkeys";
-import { imageRefProblems } from "./snippetText";
+import { snippetTextProblems, TOKEN_GRAMMAR } from "./snippetText";
 
 export type PreflightState = "pass" | "warn" | "fail";
 
 export interface PreflightCheck {
-  id: "hotkeys" | "problems" | "unassigned" | "sources" | "images" | "elevation";
+  id: "hotkeys" | "problems" | "unassigned" | "sources" | "images" | "tokens" | "elevation";
   state: PreflightState;
   label: string;
   detail?: string;
@@ -28,6 +28,10 @@ export interface PreflightInput {
   availableVideoFiles?: ReadonlySet<string> | null;
   /** Keys of the project's images; null when not loaded yet. */
   availableImageKeys?: ReadonlySet<string> | null;
+  /** Names of the project's variables; null skips the undefined-variable check. */
+  variableNames?: ReadonlySet<string> | null;
+  /** The project's token grammar version; null for projects made before tokens. */
+  tokenGrammar?: number | null;
   /** Null when unknown. */
   elevated?: boolean | null;
 }
@@ -72,9 +76,34 @@ export function computePreflight(input: PreflightInput): Preflight {
       : { id: "sources", state: "pass", label: "All clip source videos found" });
   }
 
+  // Delivery-specific image problems belong to the images check below.
+  const tokenProblem = (snippet: TextSnippet) =>
+    snippetTextProblems(snippet.text, { delivery: "fast-type", raw: snippet.raw, images: null, variables: input.variableNames ?? null });
+  const tokenBroken = input.textSnippets.filter((snippet) => tokenProblem(snippet) !== null);
+  if (tokenBroken.length > 0) {
+    checks.push({
+      id: "tokens",
+      state: "warn",
+      label: `${plural(tokenBroken.length, "snippet")} with token problems`,
+      detail: `Fix the {{…}} tokens in: ${tokenBroken.map((snippet) => snippet.title).join(", ")}. They fail before typing anything.`,
+    });
+  }
+  if ((input.tokenGrammar ?? 0) > TOKEN_GRAMMAR) {
+    checks.push({
+      id: "tokens",
+      state: "warn",
+      label: "Project made by a newer Snipsy",
+      detail: "Some {{…}} tokens may type literally. Update Snipsy before presenting.",
+    });
+  }
+
   if (input.availableImageKeys) {
     const available = input.availableImageKeys;
-    const broken = input.textSnippets.filter((snippet) => imageRefProblems(snippet.text, snippet.delivery, available) !== null);
+    const broken = input.textSnippets.filter(
+      (snippet) =>
+        tokenProblem(snippet) === null &&
+        snippetTextProblems(snippet.text, { delivery: snippet.delivery, raw: snippet.raw, images: available, variables: null }) !== null,
+    );
     if (broken.length > 0) {
       checks.push({
         id: "images",
