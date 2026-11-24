@@ -171,12 +171,39 @@ export function snippetTextProblems(text: string, options: TokenCheckOptions): s
     const missing = options.images ? keys.filter((key) => !options.images!.has(key)) : [];
     if (missing.length > 0) return `Missing ${missing.length === 1 ? "image" : "images"}: ${missing.join(", ")}`;
   }
-  const names = referencedVariables(text, options.raw);
-  const undefinedNames = options.variables ? names.filter((name) => !options.variables!.has(name)) : [];
-  if (undefinedNames.length > 0) {
-    return `Undefined ${undefinedNames.length === 1 ? "variable" : "variables"}: ${undefinedNames.join(", ")}. Add ${undefinedNames.length === 1 ? "it" : "them"} in Settings → Project.`;
-  }
-  return null;
+  return undefinedVariables(referencedVariables(text, options.raw), options.variables);
+}
+
+function undefinedVariables(names: string[], defined: ReadonlySet<string> | null): string | null {
+  const missing = defined ? names.filter((name) => !defined.has(name)) : [];
+  if (missing.length === 0) return null;
+  return `Undefined ${missing.length === 1 ? "variable" : "variables"}: ${missing.join(", ")}. Add ${missing.length === 1 ? "it" : "them"} in Setup → Variables.`;
+}
+
+/**
+ * Parses a field Snipsy acts on rather than types (an Open site URL or title).
+ * Mirrors `snippet_text::parse_field`: only value tokens are allowed there.
+ */
+export function parseFieldText(text: string): ParseResult {
+  const parsed = parseSnippetText(text);
+  if (!parsed.ok) return parsed;
+  const blocked = parsed.segments.find((s) => s.kind === "cursor" || s.kind === "clipboard" || s.kind === "image");
+  if (blocked && blocked.kind !== "text") return { ok: false, error: `${segmentToken(blocked)} only works in snippet text.` };
+  return parsed;
+}
+
+/** Variable names a field references, in first-use order; empty when it does not parse. */
+export function fieldVariables(text: string): string[] {
+  const parsed = parseFieldText(text);
+  if (!parsed.ok) return [];
+  return [...new Set(parsed.segments.flatMap((s) => (s.kind === "var" ? [s.value] : [])))];
+}
+
+/** Problems that would stop an automation field from resolving; null when there are none. */
+export function fieldTokenProblems(text: string, variables: ReadonlySet<string> | null): string | null {
+  const parsed = parseFieldText(text);
+  if (!parsed.ok) return parsed.error;
+  return undefinedVariables(fieldVariables(text), variables);
 }
 
 /** Mirrors the backend check on save: valid, unique names. Returns every problem found. */

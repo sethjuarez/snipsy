@@ -126,7 +126,7 @@ fn undefined_variables(names: &[&str]) -> String {
         ("variables", "them")
     };
     format!(
-        "Undefined {noun}: {}. Add {pronoun} in Settings → Project.",
+        "Undefined {noun}: {}. Add {pronoun} in Setup → Variables.",
         names.join(", ")
     )
 }
@@ -401,11 +401,11 @@ mod tests {
     fn undefined_variables_are_listed_once() {
         assert_eq!(
             resolve_text("{{var:a}}{{var:b}}{{var:a}}", &[]).unwrap_err(),
-            "Undefined variables: a, b. Add them in Settings → Project."
+            "Undefined variables: a, b. Add them in Setup → Variables."
         );
         assert_eq!(
             resolve_text("{{var:a}}", &[variable("b", "")]).unwrap_err(),
-            "Undefined variable: a. Add it in Settings → Project."
+            "Undefined variable: a. Add it in Setup → Variables."
         );
     }
 

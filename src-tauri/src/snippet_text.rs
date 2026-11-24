@@ -160,6 +160,23 @@ pub fn parse_snippet(text: &str, raw: bool) -> Result<Vec<Segment>, String> {
     }
 }
 
+/// Parses a field Snipsy acts on rather than types, such as an Open site URL
+/// or title. Only value tokens make sense there; the first other token is an
+/// error.
+pub fn parse_field(text: &str) -> Result<Vec<Segment>, String> {
+    let segments = parse(text)?;
+    for segment in &segments {
+        let token = match segment {
+            Segment::Cursor => "{{cursor}}".to_string(),
+            Segment::Clipboard => "{{clipboard}}".to_string(),
+            Segment::Image(key) => format!("{{{{image:{key}}}}}"),
+            _ => continue,
+        };
+        return Err(format!("{token} only works in snippet text."));
+    }
+    Ok(segments)
+}
+
 /// Image keys referenced by `segments`, in first-use order without repeats.
 pub fn image_keys(segments: &[Segment]) -> Vec<&str> {
     let mut keys: Vec<&str> = Vec::new();
@@ -191,6 +208,24 @@ mod tests {
         assert!(cases.len() > 40);
         for case in cases {
             match (parse(&case.text), case.segments, case.error) {
+                (Ok(actual), Some(expected), None) => {
+                    assert_eq!(actual, expected, "text: {:?}", case.text)
+                }
+                (Err(actual), None, Some(expected)) => {
+                    assert_eq!(actual, expected, "text: {:?}", case.text)
+                }
+                (actual, ..) => panic!("unexpected result {actual:?} for {:?}", case.text),
+            }
+        }
+    }
+
+    #[test]
+    fn parses_the_shared_field_fixture() {
+        let cases: Vec<Case> =
+            serde_json::from_str(include_str!("../../tests/fixtures/field-tokens.json")).unwrap();
+        assert!(cases.len() > 8);
+        for case in cases {
+            match (parse_field(&case.text), case.segments, case.error) {
                 (Ok(actual), Some(expected), None) => {
                     assert_eq!(actual, expected, "text: {:?}", case.text)
                 }

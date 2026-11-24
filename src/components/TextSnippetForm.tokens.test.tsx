@@ -30,7 +30,7 @@ describe("TextSnippetForm tokens", () => {
     expect(problem()).toBeNull();
 
     fireEvent.change(textArea(), { target: { value: "{{var:region}}" } });
-    expect(problem()).toBe("Undefined variable: region. Add it in Settings → Project.");
+    expect(problem()).toBe("Undefined variable: region. Add it in Setup → Variables.");
     expect(summary()).toBeNull();
   });
 

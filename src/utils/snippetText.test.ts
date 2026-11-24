@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import cases from "../../tests/fixtures/snippet-tokens.json";
+import fieldCases from "../../tests/fixtures/field-tokens.json";
 import slugCases from "../../tests/fixtures/image-slugs.json";
 import {
+  fieldTokenProblems,
+  fieldVariables,
   imageRefProblems,
   imageToken,
   isImageKey,
+  parseFieldText,
   parseSnippetText,
   recognizedTokens,
   referencedImages,
@@ -67,7 +71,7 @@ describe("snippet token checks", () => {
 
   it("reports undefined variables and cursor before an image", () => {
     expect(check("{{var:host}}/x")).toBeNull();
-    expect(check("{{var:port}}")).toBe("Undefined variable: port. Add it in Settings → Project.");
+    expect(check("{{var:port}}")).toBe("Undefined variable: port. Add it in Setup → Variables.");
     expect(check("{{var:port}}", { variables: null })).toBeNull();
     expect(check("{{cursor}}{{image:a.png}}")).toBe("{{cursor}} must come after every image.");
     expect(check("{{image:a.png}}{{cursor}}")).toBeNull();
@@ -77,5 +81,23 @@ describe("snippet token checks", () => {
     expect(check("{{var:port}} {{cursor}}{{cursor}} {{image:", { raw: true })).toBeNull();
     expect(recognizedTokens("{{cursor}}", true)).toEqual([]);
     expect(parseSnippetText("{{cursor}}", true)).toEqual({ ok: true, segments: [{ kind: "text", value: "{{cursor}}" }] });
+  });
+});
+describe("automation field tokens", () => {
+  it.each(fieldCases)("matches the shared field fixture for %j", (testCase) => {
+    const result = parseFieldText(testCase.text);
+    if ("segments" in testCase && testCase.segments) {
+      expect(result).toEqual({ ok: true, segments: testCase.segments });
+    } else {
+      expect(result).toEqual({ ok: false, error: (testCase as { error: string }).error });
+    }
+  });
+
+  it("reports undefined variables only when names are known", () => {
+    const url = "https://{{var:host}}/{{var:path}}";
+    expect(fieldVariables(url)).toEqual(["host", "path"]);
+    expect(fieldTokenProblems(url, new Set(["host"]))).toBe("Undefined variable: path. Add it in Setup → Variables.");
+    expect(fieldTokenProblems(url, null)).toBeNull();
+    expect(fieldTokenProblems("{{cursor}}", null)).toBe("{{cursor}} only works in snippet text.");
   });
 });

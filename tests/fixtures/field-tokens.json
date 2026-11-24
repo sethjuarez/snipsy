@@ -1,0 +1,106 @@
+[
+  {
+    "text": "https://{{var:host}}/app",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "https://"
+      },
+      {
+        "kind": "var",
+        "value": "host"
+      },
+      {
+        "kind": "text",
+        "value": "/app"
+      }
+    ]
+  },
+  {
+    "text": "{{var:docs-url}}",
+    "segments": [
+      {
+        "kind": "var",
+        "value": "docs-url"
+      }
+    ]
+  },
+  {
+    "text": "https://example.com/?d={{date:iso}}&t={{time}}&r={{random:6}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "https://example.com/?d="
+      },
+      {
+        "kind": "date",
+        "value": "iso"
+      },
+      {
+        "kind": "text",
+        "value": "&t="
+      },
+      {
+        "kind": "time"
+      },
+      {
+        "kind": "text",
+        "value": "&r="
+      },
+      {
+        "kind": "random",
+        "value": 6
+      }
+    ]
+  },
+  {
+    "text": "Open {{date}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "Open "
+      },
+      {
+        "kind": "date",
+        "value": "short"
+      }
+    ]
+  },
+  {
+    "text": "https://example.com/{{name}}?s={{cursor:x}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "https://example.com/{{name}}?s={{cursor:x}}"
+      }
+    ]
+  },
+  {
+    "text": "https://example.com/{{cursor}}",
+    "error": "{{cursor}} only works in snippet text."
+  },
+  {
+    "text": "{{clipboard}}",
+    "error": "{{clipboard}} only works in snippet text."
+  },
+  {
+    "text": "x {{image:logo.png}}",
+    "error": "{{image:logo.png}} only works in snippet text."
+  },
+  {
+    "text": "{{var:host}} {{cursor}}",
+    "error": "{{cursor}} only works in snippet text."
+  },
+  {
+    "text": "https://{{var:Host}}/",
+    "error": "Invalid variable reference: {{var:Host}} (names use a-z, 0-9, - and _)"
+  },
+  {
+    "text": "https://{{var:host",
+    "error": "Unclosed var reference: add }} after {{var:"
+  },
+  {
+    "text": "",
+    "segments": []
+  }
+]
