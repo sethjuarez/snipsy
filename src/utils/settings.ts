@@ -17,7 +17,7 @@ export interface SettingsSection {
 }
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
-  { id: "project", label: "Project", description: "Name, description, and variables of the open project", keywords: ["rename", "name", "title", "description", "notes", "variables", "tokens", "var"] },
+  { id: "project", label: "Project", description: "Name and description of the open project", keywords: ["rename", "name", "title", "description", "notes"] },
   { id: "appearance", label: "Appearance", description: "Light, dark, or match the system", keywords: ["dark", "light", "system", "color", "theme", "mode"] },
   { id: "demo", label: "Demo", description: "Demo start and clipboard restore", keywords: ["checklist", "confirm", "preflight", "present", "start", "clipboard", "paste", "restore"] },
   { id: "permissions", label: "Permissions", description: "Administrator rights for input protection", keywords: ["admin", "administrator", "elevation", "elevated", "uac", "input", "block"] },

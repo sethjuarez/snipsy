@@ -20,6 +20,14 @@ describe("DemoPreflightPanel", () => {
     expect(screen.getByTestId("demo-live-status").textContent).toContain("Start from the top bar");
   });
 
+  it("opens Variables from a token check with an undefined variable", () => {
+    const onNavigate = vi.fn();
+    const broken = computePreflight({ textSnippets: [{ ...snippet, text: "{{var:host}}" }], videoSnippets: [], automations: [], variableNames: new Set() });
+    render(<DemoPreflightPanel preflight={broken} demoMode={false} projectName="Keynote" onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByTestId("preflight-tokens-fix"));
+    expect(onNavigate).toHaveBeenCalledWith("variables");
+  });
+
   it("leaves Start, Stop and Keep awake to the title bar", () => {
     const { rerender } = render(<DemoPreflightPanel preflight={ready} demoMode={false} projectName="Keynote" />);
     expect(screen.queryByRole("button")).toBeNull();

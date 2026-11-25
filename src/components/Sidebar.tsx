@@ -1,6 +1,6 @@
-import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Archive, Keyboard, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Archive, Keyboard, Braces, AlertTriangle, type LucideIcon } from "lucide-react";
 
-export type AppView = "home" | "text-snippets" | "images" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck";
+export type AppView = "home" | "text-snippets" | "images" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck" | "variables";
 
 interface NavSubview {
   id: AppView;
@@ -40,6 +40,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "setup",
     label: "Setup",
     items: [
+      { id: "variables", label: "Variables", Icon: Braces },
       { id: "automations", label: "Automations", Icon: ScrollText },
     ],
   },
@@ -64,11 +65,19 @@ interface SidebarProps {
   onExportProject?: () => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  /** Optional count and warning shown next to a nav item. */
+  badges?: Partial<Record<AppView, NavBadge>>;
+}
+
+export interface NavBadge {
+  count?: number;
+  /** Shown as a warning marker and appended to the item's accessible name. */
+  warning?: string;
 }
 
 const rowClass = "flex items-center gap-2 px-3 py-1.5 rounded text-base font-medium w-full text-left";
 
-function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, collapsed = false, onCollapsedChange }: SidebarProps) {
+function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, collapsed = false, onCollapsedChange, badges }: SidebarProps) {
   return (
     <nav
       className="no-select flex flex-col shrink-0 overflow-hidden"
@@ -110,6 +119,8 @@ function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, co
             )}
             {section.items.map((item) => {
               const isActive = isNavItemActive(item, activeView);
+              const badge = badges?.[item.id];
+              const name = badge?.warning ? `${item.label} (${badge.warning})` : item.label;
               return (
                 <button
                   key={item.id}
@@ -122,11 +133,26 @@ function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, co
                   }}
                   data-testid={`nav-${item.id}`}
                   aria-current={isActive ? "page" : undefined}
-                  aria-label={item.label}
-                  title={item.label}
+                  aria-label={name}
+                  title={name}
                 >
-                  <item.Icon size={15} />
-                  {!collapsed && <span>{item.label}</span>}
+                  <span className="relative inline-flex">
+                    <item.Icon size={15} />
+                    {collapsed && badge?.warning && (
+                      <span
+                        className="absolute -right-1 -top-1 h-2 w-2 rounded-full"
+                        style={{ backgroundColor: "var(--color-warning, #f59e0b)" }}
+                        data-testid={`nav-${item.id}-warning`}
+                      />
+                    )}
+                  </span>
+                  {!collapsed && <span className="flex-1">{item.label}</span>}
+                  {!collapsed && badge?.warning && (
+                    <AlertTriangle size={12} style={{ color: "var(--color-warning, #f59e0b)" }} aria-hidden="true" data-testid={`nav-${item.id}-warning`} />
+                  )}
+                  {!collapsed && badge?.count !== undefined && badge.count > 0 && (
+                    <span className="text-xs tabular-nums opacity-80" data-testid={`nav-${item.id}-count`}>{badge.count}</span>
+                  )}
                 </button>
               );
             })}

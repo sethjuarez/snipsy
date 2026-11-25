@@ -1,6 +1,8 @@
 import type { Script, TextSnippet, VideoSnippet } from "../types";
 import { assignHotkeys, collectHotkeyOwners } from "./hotkeys";
+import type { AppView } from "../components/Sidebar";
 import { snippetTextProblems, TOKEN_GRAMMAR } from "./snippetText";
+import { automationTokenProblem, variableUsage } from "./variableUsage";
 
 export type PreflightState = "pass" | "warn" | "fail";
 
@@ -9,6 +11,8 @@ export interface PreflightCheck {
   state: PreflightState;
   label: string;
   detail?: string;
+  /** Where to go to fix it. */
+  fix?: { view: AppView; label: string };
 }
 
 export interface Preflight {
@@ -80,12 +84,24 @@ export function computePreflight(input: PreflightInput): Preflight {
   const tokenProblem = (snippet: TextSnippet) =>
     snippetTextProblems(snippet.text, { delivery: "fast-type", raw: snippet.raw, images: null, variables: input.variableNames ?? null });
   const tokenBroken = input.textSnippets.filter((snippet) => tokenProblem(snippet) !== null);
-  if (tokenBroken.length > 0) {
+  const automationsBroken = input.automations.filter(
+    (script) => automationTokenProblem(script, input.variableNames ?? null) !== null,
+  );
+  if (tokenBroken.length > 0 || automationsBroken.length > 0) {
+    const counts = [
+      tokenBroken.length > 0 ? plural(tokenBroken.length, "snippet") : null,
+      automationsBroken.length > 0 ? plural(automationsBroken.length, "automation") : null,
+    ].filter(Boolean);
+    const defined = input.variableNames;
+    const undefinedNames = defined
+      ? [...variableUsage(input.textSnippets, input.automations).keys()].filter((name) => !defined.has(name))
+      : [];
     checks.push({
       id: "tokens",
       state: "warn",
-      label: `${plural(tokenBroken.length, "snippet")} with token problems`,
-      detail: `Fix the {{…}} tokens in: ${tokenBroken.map((snippet) => snippet.title).join(", ")}. They fail before typing anything.`,
+      label: `${counts.join(" and ")} with token problems`,
+      detail: `Fix the {{…}} tokens in: ${[...tokenBroken, ...automationsBroken].map((item) => item.title).join(", ")}. They fail before typing or opening anything.`,
+      ...(undefinedNames.length > 0 ? { fix: { view: "variables" as const, label: "Open Variables" } } : {}),
     });
   }
   if ((input.tokenGrammar ?? 0) > TOKEN_GRAMMAR) {

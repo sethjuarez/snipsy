@@ -5,6 +5,7 @@ import { DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
 import { traySurfaceName } from "../utils/platform";
 import Button from "./ui/Button";
 import Dialog from "./ui/Dialog";
+import type { AppView } from "./Sidebar";
 
 const STATE_ICON: Record<PreflightState, { icon: typeof CheckCircle; color: string; label: string }> = {
   pass: { icon: CheckCircle, color: "var(--color-success)", label: "OK" },
@@ -12,7 +13,7 @@ const STATE_ICON: Record<PreflightState, { icon: typeof CheckCircle; color: stri
   fail: { icon: XCircle, color: "var(--color-danger)", label: "Blocked" },
 };
 
-function PreflightList({ checks, testId }: { checks: PreflightCheck[]; testId: string }) {
+function PreflightList({ checks, testId, onNavigate }: { checks: PreflightCheck[]; testId: string; onNavigate?: (view: AppView) => void }) {
   return (
     <ul className="space-y-1.5" data-testid={testId}>
       {checks.map((check) => {
@@ -33,6 +34,11 @@ function PreflightList({ checks, testId }: { checks: PreflightCheck[]; testId: s
                 <span className="block text-sm" style={{ color: "var(--color-text-secondary)" }}>{check.detail}</span>
               )}
             </span>
+            {check.fix && onNavigate && (
+              <Button className="ml-auto shrink-0" onClick={() => onNavigate(check.fix!.view)} data-testid={`preflight-${check.id}-fix`}>
+                {check.fix.label}
+              </Button>
+            )}
           </li>
         );
       })}
@@ -48,10 +54,12 @@ interface DemoPreflightPanelProps {
   projectName: string;
   /** Hotkeys registered while live; defaults to the preflight prediction. */
   liveArmedCount?: number;
+  /** Opens the view that fixes a check, when the check offers one. */
+  onNavigate?: (view: AppView) => void;
 }
 
 /** Overview card: checklist before a demo, live status while it runs. Start/Stop lives in the title bar. */
-export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmedCount = preflight.armedCount }: DemoPreflightPanelProps) {
+export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmedCount = preflight.armedCount, onNavigate }: DemoPreflightPanelProps) {
   const status = demoMode ? "Live" : STATUS_TEXT[preflight.state];
   const badgeStyle = demoMode
     ? { backgroundColor: "var(--color-danger)", color: "var(--color-text-on-accent)" }
@@ -84,7 +92,7 @@ export function DemoPreflightPanel({ preflight, demoMode, projectName, liveArmed
       </div>
       {!demoMode && (
         <div className="mt-4">
-          <PreflightList checks={preflight.checks} testId="demo-preflight-checks" />
+          <PreflightList checks={preflight.checks} testId="demo-preflight-checks" onNavigate={onNavigate} />
         </div>
       )}
     </section>

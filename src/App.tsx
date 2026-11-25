@@ -29,6 +29,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutsDialog from "./components/ShortcutsDialog";
 import SettingsDialog from "./components/SettingsDialog";
+import VariablesView from "./components/VariablesView";
+import { variableUsage } from "./utils/variableUsage";
 import type { SettingsSectionId } from "./utils/settings";
 import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
 import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
@@ -102,6 +104,7 @@ function App() {
   const [textSnippetSaveState, setTextSnippetSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const [videoSnippetSaveState, setVideoSnippetSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
+  const [variablesDirty, setVariablesDirty] = useState(false);
   const videoListRef = useRef<VideoListHandle>(null);
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
   const imageListRef = useRef<ImageListHandle>(null);
@@ -373,6 +376,7 @@ function App() {
     setTextSnippetSaveState(DEFAULT_SAVE_STATE);
     setVideoSnippetSaveState(DEFAULT_SAVE_STATE);
     setScriptSaveState(DEFAULT_SAVE_STATE);
+    setVariablesDirty(false);
   }, []);
 
   const activeSaveState = clipEditingVideo
@@ -383,7 +387,9 @@ function App() {
         ? videoSnippetSaveState
         : showScriptForm
           ? scriptSaveState
-          : null;
+          : activeView === "variables" && variablesDirty
+            ? { ...DEFAULT_SAVE_STATE, saveStatus: "unsaved" as const, hasUnsavedChanges: true }
+            : null;
 
   const guardEditorExit = useCallback((next: () => void) => {
     if (!activeSaveState?.hasUnsavedChanges) {
@@ -442,6 +448,15 @@ function App() {
   }, []);
   const projectTokenGrammar = useProjectStore((s) => s.projectTokenGrammar);
   const variableNames = useMemo(() => new Set(projectVariables.map((variable) => variable.name)), [projectVariables]);
+  const usage = useMemo(() => variableUsage(textSnippets, automations), [textSnippets, automations]);
+  const missingVariableCount = [...usage.keys()].filter((name) => !variableNames.has(name)).length;
+  const saveVariables = (variables: typeof projectVariables) => setProjectVariables(variables).then(
+    () => showToast("Saved variables", undefined, "success", "project-variables-save"),
+    (error: unknown) => {
+      showToast("Couldn't save variables", String(error), "error", "project-variables-save");
+      throw error;
+    },
+  );
   const preflight = useMemo(
     () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, tokenGrammar: projectTokenGrammar, elevated }),
     [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, projectTokenGrammar, elevated],
@@ -634,14 +649,6 @@ function App() {
           throw error;
         },
       ) : undefined}
-      variables={projectVariables}
-      onSaveVariables={projectName ? (variables) => setProjectVariables(variables).then(
-        () => showToast("Saved variables", undefined, "success", "project-variables-save"),
-        (error: unknown) => {
-          showToast("Couldn't save variables", String(error), "error", "project-variables-save");
-          throw error;
-        },
-      ) : undefined}
       onError={settingsError}
     />
   );
@@ -667,7 +674,7 @@ function App() {
       <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setSettingsSection(null); setPaletteOpen(true); } }} onOpenSettings={openSettings} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
+        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} badges={{ variables: { count: projectVariables.length, warning: missingVariableCount > 0 ? `${missingVariableCount} used but not defined` : undefined } }} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -756,7 +763,7 @@ function App() {
             <>
             {activeView === "home" && (
               <div className="space-y-4">
-                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} />
+                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} onNavigate={changeView} />
                 <HotkeyOverview
                   textSnippets={textSnippets}
                   videoSnippets={videoSnippets}
@@ -883,6 +890,7 @@ function App() {
                       script={editingScript}
                       onSave={handleScriptSave}
                       hotkeyOwners={hotkeyOwners}
+                      projectVariables={projectVariables}
                       onSaveStateChange={setScriptSaveState}
                     />
                   </div>
@@ -917,6 +925,15 @@ function App() {
               />
             )}
             {activeView === "stream-deck" && <StreamDeckPreview />}
+            {activeView === "variables" && (
+              <VariablesView
+                key={projectPath ?? "variables"}
+                variables={projectVariables}
+                usage={usage}
+                onSave={saveVariables}
+                onDirtyChange={setVariablesDirty}
+              />
+            )}
 
 
             </>
@@ -965,6 +982,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   automations: "Automations",
   hotkeys: "Hotkeys",
   "stream-deck": "Stream Deck",
+  variables: "Variables",
 };
 
 function ContentHeader({

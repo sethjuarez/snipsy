@@ -10,8 +10,7 @@ import { useUpdateStore } from "../stores/updateStore";
 import { DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
 import { clampRestoreDelay, filterSettingsSections, MAX_RESTORE_DELAY_MS, MIN_RESTORE_DELAY_MS, SETTINGS_SECTIONS, type SettingsSectionId } from "../utils/settings";
 import { getBackend } from "../services";
-import type { AppSettings, ProjectVariable } from "../types";
-import ProjectVariablesEditor from "./ProjectVariablesEditor";
+import type { AppSettings } from "../types";
 
 interface SettingsDialogProps {
   initialSection?: SettingsSectionId;
@@ -28,9 +27,6 @@ interface SettingsDialogProps {
   /** Saves the project name and description; rejects with a message on failure. */
   onSaveProject?: (name: string, description: string) => Promise<void>;
   /** The open project's `{{var:name}}` values. */
-  variables?: ProjectVariable[];
-  /** Saves the project variables; rejects with a message on failure. */
-  onSaveVariables?: (variables: ProjectVariable[]) => Promise<void>;
   /** Reports a failure to load or save app settings. */
   onError?: (title: string, detail: string) => void;
 }
@@ -63,15 +59,8 @@ function readDemoChecklist(): boolean {
 
 const fieldStyle = { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" };
 
-function ProjectSection(props: Pick<SettingsDialogProps, "project" | "onSaveProject" | "variables" | "onSaveVariables">) {
-  return (
-    <>
-      <ProjectDetails project={props.project} onSaveProject={props.onSaveProject} />
-      {props.project && props.onSaveVariables && (
-        <ProjectVariablesEditor variables={props.variables ?? []} onSave={props.onSaveVariables} />
-      )}
-    </>
-  );
+function ProjectSection(props: Pick<SettingsDialogProps, "project" | "onSaveProject">) {
+  return <ProjectDetails project={props.project} onSaveProject={props.onSaveProject} />;
 }
 
 function ProjectDetails({ project, onSaveProject }: Pick<SettingsDialogProps, "project" | "onSaveProject">) {
@@ -373,7 +362,7 @@ function ShortcutsSection({ onShowShortcuts, onNavigate }: Pick<SettingsDialogPr
 }
 
 /** App settings in sections, with search and deep links. */
-function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onShowShortcuts, onNavigate, project, onSaveProject, variables, onSaveVariables, onError }: SettingsDialogProps) {
+function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onShowShortcuts, onNavigate, project, onSaveProject, onError }: SettingsDialogProps) {
   const [selected, setSelected] = useState<SettingsSectionId>(initialSection);
   const [query, setQuery] = useState("");
   useEffect(() => setSelected(initialSection), [initialSection]);
@@ -385,7 +374,7 @@ function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRe
   const renderSection = (id: SettingsSectionId) => {
     switch (id) {
       case "project":
-        return <ProjectSection project={project} onSaveProject={onSaveProject} variables={variables} onSaveVariables={onSaveVariables} />;
+        return <ProjectSection project={project} onSaveProject={onSaveProject} />;
       case "appearance":
         return <AppearanceSection />;
       case "demo":

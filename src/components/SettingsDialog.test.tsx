@@ -274,37 +274,3 @@ describe("Clipboard settings", () => {
     expect(toggle.checked).toBe(true);
   });
 });
-
-describe("Project variables", () => {
-  const project = { name: "Demo", description: "" };
-
-  it("adds, validates, and saves variables", async () => {
-    const onSaveVariables = vi.fn().mockResolvedValue(undefined);
-    renderDialog({ initialSection: "project", project, onSaveProject: vi.fn(), variables: [{ name: "host", value: "contoso.com" }], onSaveVariables });
-    const save = screen.getByTestId("settings-variables-save") as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
-
-    fireEvent.click(screen.getByTestId("settings-variable-add"));
-    const names = screen.getAllByTestId("settings-variable-name");
-    fireEvent.change(names[1], { target: { value: "host" } });
-    expect(screen.getByTestId("settings-variables-problem").textContent).toContain('"host" is defined twice');
-    expect(save.disabled).toBe(true);
-
-    fireEvent.change(names[1], { target: { value: "Region" } });
-    fireEvent.change(screen.getAllByTestId("settings-variable-value")[1], { target: { value: "West US" } });
-    expect(screen.queryByTestId("settings-variables-problem")).toBeNull();
-    fireEvent.click(save);
-    await waitFor(() => expect(onSaveVariables).toHaveBeenCalledWith([
-      { name: "host", value: "contoso.com" },
-      { name: "region", value: "West US" },
-    ]));
-  });
-
-  it("removes a variable", async () => {
-    const onSaveVariables = vi.fn().mockResolvedValue(undefined);
-    renderDialog({ initialSection: "project", project, onSaveProject: vi.fn(), variables: [{ name: "host", value: "x" }], onSaveVariables });
-    fireEvent.click(screen.getByTestId("settings-variable-remove"));
-    fireEvent.click(screen.getByTestId("settings-variables-save"));
-    await waitFor(() => expect(onSaveVariables).toHaveBeenCalledWith([]));
-  });
-});

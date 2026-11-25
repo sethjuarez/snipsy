@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computePreflight } from "./preflight";
-import type { TextSnippet } from "../types";
+import type { Script, TextSnippet } from "../types";
 import { TOKEN_GRAMMAR } from "./snippetText";
 
 const snippet = (id: string, text: string, delivery: TextSnippet["delivery"] = "fast-type"): TextSnippet => ({
@@ -46,6 +46,22 @@ describe("computePreflight tokens", () => {
     expect(checks).toHaveLength(1);
     expect(checks[0].label).toBe("2 snippets with token problems");
     expect(checks[0].detail).toContain("broken, undefined.");
+  });
+
+  it("checks automation URLs and titles, linking to Variables when one is undefined", () => {
+    const site = (title: string, url: string): Script => ({
+      id: title, title, description: "",
+      contributionGroups: [{ id: "g", title: "Step", contributions: [{ id: `${title}-site`, kind: "openSite", title, url }] }],
+    });
+    const run = (automations: Script[], textSnippets: TextSnippet[] = []) =>
+      computePreflight({ textSnippets, videoSnippets: [], automations, variableNames: new Set(["host"]) })
+        .checks.filter((check) => check.id === "tokens");
+
+    expect(run([site("ok", "https://{{var:host}}/{{date:iso}}")])).toEqual([]);
+    const [check] = run([site("cursor", "https://x/{{cursor}}")], [snippet("text", "{{var:region}}")]);
+    expect(check.label).toBe("1 snippet and 1 automation with token problems");
+    expect(check.fix).toEqual({ view: "variables", label: "Open Variables" });
+    expect(run([site("cursor", "https://x/{{cursor}}")])[0].fix).toBeUndefined();
   });
 
   it("skips the variable check until variables are known", () => {

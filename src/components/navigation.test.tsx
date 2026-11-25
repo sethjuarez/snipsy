@@ -27,9 +27,22 @@ describe("Sidebar", () => {
     render(<Sidebar activeView="home" onViewChange={vi.fn()} />);
     const content = screen.getByRole("group", { name: "Content" });
     expect(content.textContent).toBe("ContentSnippetsClips");
-    expect(screen.getByRole("group", { name: "Setup" }).textContent).toBe("SetupAutomations");
+    expect(screen.getByRole("group", { name: "Setup" }).textContent).toBe("SetupVariablesAutomations");
     expect(screen.getByRole("group", { name: "Controls" }).textContent).toBe("ControlsHotkeysStream Deck");
     expect(screen.queryByTestId("nav-videos")).toBeNull();
+  });
+
+  it("shows the variable count and a warning marker, also when collapsed", () => {
+    const badges = { variables: { count: 3, warning: "2 used but not defined" } };
+    const { rerender } = render(<Sidebar activeView="home" onViewChange={vi.fn()} badges={badges} />);
+    expect(screen.getByTestId("nav-variables-count").textContent).toBe("3");
+    expect(screen.getByRole("button", { name: "Variables (2 used but not defined)" })).toBeTruthy();
+    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} badges={badges} collapsed />);
+    expect(screen.queryByTestId("nav-variables-count")).toBeNull();
+    expect(screen.getByTestId("nav-variables-warning")).toBeTruthy();
+    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} badges={{ variables: { count: 0 } }} />);
+    expect(screen.queryByTestId("nav-variables-count")).toBeNull();
+    expect(screen.queryByTestId("nav-variables-warning")).toBeNull();
   });
 
   it("offers export and close project in the footer", () => {
