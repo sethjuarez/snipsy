@@ -233,7 +233,7 @@ function MomentImportDialog({
               disabled={!canApply}
               className="rounded px-3 py-1.5 text-base font-medium disabled:opacity-50"
               style={{ backgroundColor: "var(--color-accent)", color: "var(--color-text-on-accent)" }}
-              title="Replace this clip's moments (Ctrl+Enter)"
+              title="Replace this clip's moments"
               data-testid="moment-import-apply"
             >
               {plan.stops.length === 0 && existingStops.length > 0

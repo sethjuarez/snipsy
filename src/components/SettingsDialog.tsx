@@ -1,8 +1,7 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
-import { CheckCircle2, Download, ExternalLink, Keyboard, LayoutGrid, RefreshCw, Save, Search, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, LayoutGrid, RefreshCw, Save, Search, ShieldAlert } from "lucide-react";
 import Dialog from "./ui/Dialog";
 import Button from "./ui/Button";
-import Kbd from "./ui/Kbd";
 import StatusBadge from "./ui/StatusBadge";
 import { useTheme, type ThemePreference } from "../hooks/useTheme";
 import { useAppVersion } from "../hooks/useAppVersion";
@@ -19,7 +18,6 @@ interface SettingsDialogProps {
   onClose: () => void;
   onRelaunchAsAdmin: () => void;
   /** Omitted when no project is open. */
-  onShowShortcuts?: () => void;
   /** Opens a project view; omitted when no project is open. */
   onNavigate?: (view: "stream-deck" | "hotkeys") => void;
   /** The open project; omitted when none is open. */
@@ -340,29 +338,20 @@ function StreamDeckSection({ onNavigate }: Pick<SettingsDialogProps, "onNavigate
   );
 }
 
-function ShortcutsSection({ onShowShortcuts, onNavigate }: Pick<SettingsDialogProps, "onShowShortcuts" | "onNavigate">) {
+function ShortcutsSection({ onNavigate }: Pick<SettingsDialogProps, "onNavigate">) {
   return (
-    <>
-      <Row title="In-app shortcuts" description={<>Work while Snipsy is focused. <Kbd hotkey="CmdOrControl+K" /> opens the command palette.</>}>
-        {onShowShortcuts && (
-          <Button icon={<Keyboard size={12} />} onClick={onShowShortcuts} data-testid="settings-show-shortcuts">
-            View all
-          </Button>
-        )}
-      </Row>
-      <Row title="Demo hotkeys" description="Each snippet, clip, and automation has its own hotkey that works only during a demo.">
-        {onNavigate && (
-          <Button icon={<ExternalLink size={12} />} onClick={() => onNavigate("hotkeys")} data-testid="settings-open-hotkeys">
-            Manage hotkeys
-          </Button>
-        )}
-      </Row>
-    </>
+    <Row title="Demo hotkeys" description="Each snippet, clip, and automation has its own hotkey that works only during a demo.">
+      {onNavigate && (
+        <Button icon={<ExternalLink size={12} />} onClick={() => onNavigate("hotkeys")} data-testid="settings-open-hotkeys">
+          Manage hotkeys
+        </Button>
+      )}
+    </Row>
   );
 }
 
 /** App settings in sections, with search and deep links. */
-function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onShowShortcuts, onNavigate, project, onSaveProject, onError }: SettingsDialogProps) {
+function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onNavigate, project, onSaveProject, onError }: SettingsDialogProps) {
   const [selected, setSelected] = useState<SettingsSectionId>(initialSection);
   const [query, setQuery] = useState("");
   useEffect(() => setSelected(initialSection), [initialSection]);
@@ -386,7 +375,7 @@ function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRe
       case "stream-deck":
         return <StreamDeckSection onNavigate={onNavigate} />;
       case "shortcuts":
-        return <ShortcutsSection onShowShortcuts={onShowShortcuts} onNavigate={onNavigate} />;
+        return <ShortcutsSection onNavigate={onNavigate} />;
     }
   };
 

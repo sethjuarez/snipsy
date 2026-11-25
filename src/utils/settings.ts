@@ -23,7 +23,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: "permissions", label: "Permissions", description: "Administrator rights for input protection", keywords: ["admin", "administrator", "elevation", "elevated", "uac", "input", "block"] },
   { id: "updates", label: "Updates", description: "Version and app updates", keywords: ["version", "upgrade", "install", "release", "check"] },
   { id: "stream-deck", label: "Stream Deck", description: "Trigger snippets from an Elgato Stream Deck", keywords: ["elgato", "plugin", "buttons", "keys", "icons"] },
-  { id: "shortcuts", label: "Shortcuts", description: "In-app shortcuts and demo hotkeys", keywords: ["keyboard", "keys", "hotkeys", "palette", "conflicts"] },
+  { id: "shortcuts", label: "Hotkeys", description: "Demo hotkeys", keywords: ["keyboard", "keys", "hotkeys", "shortcuts", "conflicts"] },
 ];
 
 /** Sections containing every word of the query; no fuzzy letter matching, which matches nearly everything here. */

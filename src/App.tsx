@@ -26,15 +26,12 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import SectionToolbar, { type ToolbarAction } from "./components/SectionToolbar";
 import ToastViewport, { type ToastMessage, type ToastTone } from "./components/ToastViewport";
 import ErrorBoundary from "./components/ErrorBoundary";
-import CommandPalette from "./components/CommandPalette";
-import ShortcutsDialog from "./components/ShortcutsDialog";
 import SettingsDialog from "./components/SettingsDialog";
 import VariablesView from "./components/VariablesView";
 import { variableUsage } from "./utils/variableUsage";
 import type { SettingsSectionId } from "./utils/settings";
 import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
 import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
-import { buildCommands, matchesShortcut, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
 import { describeArchive, exportOpenProject } from "./utils/projectArchive";
 import { auditaurListen } from "./services/auditaur";
@@ -438,8 +435,6 @@ function App() {
     else setActiveView(view);
   };
 
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const [demoStartOpen, setDemoStartOpen] = useState(false);
   const [elevated, setElevated] = useState<boolean | null>(null);
@@ -464,55 +459,21 @@ function App() {
   const blockingOverlay = confirmDialog !== null || demoStartOpen;
   const openSettings = (section: SettingsSectionId = "appearance") => {
     if (blockingOverlay) return;
-    setPaletteOpen(false);
-    setShortcutsOpen(false);
     setSettingsSection(section);
   };
 
-  const commandContext: CommandContext = {
-    demoMode,
-    textSnippets,
-    videoSnippets,
-    automations,
-    runningAutomationId: runningScriptId,
-    navigate: changeView,
-    newTextSnippet: () => guardEditorExit(() => {
-      setActiveView("text-snippets");
-      setEditingSnippet(undefined);
-      setShowForm(true);
-    }),
-    newClip: () => guardEditorExit(() => {
-      setActiveView("video-snippets");
-      setEditingVideoSnippet(undefined);
-      setShowVideoForm(true);
-    }),
-    newAutomation: () => guardEditorExit(() => {
-      setActiveView("automations");
-      setEditingScript(undefined);
-      setShowScriptForm(true);
-    }),
-    toggleDemo: () => handleToggleDemo(),
-    closeProject: () => guardEditorExit(() => void closeProject()),
-    exportProject: () => void handleExportProject(),
-    renameProject: () => openSettings("project"),
-    showShortcuts: () => setShortcutsOpen(true),
-    openSettings: () => openSettings(),
-    toggleSidebar: () => setSidebarCollapsed((collapsed) => !collapsed),
-    editText: (snippet) => guardEditorExit(() => {
-      setActiveView("text-snippets");
-      handleEdit(snippet);
-    }),
-    editClip: (snippet) => guardEditorExit(() => {
-      setActiveView("video-snippets");
-      void handleVideoEdit(snippet);
-    }),
-    playClip: (snippet) => void playVideo(snippet),
-    editAutomation: (script) => guardEditorExit(() => {
-      setActiveView("automations");
-      handleScriptEdit(script);
-    }),
-    runAutomation: (script) => void handleRunScript(script.id),
-  };
+  const editText = (snippet: TextSnippet) => guardEditorExit(() => {
+    setActiveView("text-snippets");
+    handleEdit(snippet);
+  });
+  const editClip = (snippet: VideoSnippet) => guardEditorExit(() => {
+    setActiveView("video-snippets");
+    void handleVideoEdit(snippet);
+  });
+  const editAutomation = (script: Script) => guardEditorExit(() => {
+    setActiveView("automations");
+    handleScriptEdit(script);
+  });
 
   const changeOwnerHotkey = async (owner: HotkeyOwner, hotkey: string) => {
     if (owner.kind === "text") {
@@ -527,48 +488,15 @@ function App() {
   const openHotkeyOwner = (owner: HotkeyOwner) => {
     if (owner.kind === "text") {
       const snippet = textSnippets.find((candidate) => candidate.id === owner.id);
-      if (snippet) commandContext.editText(snippet);
+      if (snippet) editText(snippet);
     } else if (owner.kind === "video") {
       const snippet = videoSnippets.find((candidate) => candidate.id === owner.id);
-      if (snippet) commandContext.editClip(snippet);
+      if (snippet) editClip(snippet);
     } else {
       const script = automations.find((candidate) => candidate.id === owner.id);
-      if (script) commandContext.editAutomation(script);
+      if (script) editAutomation(script);
     }
   };
-
-  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
-  shortcutHandlerRef.current = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.repeat) return;
-    if (matchesShortcut(event, "CmdOrControl+,")) {
-      event.preventDefault();
-      if (settingsSection !== null) setSettingsSection(null);
-      else openSettings();
-      return;
-    }
-    if (!projectName) return;
-    if (matchesShortcut(event, "CmdOrControl+K")) {
-      event.preventDefault();
-      if (blockingOverlay) return;
-      setShortcutsOpen(false);
-      setSettingsSection(null);
-      setPaletteOpen((open) => !open);
-      return;
-    }
-    if (matchesShortcut(event, "CmdOrControl+/")) {
-      event.preventDefault();
-      if (blockingOverlay) return;
-      setPaletteOpen(false);
-      setSettingsSection(null);
-      setShortcutsOpen((open) => !open);
-      return;
-    }
-  };
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => shortcutHandlerRef.current(event);
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   const handleRunScript = useCallback(async (scriptId: string) => {
     if (!projectPath) return;
@@ -613,8 +541,6 @@ function App() {
   const handleToggleDemo = () => {
     if (demoMode) void exitDemoMode();
     else if (shouldConfirmDemoStart(preflight)) {
-      setPaletteOpen(false);
-      setShortcutsOpen(false);
       setSettingsSection(null);
       setDemoStartOpen(true);
     } else startDemo();
@@ -626,10 +552,6 @@ function App() {
       elevated={elevated}
       onClose={() => setSettingsSection(null)}
       onRelaunchAsAdmin={() => void backend.relaunchAsAdmin().catch((e) => showToast("Couldn't restart as administrator", String(e), "error"))}
-      onShowShortcuts={projectName ? () => {
-        setSettingsSection(null);
-        setShortcutsOpen(true);
-      } : undefined}
       onNavigate={projectName ? (view) => {
         setSettingsSection(null);
         changeView(view);
@@ -664,7 +586,7 @@ function App() {
   // ── Main app layout ──
   return (
     <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setSettingsSection(null); setPaletteOpen(true); } }} onOpenSettings={openSettings} />
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenSettings={openSettings} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} warnings={{ variables: missingVariableCount > 0 ? `${missingVariableCount} used but not defined` : undefined }} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
@@ -956,8 +878,6 @@ function App() {
         />
       )}
 
-      {paletteOpen && <CommandPalette commands={buildCommands(commandContext)} onClose={() => setPaletteOpen(false)} />}
-      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {settingsDialog}
       {demoStartOpen && <DemoStartDialog preflight={preflight} onStart={startDemo} onClose={() => setDemoStartOpen(false)} />}
 

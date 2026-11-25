@@ -14,7 +14,7 @@ A **Project** is the top-level organizational unit in Snipsy. A project is store
 - **Video Snippets** — pre-recorded screen capture clips with assigned hotkeys, playback speeds, and optional transition actions.
 - **Automations** (Advanced mode) — ordered, reusable actions that can prepare a demo or open sites programmatically.
 
-A user can have multiple projects (e.g., one per talk or demo). **Export project** (sidebar footer or command palette) zips the whole folder, videos included, into a .snipsy.zip; **Import Project** on the welcome screen unzips one into an empty folder and opens it. All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
+A user can have multiple projects (e.g., one per talk or demo). **Export project** (sidebar footer) zips the whole folder, videos included, into a .snipsy.zip; **Import Project** on the welcome screen unzips one into an empty folder and opens it. All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
 
 ### Demo Mode
 
@@ -98,16 +98,10 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - **Hotkeys** in the sidebar lists every text snippet, clip, and automation with its hotkey and what demo mode will do with it: **Ready**/**Armed**, **Duplicate** (the first item listed wins), **Invalid**, **No hotkey** (or **Optional** for automations), or **Not registered** when the OS refused it during a live demo.
 - **Change** captures a new hotkey in place (conflicts are rejected), **Remove** clears an automation's optional hotkey, and **Open** jumps to the item's editor. **Problems only** filters the list.
 
-### Command Palette & Shortcuts
-
-- Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
-- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
-- These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
-
 ### Settings
 
-- The title-bar gear (or **Ctrl/Cmd+,**) opens Settings, with or without a project. Search filters its sections.
-- **Project** (rename the open project or edit its description, also **Rename project** in the palette; project variables live in **Setup → Variables**), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off; **Restore clipboard after paste**, on by default, and the **restore delay**, 100–5000 ms, default 500, which slow targets like browsers or remote sessions may need raised), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
+- The title-bar gear opens Settings, with or without a project. Search filters its sections.
+- **Project** (rename the open project or edit its description; project variables live in **Setup → Variables**), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off; **Restore clipboard after paste**, on by default, and the **restore delay**, 100–5000 ms, default 500, which slow targets like browsers or remote sessions may need raised), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Hotkeys** (links to the Hotkeys view).
 - The title-bar shield, shown when Snipsy isn't elevated, opens Permissions.
 - App-wide settings that the backend needs (clipboard restore) live in `settings.json` in Snipsy's app data folder, not in a project.
 

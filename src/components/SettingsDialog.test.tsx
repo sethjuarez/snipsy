@@ -23,7 +23,7 @@ const { useThemeStore, THEME_STORAGE_KEY } = await import("../stores/themeStore"
 const { useUpdateStore } = await import("../stores/updateStore");
 
 function renderDialog(props: Partial<Parameters<typeof SettingsDialog>[0]> = {}) {
-  const handlers = { onClose: vi.fn(), onRelaunchAsAdmin: vi.fn(), onShowShortcuts: vi.fn(), onNavigate: vi.fn() };
+  const handlers = { onClose: vi.fn(), onRelaunchAsAdmin: vi.fn(), onNavigate: vi.fn() };
   render(<SettingsDialog elevated {...handlers} {...props} />);
   return handlers;
 }
@@ -190,10 +190,9 @@ describe("SettingsDialog", () => {
     expect((screen.getByTestId("settings-update-install") as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("links to shortcuts, hotkeys, and the Stream Deck preview", () => {
-    const { onShowShortcuts, onNavigate } = renderDialog({ initialSection: "shortcuts" });
-    fireEvent.click(screen.getByTestId("settings-show-shortcuts"));
-    expect(onShowShortcuts).toHaveBeenCalled();
+  it("links to hotkeys and the Stream Deck preview, without in-app shortcut hints", () => {
+    const { onNavigate } = renderDialog({ initialSection: "shortcuts" });
+    expect(screen.queryByTestId("settings-show-shortcuts")).toBeNull();
     fireEvent.click(screen.getByTestId("settings-open-hotkeys"));
     expect(onNavigate).toHaveBeenCalledWith("hotkeys");
     fireEvent.click(screen.getByTestId("settings-nav-stream-deck"));

@@ -149,13 +149,6 @@ describe("StreamDeckPreview", () => {
 });
 
 describe("TitleBar", () => {
-  it("opens the command palette from the search button", () => {
-    const onOpenPalette = vi.fn();
-    render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} onOpenPalette={onOpenPalette} />);
-    fireEvent.click(screen.getByTestId("command-palette-button"));
-    expect(onOpenPalette).toHaveBeenCalled();
-  });
-
   it("shows Keep awake beside Start, but not while live", () => {
     const { rerender } = render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} />);
     expect(screen.getByTestId("titlebar-keep-awake")).toBeTruthy();
@@ -176,8 +169,8 @@ describe("TitleBar", () => {
     expect(screen.getByTestId("demo-mode-toggle").getAttribute("aria-label")).toBe("Stop demo");
   });
 
-  it("hides the search button without a handler", () => {
-    render(<TitleBar projectName={null} demoMode={false} onToggleDemo={vi.fn()} />);
+  it("has no command palette launcher", () => {
+    render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} />);
     expect(screen.queryByTestId("command-palette-button")).toBeNull();
   });
 
