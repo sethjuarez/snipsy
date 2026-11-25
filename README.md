@@ -41,7 +41,7 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
   | Token | Becomes |
   | --- | --- |
   | `{{cursor}}` | Where the caret ends up after delivery (Snipsy presses Left). One per snippet. |
-  | `{{var:<name>}}` | The value of a project variable (Settings → Project → Variables). |
+  | `{{var:<name>}}` | The value of a project variable (**Setup → Variables**). |
   | `{{date}}` / `{{date:<preset>}}` | Today's date. Presets: `short` (the default, locale short date), `long`, `month`, `weekday` (locale-aware), `iso` (`2025-03-14`), `us` (`03/14/2025`), `eu` (`14/03/2025`), `year`. |
   | `{{time}}` | The current time in the locale's short format. |
   | `{{clipboard}}` | The clipboard text from *before* Snipsy touched it. |
@@ -77,12 +77,21 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - A project can contain **automations** — ordered steps (stored as contribution groups) that run repeatable setup actions.
 - A contribution is an extensible action someone can add to an automation. Contributions run in group order, and each contribution is idempotent within a run.
 - The first built-in contribution is `openSite`, which opens an `http://` or `https://` URL in the default browser.
+- An Open site URL and title can use `{{var:<name>}}`, `{{date…}}`, `{{time}}`, and `{{random:N}}` (each action has an **Insert token** menu). `{{cursor}}`, `{{clipboard}}`, and `{{image:…}}` only work in snippet text and are flagged in the editor and pre-demo checklist.
+- Before opening anything, a run resolves every token, inserting values as written (a value is never re-parsed), and checks that each resolved URL is still `http://` or `https://`. An undefined variable or a non-web URL fails the run with the step and action that caused it, and nothing opens.
 - When an automation is executed, Snipsy:
   1. Runs each contribution group in order.
-  2. Skips sites whose URL already opened in the same automation execution.
+  2. Skips sites whose resolved URL already opened in the same automation execution.
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
 - The editor reorders steps and actions with move buttons, insert-below, and drag and drop (pointer or keyboard), including moving actions between steps. Order in the editor is execution order.
 - Automations are stored as human-editable JSON files within the project folder.
+
+### Variables View
+
+- **Setup → Variables** in the sidebar is the one place to edit project variables. The table shows each variable's name, value, description, and how many snippets and automations use it (hover for the list). Raw (**Type literally**) snippets don't count.
+- Names that snippets or automations use but the project doesn't define are listed at the top with an **Add** button each, and the sidebar item shows a warning marker. When the pre-demo checklist finds an undefined variable, its **Open Variables** button comes here.
+- The sidebar shows how many variables the project has.
+- Stream Deck key titles, clip labels, and snippet, automation, and step names are display text and stay as written. Variables resolve in text Snipsy types and in Open site URLs and action titles when the automation runs.
 
 ### Hotkeys View
 
@@ -92,13 +101,13 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 ### Command Palette & Shortcuts
 
 - Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
-- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–6** switch sidebar views, **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
+- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–7** switch sidebar views, **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
 - These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
 
 ### Settings
 
 - The title-bar gear (or **Ctrl/Cmd+,**) opens Settings, with or without a project. Search filters its sections.
-- **Project** (rename the open project or edit its description, also **Rename project** in the palette; edit project **Variables** for `{{var:<name>}}`), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off; **Restore clipboard after paste**, on by default, and the **restore delay**, 100–5000 ms, default 500, which slow targets like browsers or remote sessions may need raised), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
+- **Project** (rename the open project or edit its description, also **Rename project** in the palette; project variables live in **Setup → Variables**), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off; **Restore clipboard after paste**, on by default, and the **restore delay**, 100–5000 ms, default 500, which slow targets like browsers or remote sessions may need raised), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
 - The title-bar shield, shown when Snipsy isn't elevated, opens Permissions.
 - App-wide settings that the backend needs (clipboard restore) live in `settings.json` in Snipsy's app data folder, not in a project.
 
