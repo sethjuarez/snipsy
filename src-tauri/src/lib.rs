@@ -1,3 +1,5 @@
+mod app_settings;
+mod clipboard_guard;
 mod commands;
 mod delivery;
 mod demo;
@@ -13,6 +15,7 @@ mod scripting;
 mod snippet_text;
 mod stream_deck;
 mod stream_deck_control;
+mod tokens;
 mod tray;
 mod typing;
 mod video_meta;
@@ -48,6 +51,7 @@ pub fn run() {
             }
 
             // Always-on tray/menu bar icon
+            app_settings::init(app.handle());
             tray::init_tray(app.handle())?;
             match stream_deck_control::start_control_server(app.handle()) {
                 Ok(state) => {
@@ -82,6 +86,9 @@ pub fn run() {
             commands::create_project,
             commands::open_project,
             commands::save_project,
+            commands::save_project_variables,
+            app_settings::get_app_settings,
+            app_settings::set_app_settings,
             project_archive::export_project,
             project_archive::import_project,
             commands::save_text_snippets,

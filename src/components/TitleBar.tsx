@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Search, Settings } from "lucide-react";
-import Kbd from "./ui/Kbd";
+import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Settings } from "lucide-react";
 import KeepAwakeToggle from "./KeepAwakeToggle";
 import { getBackend } from "../services";
 import { isMacPlatform, traySurfaceName } from "../utils/platform";
@@ -12,8 +11,6 @@ interface TitleBarProps {
   projectName: string | null;
   demoMode: boolean;
   onToggleDemo: () => void;
-  /** Opens the command palette; the search button is hidden when omitted. */
-  onOpenPalette?: () => void;
   /** Opens Settings, optionally at a section; the gear is hidden when omitted. */
   onOpenSettings?: (section?: "permissions") => void;
 }
@@ -23,7 +20,7 @@ function isInteractiveTitlebarTarget(target: EventTarget | null) {
   return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [data-titlebar-interactive='true']"));
 }
 
-function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSettings }: TitleBarProps) {
+function TitleBar({ projectName, demoMode, onToggleDemo, onOpenSettings }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
   const isMac = isMacPlatform();
   const [maximized, setMaximized] = useState(false);
@@ -134,25 +131,7 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSe
         )}
       </div>
 
-      {/* Center: command palette launcher, flanked by draggable space */}
-      <div data-tauri-drag-region className="flex flex-1 min-w-0 items-center justify-center px-3">
-        {onOpenPalette && (
-          <button
-            type="button"
-            onClick={onOpenPalette}
-            className="inline-flex min-w-0 items-center gap-2 rounded-md px-2 transition-colors hover:bg-[var(--color-surface-inset)]"
-            style={{ height: 24, width: "100%", maxWidth: 360, border: "1px solid var(--color-border)", color: "var(--color-text-secondary)", fontSize: "var(--font-size-sm)" }}
-            title="Search snippets and commands"
-            aria-label="Search snippets and commands"
-            aria-keyshortcuts="Control+K Meta+K"
-            data-testid="command-palette-button"
-          >
-            <Search size={13} aria-hidden="true" />
-            <span className="flex-1 truncate text-left">Search or run a command</span>
-            <Kbd hotkey="CmdOrControl+K" />
-          </button>
-        )}
-      </div>
+      <div data-tauri-drag-region className="flex-1" />
 
       {/* Right: controls (no-drag so buttons are clickable) */}
       <div className="flex items-center shrink-0" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
@@ -204,9 +183,8 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenPalette, onOpenSe
             <button
               onClick={() => onOpenSettings()}
               className="inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-inset)]"
-              title={isMac ? "Settings (⌘,)" : "Settings (Ctrl+,)"}
+              title="Settings"
               aria-label="Settings"
-              aria-keyshortcuts="Control+Comma Meta+Comma"
               data-testid="settings-button"
               style={titlebarButtonStyle}
             >

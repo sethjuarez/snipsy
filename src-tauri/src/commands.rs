@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::models::{Project, ProjectData, Script, TextSnippet, VideoSnippet};
+use crate::models::{
+    Project, ProjectData, ProjectVariable, Script, TextSnippet, VideoSnippet, TOKEN_GRAMMAR,
+};
 use tauri_plugin_auditaur::IpcTraceContext;
 
 #[tauri::command]
@@ -18,7 +20,12 @@ pub fn create_project(
     }
     fs::create_dir_all(&project_dir).map_err(|e| format!("Failed to create directory: {e}"))?;
 
-    let project = Project { name, description };
+    let project = Project {
+        name,
+        description,
+        token_grammar: Some(TOKEN_GRAMMAR),
+        ..Project::default()
+    };
 
     let project_json = serde_json::to_string_pretty(&project)
         .map_err(|e| format!("Failed to serialize project: {e}"))?;
@@ -44,10 +51,7 @@ pub fn create_project(
         .map_err(|e| format!("Failed to create automations dir: {e}"))?;
 
     Ok(ProjectData {
-        project: Project {
-            name: project.name,
-            description: project.description,
-        },
+        project,
         text_snippets: empty_text,
         video_snippets: empty_video,
     })
@@ -102,14 +106,117 @@ pub fn save_project(
     if name.is_empty() {
         return Err("Project name cannot be empty.".into());
     }
-    let project = Project {
-        name,
-        description: description.trim().to_string(),
-    };
-    let json = serde_json::to_string_pretty(&project)
+    let description = description.trim().to_string();
+    update_project_file(&project_dir, |fields| {
+        fields.insert("name".into(), name.into());
+        fields.insert("description".into(), description.into());
+    })
+}
+
+/// Replaces the project's `{{var:name}}` values.
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_project_variables(
+    path: String,
+    variables: Vec<ProjectVariable>,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Project, String> {
+    let variables: Vec<ProjectVariable> = variables
+        .into_iter()
+        .map(|variable| ProjectVariable {
+            name: variable.name.trim().to_string(),
+            value: variable.value,
+            description: variable
+                .description
+                .map(|text| text.trim().to_string())
+                .filter(|text| !text.is_empty()),
+        })
+        .collect();
+    validate_variables(&variables)?;
+    let project_dir = PathBuf::from(&path);
+    if !project_dir.join("project.json").is_file() {
+        return Err("No Snipsy project found in this folder.".into());
+    }
+    let value = serde_json::to_value(&variables)
+        .map_err(|e| format!("Failed to serialize variables: {e}"))?;
+    update_project_file(&project_dir, |fields| {
+        if variables.is_empty() {
+            fields.remove("variables");
+        } else {
+            fields.insert("variables".into(), value);
+        }
+    })
+}
+
+pub fn validate_variables(variables: &[ProjectVariable]) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    for variable in variables {
+        if !crate::snippet_text::is_variable_name(&variable.name) {
+            return Err(format!(
+                "Invalid variable name \"{}\": use a-z, 0-9, - and _, starting with a letter or digit.",
+                variable.name
+            ));
+        }
+        if !seen.insert(variable.name.as_str()) {
+            return Err(format!("Variable \"{}\" is defined twice.", variable.name));
+        }
+    }
+    Ok(())
+}
+
+/// Variables from `project.json`, checked so a hand-edited file can't make a
+/// `{{var:...}}` token ambiguous.
+pub fn load_project_variables(
+    project_dir: &std::path::Path,
+) -> Result<Vec<ProjectVariable>, String> {
+    let _lock = project_file_lock();
+    let json = fs::read_to_string(project_dir.join("project.json"))
+        .map_err(|e| format!("Failed to read project.json: {e}"))?;
+    #[derive(serde::Deserialize)]
+    struct VariablesOnly {
+        #[serde(default)]
+        variables: Vec<ProjectVariable>,
+    }
+    let project: VariablesOnly =
+        serde_json::from_str(&json).map_err(|e| format!("Failed to parse project.json: {e}"))?;
+    validate_variables(&project.variables)?;
+    Ok(project.variables)
+}
+
+fn project_file_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Read-modify-writes `project.json`, keeping fields this build doesn't know
+/// about, and replaces the file atomically so readers never see half a file.
+fn update_project_file(
+    project_dir: &std::path::Path,
+    patch: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) -> Result<Project, String> {
+    let _lock = project_file_lock();
+    let path = project_dir.join("project.json");
+    let json =
+        fs::read_to_string(&path).map_err(|e| format!("Failed to read project.json: {e}"))?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(&json).map_err(|e| format!("Failed to parse project.json: {e}"))?;
+    let fields = value
+        .as_object_mut()
+        .ok_or("project.json must contain a JSON object.")?;
+    patch(fields);
+    fields
+        .entry("tokenGrammar")
+        .or_insert_with(|| TOKEN_GRAMMAR.into());
+    let project: Project = serde_json::from_value(value.clone())
+        .map_err(|e| format!("Failed to update project.json: {e}"))?;
+    let json = serde_json::to_string_pretty(&value)
         .map_err(|e| format!("Failed to serialize project: {e}"))?;
-    fs::write(project_dir.join("project.json"), json)
-        .map_err(|e| format!("Failed to write project.json: {e}"))?;
+    let temp = project_dir.join("project.json.tmp");
+    fs::write(&temp, json).map_err(|e| format!("Failed to write project.json: {e}"))?;
+    fs::rename(&temp, &path).map_err(|e| {
+        let _ = fs::remove_file(&temp);
+        format!("Failed to write project.json: {e}")
+    })?;
     Ok(project)
 }
 
@@ -186,7 +293,10 @@ fn import_video_file(
 const MAX_THUMBNAIL_BYTES: usize = 5 * 1024 * 1024;
 
 /// Path of the thumbnail JPEG for a video stored under `<project>/videos/`.
-fn thumbnail_path_for(project_dir: &std::path::Path, relative_path: &str) -> Result<PathBuf, String> {
+fn thumbnail_path_for(
+    project_dir: &std::path::Path,
+    relative_path: &str,
+) -> Result<PathBuf, String> {
     let relative = std::path::Path::new(relative_path);
     let mut components = relative.components();
     let in_videos_dir = matches!(
@@ -559,7 +669,13 @@ mod tests {
         let path = tmp.path().to_string_lossy().into_owned();
         create_project(path.clone(), "Old".into(), "old".into(), None).unwrap();
 
-        let saved = save_project(path.clone(), "  New name ".into(), " new desc ".into(), None).unwrap();
+        let saved = save_project(
+            path.clone(),
+            "  New name ".into(),
+            " new desc ".into(),
+            None,
+        )
+        .unwrap();
         assert_eq!(saved.name, "New name");
         assert_eq!(saved.description, "new desc");
         let opened = open_project(path, None).unwrap();
@@ -570,15 +686,81 @@ mod tests {
     fn save_project_rejects_empty_name_and_missing_project() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().to_string_lossy().into_owned();
-        assert!(save_project(path.clone(), "Name".into(), String::new(), None)
-            .unwrap_err()
-            .contains("No Snipsy project"));
+        assert!(
+            save_project(path.clone(), "Name".into(), String::new(), None)
+                .unwrap_err()
+                .contains("No Snipsy project")
+        );
 
         create_project(path.clone(), "Keep".into(), String::new(), None).unwrap();
-        assert!(save_project(path.clone(), "   ".into(), String::new(), None)
-            .unwrap_err()
-            .contains("cannot be empty"));
+        assert!(
+            save_project(path.clone(), "   ".into(), String::new(), None)
+                .unwrap_err()
+                .contains("cannot be empty")
+        );
         assert_eq!(open_project(path, None).unwrap().project.name, "Keep");
+    }
+
+    fn variable(name: &str, value: &str) -> ProjectVariable {
+        ProjectVariable {
+            name: name.into(),
+            value: value.into(),
+            description: None,
+        }
+    }
+
+    #[test]
+    fn renaming_keeps_variables_and_unknown_fields() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        fs::write(
+            tmp.path().join("project.json"),
+            r#"{"name":"Old","description":"","tokenGrammar":2,"futureField":[1]}"#,
+        )
+        .unwrap();
+        save_project_variables(path.clone(), vec![variable(" host ", "contoso.com")], None)
+            .unwrap();
+        let saved = save_project(path.clone(), "New".into(), String::new(), None).unwrap();
+
+        assert_eq!(saved.variables, [variable("host", "contoso.com")]);
+        assert_eq!(saved.token_grammar, Some(2));
+        let raw = fs::read_to_string(tmp.path().join("project.json")).unwrap();
+        assert!(raw.contains("futureField"), "{raw}");
+        assert!(!tmp.path().join("project.json.tmp").exists());
+        assert_eq!(
+            load_project_variables(tmp.path()).unwrap(),
+            [variable("host", "contoso.com")]
+        );
+    }
+
+    #[test]
+    fn variables_are_validated_on_save_and_load() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        create_project(path.clone(), "P".into(), String::new(), None).unwrap();
+        let err =
+            save_project_variables(path.clone(), vec![variable("Host", "x")], None).unwrap_err();
+        assert!(err.contains("Invalid variable name"), "{err}");
+        let err = save_project_variables(
+            path.clone(),
+            vec![variable("a", "1"), variable("a", "2")],
+            None,
+        )
+        .unwrap_err();
+        assert!(err.contains("defined twice"), "{err}");
+
+        fs::write(
+            tmp.path().join("project.json"),
+            r#"{"name":"P","description":"","variables":[{"name":"a","value":"1"},{"name":"a","value":"2"}]}"#,
+        )
+        .unwrap();
+        assert!(load_project_variables(tmp.path())
+            .unwrap_err()
+            .contains("defined twice"));
+
+        save_project_variables(path.clone(), Vec::new(), None).unwrap();
+        let raw = fs::read_to_string(tmp.path().join("project.json")).unwrap();
+        assert!(!raw.contains("variables"), "{raw}");
     }
 
     #[test]
@@ -592,7 +774,10 @@ mod tests {
         assert!(err.contains("already has a Snipsy project"));
         let project = fs::read_to_string(tmp.path().join("project.json")).unwrap();
         assert!(project.contains("Original"));
-        assert_eq!(fs::read_to_string(tmp.path().join("text-snippets.json")).unwrap(), "[\"keep\"]");
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("text-snippets.json")).unwrap(),
+            "[\"keep\"]"
+        );
     }
 
     #[test]
@@ -618,6 +803,7 @@ mod tests {
             typo_chance: Some(3),
             type_variation: Some(40),
             shift_enter: None,
+            raw: None,
             stream_deck_icon: Some(StreamDeckIcon::Preset {
                 value: "code".into(),
                 background: Some("#111827".into()),
@@ -823,7 +1009,10 @@ mod tests {
         )
         .unwrap();
 
-        let expected = project_path.join("videos").join("thumbnails").join("demo.jpg");
+        let expected = project_path
+            .join("videos")
+            .join("thumbnails")
+            .join("demo.jpg");
         assert_eq!(PathBuf::from(&saved), expected);
         assert_eq!(fs::read(&expected).unwrap(), FAKE_JPEG);
 
@@ -835,7 +1024,8 @@ mod tests {
     #[test]
     fn save_video_thumbnail_rejects_non_jpeg() {
         let (_tmp, project_path) = project_with_video("demo.mp4");
-        let err = write_video_thumbnail(&project_path, "videos/demo.mp4", b"\x89PNG....").unwrap_err();
+        let err =
+            write_video_thumbnail(&project_path, "videos/demo.mp4", b"\x89PNG....").unwrap_err();
         assert!(err.contains("JPEG"));
     }
 
@@ -859,7 +1049,8 @@ mod tests {
     #[test]
     fn save_video_thumbnail_requires_existing_video() {
         let (_tmp, project_path) = project_with_video("demo.mp4");
-        let err = write_video_thumbnail(&project_path, "videos/missing.mp4", FAKE_JPEG).unwrap_err();
+        let err =
+            write_video_thumbnail(&project_path, "videos/missing.mp4", FAKE_JPEG).unwrap_err();
         assert!(err.contains("not found"));
     }
 
@@ -873,7 +1064,10 @@ mod tests {
         import_video_file(&project_path, &source).unwrap();
 
         assert!(!thumb.exists());
-        assert_eq!(fs::read(project_path.join("videos").join("demo.mp4")).unwrap(), b"new video");
+        assert_eq!(
+            fs::read(project_path.join("videos").join("demo.mp4")).unwrap(),
+            b"new video"
+        );
     }
 
     #[test]

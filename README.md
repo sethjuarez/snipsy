@@ -14,7 +14,7 @@ A **Project** is the top-level organizational unit in Snipsy. A project is store
 - **Video Snippets** — pre-recorded screen capture clips with assigned hotkeys, playback speeds, and optional transition actions.
 - **Automations** (Advanced mode) — ordered, reusable actions that can prepare a demo or open sites programmatically.
 
-A user can have multiple projects (e.g., one per talk or demo). **Export project** (sidebar footer or command palette) zips the whole folder, videos included, into a .snipsy.zip; **Import Project** on the welcome screen unzips one into an empty folder and opens it. All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
+A user can have multiple projects (e.g., one per talk or demo). **Export project** (sidebar footer) zips the whole folder, videos included, into a .snipsy.zip; **Import Project** on the welcome screen unzips one into an empty folder and opens it. All snippet hotkeys within a project are global system-level hotkeys that are active whenever the project is in **demo mode**.
 
 ### Demo Mode
 
@@ -36,6 +36,22 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - Fast-type snippets can embed **images** with `{{image:<key>}}` (e.g. `{{image:logo.png}}`). Each image is pasted from the clipboard at that point; images are never humanized. Paste delivery can't include images.
   - Manage images on the **Images** tab under Snippets (import, copy reference, delete). In the snippet editor, **Insert image**, **Import image…**, or paste an image into the text to add it.
   - The editor and pre-demo checklist flag malformed, missing, or paste-mode references.
+- Snippets can include **tokens** that Snipsy fills in when it delivers. Use **Insert token…** in the editor to add them:
+
+  | Token | Becomes |
+  | --- | --- |
+  | `{{cursor}}` | Where the caret ends up after delivery (Snipsy presses Left). One per snippet. |
+  | `{{var:<name>}}` | The value of a project variable (**Setup → Variables**). |
+  | `{{date}}` / `{{date:<preset>}}` | Today's date. Presets: `short` (the default, locale short date), `long`, `month`, `weekday` (locale-aware), `iso` (`2025-03-14`), `us` (`03/14/2025`), `eu` (`14/03/2025`), `year`. |
+  | `{{time}}` | The current time in the locale's short format. |
+  | `{{clipboard}}` | The clipboard text from *before* Snipsy touched it. |
+  | `{{random:<N>}}` | N (1–64) random lowercase letters and digits. The same `N` repeats the same value across snippets for the whole demo session; outside demo mode it's new on every run. |
+
+  - Tokens must match exactly: lowercase, no spaces inside the braces. Anything else stays literal, so `{{ cursor }}`, `{{name}}`, `{{count}}`, JSX `style={{cursor:'pointer'}}`, and `${{ secrets.X }}` are typed as written.
+  - A known token with a bad argument (an unknown date preset, an undefined variable, `{{random:0}}`) is an error. The editor and pre-demo checklist show it, and delivery refuses to start, so nothing is half-typed.
+  - **Type literally** turns tokens off for a snippet. There's no escape syntax.
+  - `{{cursor}}` counts characters after it, so editors that auto-indent or auto-close brackets can leave the caret in the wrong place. It can't come before an image.
+- **Clipboard protection.** Paste delivery and pasted images use the clipboard. Snipsy saves the clipboard once per delivery and puts it back afterward (all formats on Windows; text and images elsewhere). If you copy something while Snipsy is delivering, your copy wins and nothing is restored. On Windows, Snipsy's own clipboard writes stay out of clipboard history (Win+V) and cloud sync.
 
 ### Video Snippets
 
@@ -61,29 +77,33 @@ When a user activates demo mode for a project, all of that project's hotkeys bec
 - A project can contain **automations** — ordered steps (stored as contribution groups) that run repeatable setup actions.
 - A contribution is an extensible action someone can add to an automation. Contributions run in group order, and each contribution is idempotent within a run.
 - The first built-in contribution is `openSite`, which opens an `http://` or `https://` URL in the default browser.
+- An Open site URL and title can use `{{var:<name>}}`, `{{date…}}`, `{{time}}`, and `{{random:N}}` (each action has an **Insert token** menu). `{{cursor}}`, `{{clipboard}}`, and `{{image:…}}` only work in snippet text and are flagged in the editor and pre-demo checklist.
+- Before opening anything, a run resolves every token, inserting values as written (a value is never re-parsed), and checks that each resolved URL is still `http://` or `https://`. An undefined variable or a non-web URL fails the run with the step and action that caused it, and nothing opens.
 - When an automation is executed, Snipsy:
   1. Runs each contribution group in order.
-  2. Skips sites whose URL already opened in the same automation execution.
+  2. Skips sites whose resolved URL already opened in the same automation execution.
 - Automations can be edited and re-run from the UI, global hotkeys, or Stream Deck buttons.
 - The editor reorders steps and actions with move buttons, insert-below, and drag and drop (pointer or keyboard), including moving actions between steps. Order in the editor is execution order.
 - Automations are stored as human-editable JSON files within the project folder.
+
+### Variables View
+
+- **Setup → Variables** in the sidebar is the one place to edit project variables. The table shows each variable's name, value, description, and how many snippets and automations use it (hover for the list). Raw (**Type literally**) snippets don't count.
+- Names that snippets or automations use but the project doesn't define are listed at the top with an **Add** button each, and the sidebar item shows a warning marker. When the pre-demo checklist finds an undefined variable, its **Open Variables** button comes here.
+- The sidebar shows how many variables the project has.
+- Stream Deck key titles, clip labels, and snippet, automation, and step names are display text and stay as written. Variables resolve in text Snipsy types and in Open site URLs and action titles when the automation runs.
 
 ### Hotkeys View
 
 - **Hotkeys** in the sidebar lists every text snippet, clip, and automation with its hotkey and what demo mode will do with it: **Ready**/**Armed**, **Duplicate** (the first item listed wins), **Invalid**, **No hotkey** (or **Optional** for automations), or **Not registered** when the OS refused it during a live demo.
 - **Change** captures a new hotkey in place (conflicts are rejected), **Remove** clears an automation's optional hotkey, and **Open** jumps to the item's editor. **Problems only** filters the list.
 
-### Command Palette & Shortcuts
-
-- Press **Ctrl/Cmd+K** (or the title-bar search) to jump anywhere, create items, start or stop a demo, and edit, play, or run any snippet, clip, or automation.
-- **Ctrl/Cmd+/** lists in-app shortcuts. **Ctrl/Cmd+1–6** switch sidebar views, **Ctrl/Cmd+,** opens Settings, and **Ctrl/Cmd+S** saves the open editor.
-- These only work while Snipsy is focused; snippet hotkeys stay global and only listen in demo mode.
-
 ### Settings
 
-- The title-bar gear (or **Ctrl/Cmd+,**) opens Settings, with or without a project. Search filters its sections.
-- **Project** (rename the open project or edit its description; also **Rename project** in the palette), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Shortcuts**.
+- The title-bar gear opens Settings, with or without a project. Search filters its sections.
+- **Project** (rename the open project or edit its description; project variables live in **Setup → Variables**), **Appearance** (System/Light/Dark theme), **Demo** (pre-demo checklist on or off; **Restore clipboard after paste**, on by default, and the **restore delay**, 100–5000 ms, default 500, which slow targets like browsers or remote sessions may need raised), **Permissions** (restart as administrator on Windows), **Updates** (version, check, install), **Stream Deck**, and **Hotkeys** (links to the Hotkeys view).
 - The title-bar shield, shown when Snipsy isn't elevated, opens Permissions.
+- App-wide settings that the backend needs (clipboard restore) live in `settings.json` in Snipsy's app data folder, not in a project.
 
 ## Data Model
 
@@ -124,12 +144,31 @@ All configuration is stored as **JSON files**, making projects human-readable, v
 }
 ```
 
+- `raw` (optional): `true` types the text exactly as written, without filling in tokens. Omitted means tokens are filled in.
+
 - `delivery`: `"fast-type"` or `"paste"`.
 - `typeDelay` (optional, fast-type only): Milliseconds between simulated keystrokes.
 - `typoChance` (optional, fast-type only): Percent chance (0–20) that a letter or digit is mistyped and corrected. Omitted means off.
 - `typeVariation` (optional, fast-type only): Percent (0–100) that key timing drifts from `typeDelay`. Omitted means off.
 - `shiftEnter` (optional, fast-type only): `true` types line breaks as Shift+Enter, so chat apps add a line instead of sending. Omitted means Enter.
-- `text` may contain `{{image:<key>}}` references to files in `images/` (lowercase `a-z0-9-` name, `.png`/`.jpg`/`.jpeg`). Fast-type only. Other `{{…}}` text is typed literally.
+- `text` may contain `{{image:<key>}}` references to files in `images/` (lowercase `a-z0-9-` name, `.png`/`.jpg`/`.jpeg`). Fast-type only.
+- `text` may also contain the tokens listed under [Text Snippets](#text-snippets). Other `{{…}}` text is typed literally.
+
+### Project Schema
+
+```json
+{
+  "name": "Contoso keynote",
+  "description": "Build 2025 demo",
+  "tokenGrammar": 1,
+  "variables": [
+    { "name": "host", "value": "contoso.example.com", "description": "Demo tenant" }
+  ]
+}
+```
+
+- `variables` (optional): Values for `{{var:<name>}}`. Names are lowercase `a-z0-9`, `-`, or `_`, start with a letter or digit, are at most 64 characters, and must be unique. Values are inserted as written.
+- `tokenGrammar` (optional): The token version the project was saved with. Snipsy warns in the pre-demo checklist when a project comes from a newer version. Unknown fields are kept when Snipsy saves.
 
 ### Video Snippet Schema
 

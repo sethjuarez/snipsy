@@ -356,7 +356,6 @@ function HotkeyOverview({
         icon={Keyboard}
         title="Your run sheet is empty"
         description="Text snippets and clips you create show up here, in the order you'll present them."
-        tip={<>Tip: press <Kbd hotkey="CmdOrControl+K" /> to create anything.</>}
         data-testid="hotkey-overview-empty"
       />
     );

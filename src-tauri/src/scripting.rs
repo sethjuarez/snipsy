@@ -7,7 +7,9 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use crate::models::{AutomationContribution, Script};
+use crate::models::{AutomationContribution, ProjectVariable, Script};
+use crate::snippet_text::{self, Segment};
+use crate::tokens;
 use tauri_plugin_auditaur::IpcTraceContext;
 
 const OPEN_SITE_SETTLE_MS: u64 = 500;
@@ -75,6 +77,8 @@ fn load_automation(project_path: &str, script_id: &str) -> Result<Script, String
     serde_json::from_str(&content).map_err(|e| format!("Failed to parse automation: {}", e))
 }
 
+/// Dedupes sites within one run; called on resolved URLs, so a templated and a
+/// literal URL that land on the same page open once.
 fn idempotency_key(contribution: &AutomationContribution) -> String {
     match contribution {
         AutomationContribution::OpenSite { id, url, .. } => {
@@ -271,6 +275,75 @@ fn split_windows_command_line(command: &str) -> Vec<String> {
     parts
 }
 
+/// Fills in `{{var:...}}`, date, time and random tokens in every Open site URL
+/// and title, then checks each resolved URL, so a missing variable or a value
+/// that isn't an http(s) URL fails the run before any site opens. Values go in
+/// literally; they are never parsed again. Variables load once, and only when
+/// a field uses one.
+fn resolve_script(
+    mut script: Script,
+    load_variables: impl FnOnce() -> Result<Vec<ProjectVariable>, String>,
+    now: chrono::DateTime<chrono::Local>,
+    random: &mut impl FnMut(u32) -> String,
+) -> Result<Script, String> {
+    let mut parsed = Vec::new();
+    for (group_index, group) in script.contribution_groups.iter().enumerate() {
+        for (index, contribution) in group.contributions.iter().enumerate() {
+            let AutomationContribution::OpenSite { title, url, .. } = contribution;
+            let place = format!("Step {} action {}", group_index + 1, index + 1);
+            let title = match title {
+                Some(title) => Some(
+                    snippet_text::parse_field(title)
+                        .map_err(|error| format!("{place} title: {error}"))?,
+                ),
+                None => None,
+            };
+            let url =
+                snippet_text::parse_field(url).map_err(|error| format!("{place} URL: {error}"))?;
+            parsed.push((place, title, url));
+        }
+    }
+
+    let uses_variables = parsed.iter().any(|(_, title, url)| {
+        title
+            .iter()
+            .chain(std::iter::once(url))
+            .flatten()
+            .any(|segment| matches!(segment, Segment::Var(_)))
+    });
+    let variables = if uses_variables {
+        load_variables()?
+    } else {
+        Vec::new()
+    };
+    let values = tokens::Values {
+        variables: &variables,
+        now,
+        clipboard: None,
+    };
+
+    let mut parsed = parsed.into_iter();
+    for group in &mut script.contribution_groups {
+        for contribution in &mut group.contributions {
+            let (place, title_segments, url_segments) =
+                parsed.next().expect("one parse per contribution");
+            let AutomationContribution::OpenSite { title, url, .. } = contribution;
+            if let Some(segments) = title_segments {
+                *title = Some(
+                    tokens::resolve(&segments, &values, random)
+                        .map_err(|error| format!("{place} title: {error}"))?
+                        .text(),
+                );
+            }
+            *url = tokens::resolve(&url_segments, &values, random)
+                .map_err(|error| format!("{place} URL: {error}"))?
+                .text();
+            validate_site_url(url).map_err(|error| format!("{place}: {error}"))?;
+        }
+    }
+    Ok(script)
+}
+
 fn execute_contribution(contribution: &AutomationContribution) -> Result<(), String> {
     match contribution {
         AutomationContribution::OpenSite { url, .. } => open_site(url),
@@ -360,6 +433,12 @@ pub async fn run_automation_with_cancel(
     _auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<String, String> {
     let script = load_automation(&project_path, &script_id)?;
+    let script = resolve_script(
+        script,
+        || crate::commands::load_project_variables(std::path::Path::new(&project_path)),
+        chrono::Local::now(),
+        &mut tokens::random_for_delivery(),
+    )?;
 
     let summary = tauri::async_runtime::spawn_blocking(move || {
         execute_contribution_groups_with_cancel(&script, cancel_token)
@@ -373,6 +452,138 @@ pub async fn run_automation_with_cancel(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn site(url: &str, title: Option<&str>) -> AutomationContribution {
+        AutomationContribution::OpenSite {
+            id: uuid::Uuid::new_v4().to_string(),
+            title: title.map(Into::into),
+            url: url.into(),
+        }
+    }
+
+    fn script_with(contributions: Vec<AutomationContribution>) -> Script {
+        Script {
+            id: "automation-1".into(),
+            title: "Demo".into(),
+            description: "".into(),
+            hotkey: None,
+            contribution_groups: vec![crate::models::AutomationContributionGroup {
+                id: "group-1".into(),
+                title: "Setup".into(),
+                contributions,
+            }],
+            stream_deck_icon: None,
+        }
+    }
+
+    fn variable(name: &str, value: &str) -> ProjectVariable {
+        ProjectVariable {
+            name: name.into(),
+            value: value.into(),
+            description: None,
+        }
+    }
+
+    fn urls(script: &Script) -> Vec<String> {
+        script.contribution_groups[0]
+            .contributions
+            .iter()
+            .map(|c| match c {
+                AutomationContribution::OpenSite { url, .. } => url.clone(),
+            })
+            .collect()
+    }
+
+    fn resolve_with(script: Script, variables: Vec<ProjectVariable>) -> Result<Script, String> {
+        let mut random = |n: u32| "r".repeat(n as usize);
+        resolve_script(script, || Ok(variables), chrono::Local::now(), &mut random)
+    }
+
+    #[test]
+    fn resolves_variables_in_urls_and_titles_literally() {
+        let script = script_with(vec![site(
+            "https://{{var:host}}/?q={{var:query}}&id={{random:3}}",
+            Some("Open {{var:host}}"),
+        )]);
+        let resolved = resolve_with(
+            script,
+            vec![
+                variable("host", "contoso.example.com"),
+                variable("query", "{{cursor}}"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            urls(&resolved),
+            ["https://contoso.example.com/?q={{cursor}}&id=rrr"]
+        );
+        let AutomationContribution::OpenSite { title, .. } =
+            &resolved.contribution_groups[0].contributions[0];
+        assert_eq!(title.as_deref(), Some("Open contoso.example.com"));
+    }
+
+    #[test]
+    fn variable_that_makes_a_non_http_url_fails_the_whole_run() {
+        let script = script_with(vec![
+            site("https://snipsy.dev", None),
+            site("{{var:target}}", None),
+        ]);
+        assert_eq!(
+            resolve_with(script, vec![variable("target", "file:///C:/secret.txt")]).unwrap_err(),
+            "Step 1 action 2: Open site contributions require an http:// or https:// URL."
+        );
+    }
+
+    #[test]
+    fn missing_variable_fails_before_any_site_opens() {
+        let script = script_with(vec![
+            site("https://snipsy.dev", None),
+            site("https://{{var:host}}/", None),
+        ]);
+        assert_eq!(
+            resolve_with(script, vec![]).unwrap_err(),
+            "Step 1 action 2 URL: Undefined variable: host. Add it in Setup → Variables."
+        );
+    }
+
+    #[test]
+    fn snippet_only_tokens_are_rejected_in_fields() {
+        let script = script_with(vec![site("https://snipsy.dev", Some("{{clipboard}}"))]);
+        assert_eq!(
+            resolve_with(script, vec![]).unwrap_err(),
+            "Step 1 action 1 title: {{clipboard}} only works in snippet text."
+        );
+    }
+
+    #[test]
+    fn literal_urls_never_read_variables() {
+        let script = script_with(vec![site("https://snipsy.dev", None)]);
+        let mut random = |_| String::new();
+        let resolved = resolve_script(
+            script,
+            || Err("should not load".into()),
+            chrono::Local::now(),
+            &mut random,
+        )
+        .unwrap();
+        assert_eq!(urls(&resolved), ["https://snipsy.dev"]);
+    }
+
+    #[test]
+    fn resolved_urls_share_one_idempotency_key() {
+        let script = script_with(vec![
+            site("https://{{var:host}}/", None),
+            site("https://contoso.example.com/", None),
+        ]);
+        let resolved = resolve_with(script, vec![variable("host", "contoso.example.com")]).unwrap();
+        let keys: Vec<String> = resolved.contribution_groups[0]
+            .contributions
+            .iter()
+            .map(idempotency_key)
+            .collect();
+        assert_eq!(keys[0], keys[1]);
+        assert_eq!(keys[0], "openSite:https://contoso.example.com/");
+    }
 
     #[test]
     fn rejects_non_http_open_site_urls() {

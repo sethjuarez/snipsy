@@ -1,7 +1,9 @@
 import type {
+  AppSettings,
   ArchiveSummary,
   Project,
   ProjectData,
+  ProjectVariable,
   ImportedVideo,
   MonitorInfo,
   PauseStop,
@@ -24,6 +26,7 @@ export interface SnippetHotkey {
   typoChance?: number;
   typeVariation?: number;
   shiftEnter?: boolean;
+  raw?: boolean;
   // Video snippet fields
   projectPath?: string;
   videoFile?: string;
@@ -63,6 +66,11 @@ export interface BackendService {
   openProject(path: string): Promise<ProjectData>;
   /** Rename the project or change its description; returns the saved values. */
   saveProject(path: string, name: string, description: string): Promise<Project>;
+  /** Replace the project's `{{var:name}}` values; returns the saved project. */
+  saveProjectVariables(path: string, variables: ProjectVariable[]): Promise<Project>;
+  getAppSettings(): Promise<AppSettings>;
+  /** Save app-wide settings; returns them as stored (delays are clamped). */
+  setAppSettings(settings: AppSettings): Promise<AppSettings>;
   /** Zip the project folder (videos included) into a single archive. */
   exportProject(projectPath: string, archivePath: string): Promise<ArchiveSummary>;
   /** Unzip a project archive into an empty folder. */
@@ -83,6 +91,8 @@ export interface BackendService {
     shiftEnter?: boolean,
     /** Needed when the text references `{{image:key}}` images. */
     projectPath?: string,
+    /** Type the text literally, without resolving tokens. */
+    raw?: boolean,
   ): Promise<void>;
   importVideo(projectPath: string, sourceFilePath: string): Promise<string>;
   getImportedVideos(projectPath: string): Promise<ImportedVideo[]>;

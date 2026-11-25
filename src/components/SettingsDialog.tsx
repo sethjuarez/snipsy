@@ -1,14 +1,15 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
-import { CheckCircle2, Download, ExternalLink, Keyboard, LayoutGrid, RefreshCw, Save, Search, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, LayoutGrid, RefreshCw, Save, Search, ShieldAlert } from "lucide-react";
 import Dialog from "./ui/Dialog";
 import Button from "./ui/Button";
-import Kbd from "./ui/Kbd";
 import StatusBadge from "./ui/StatusBadge";
 import { useTheme, type ThemePreference } from "../hooks/useTheme";
 import { useAppVersion } from "../hooks/useAppVersion";
 import { useUpdateStore } from "../stores/updateStore";
 import { DEMO_INTRO_SEEN_KEY } from "../utils/preflight";
-import { filterSettingsSections, SETTINGS_SECTIONS, type SettingsSectionId } from "../utils/settings";
+import { clampRestoreDelay, filterSettingsSections, MAX_RESTORE_DELAY_MS, MIN_RESTORE_DELAY_MS, SETTINGS_SECTIONS, type SettingsSectionId } from "../utils/settings";
+import { getBackend } from "../services";
+import type { AppSettings } from "../types";
 
 interface SettingsDialogProps {
   initialSection?: SettingsSectionId;
@@ -17,13 +18,15 @@ interface SettingsDialogProps {
   onClose: () => void;
   onRelaunchAsAdmin: () => void;
   /** Omitted when no project is open. */
-  onShowShortcuts?: () => void;
   /** Opens a project view; omitted when no project is open. */
   onNavigate?: (view: "stream-deck" | "hotkeys") => void;
   /** The open project; omitted when none is open. */
   project?: { name: string; description: string };
   /** Saves the project name and description; rejects with a message on failure. */
   onSaveProject?: (name: string, description: string) => Promise<void>;
+  /** The open project's `{{var:name}}` values. */
+  /** Reports a failure to load or save app settings. */
+  onError?: (title: string, detail: string) => void;
 }
 
 const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
@@ -54,7 +57,11 @@ function readDemoChecklist(): boolean {
 
 const fieldStyle = { backgroundColor: "var(--color-surface-inset)", border: "1px solid var(--color-border)", color: "var(--color-text)" };
 
-function ProjectSection({ project, onSaveProject }: Pick<SettingsDialogProps, "project" | "onSaveProject">) {
+function ProjectSection(props: Pick<SettingsDialogProps, "project" | "onSaveProject">) {
+  return <ProjectDetails project={props.project} onSaveProject={props.onSaveProject} />;
+}
+
+function ProjectDetails({ project, onSaveProject }: Pick<SettingsDialogProps, "project" | "onSaveProject">) {
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
   const [saving, setSaving] = useState(false);
@@ -159,7 +166,87 @@ function AppearanceSection() {
   );
 }
 
-function DemoSection() {
+function ClipboardSettings({ onError }: Pick<SettingsDialogProps, "onError">) {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [delay, setDelay] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    getBackend().getAppSettings().then(
+      (loaded) => {
+        if (cancelled) return;
+        setSettings(loaded);
+        setDelay(String(loaded.clipboardRestoreDelayMs));
+      },
+      (error: unknown) => onError?.("Couldn't load settings", String(error)),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [onError]);
+  if (!settings) return null;
+  const save = (next: AppSettings) => {
+    const previous = settings;
+    setSettings(next);
+    getBackend().setAppSettings(next).then(
+      (saved) => {
+        setSettings(saved);
+        setDelay(String(saved.clipboardRestoreDelayMs));
+      },
+      (error: unknown) => {
+        setSettings(previous);
+        setDelay(String(previous.clipboardRestoreDelayMs));
+        onError?.("Couldn't save settings", String(error));
+      },
+    );
+  };
+  const commitDelay = () => {
+    const ms = clampRestoreDelay(Number(delay));
+    setDelay(String(ms));
+    if (ms !== settings.clipboardRestoreDelayMs) save({ ...settings, clipboardRestoreDelayMs: ms });
+  };
+  return (
+    <>
+      <Row
+        title="Restore the clipboard after pasting"
+        description="Snipsy pastes through the clipboard, then puts back what you had copied. Skipped if you copy something while it works."
+      >
+        <input
+          type="checkbox"
+          checked={settings.restoreClipboard}
+          onChange={(event) => save({ ...settings, restoreClipboard: event.target.checked })}
+          aria-label="Restore the clipboard after pasting"
+          data-testid="settings-restore-clipboard"
+        />
+      </Row>
+      {settings.restoreClipboard && (
+        <Row
+          title="Restore delay"
+          description="Wait this long after the last paste. Raise it if a browser or remote session pastes your old clipboard."
+        >
+          <input
+            type="number"
+            min={MIN_RESTORE_DELAY_MS}
+            max={MAX_RESTORE_DELAY_MS}
+            step={100}
+            value={delay}
+            onChange={(event) => setDelay(event.target.value)}
+            onBlur={commitDelay}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") commitDelay();
+            }}
+            aria-label="Restore delay in milliseconds"
+            className="w-20 rounded px-2 py-1 text-base"
+            style={fieldStyle}
+            data-testid="settings-restore-delay"
+          />
+          <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>ms</span>
+        </Row>
+      )}
+    </>
+  );
+}
+
+function DemoSection({ onError }: Pick<SettingsDialogProps, "onError">) {
   const [showChecklist, setShowChecklist] = useState(readDemoChecklist);
   const toggle = (next: boolean) => {
     try {
@@ -171,6 +258,7 @@ function DemoSection() {
     setShowChecklist(next);
   };
   return (
+    <>
     <Row
       title="Show the checklist before starting a demo"
       description="Snipsy always asks when no hotkeys would be armed."
@@ -183,6 +271,8 @@ function DemoSection() {
         data-testid="settings-demo-checklist"
       />
     </Row>
+    <ClipboardSettings onError={onError} />
+    </>
   );
 }
 
@@ -248,29 +338,20 @@ function StreamDeckSection({ onNavigate }: Pick<SettingsDialogProps, "onNavigate
   );
 }
 
-function ShortcutsSection({ onShowShortcuts, onNavigate }: Pick<SettingsDialogProps, "onShowShortcuts" | "onNavigate">) {
+function ShortcutsSection({ onNavigate }: Pick<SettingsDialogProps, "onNavigate">) {
   return (
-    <>
-      <Row title="In-app shortcuts" description={<>Work while Snipsy is focused. <Kbd hotkey="CmdOrControl+K" /> opens the command palette.</>}>
-        {onShowShortcuts && (
-          <Button icon={<Keyboard size={12} />} onClick={onShowShortcuts} data-testid="settings-show-shortcuts">
-            View all
-          </Button>
-        )}
-      </Row>
-      <Row title="Demo hotkeys" description="Each snippet, clip, and automation has its own hotkey that works only during a demo.">
-        {onNavigate && (
-          <Button icon={<ExternalLink size={12} />} onClick={() => onNavigate("hotkeys")} data-testid="settings-open-hotkeys">
-            Manage hotkeys
-          </Button>
-        )}
-      </Row>
-    </>
+    <Row title="Demo hotkeys" description="Each snippet, clip, and automation has its own hotkey that works only during a demo.">
+      {onNavigate && (
+        <Button icon={<ExternalLink size={12} />} onClick={() => onNavigate("hotkeys")} data-testid="settings-open-hotkeys">
+          Manage hotkeys
+        </Button>
+      )}
+    </Row>
   );
 }
 
 /** App settings in sections, with search and deep links. */
-function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onShowShortcuts, onNavigate, project, onSaveProject }: SettingsDialogProps) {
+function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRelaunchAsAdmin, onNavigate, project, onSaveProject, onError }: SettingsDialogProps) {
   const [selected, setSelected] = useState<SettingsSectionId>(initialSection);
   const [query, setQuery] = useState("");
   useEffect(() => setSelected(initialSection), [initialSection]);
@@ -286,7 +367,7 @@ function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRe
       case "appearance":
         return <AppearanceSection />;
       case "demo":
-        return <DemoSection />;
+        return <DemoSection onError={onError} />;
       case "permissions":
         return <PermissionsSection elevated={elevated} onRelaunchAsAdmin={onRelaunchAsAdmin} />;
       case "updates":
@@ -294,7 +375,7 @@ function SettingsDialog({ initialSection = "appearance", elevated, onClose, onRe
       case "stream-deck":
         return <StreamDeckSection onNavigate={onNavigate} />;
       case "shortcuts":
-        return <ShortcutsSection onShowShortcuts={onShowShortcuts} onNavigate={onNavigate} />;
+        return <ShortcutsSection onNavigate={onNavigate} />;
     }
   };
 

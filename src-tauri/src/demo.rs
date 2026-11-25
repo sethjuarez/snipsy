@@ -18,6 +18,9 @@ pub struct SnippetHotkey {
     pub typo_chance: Option<u32>,
     pub type_variation: Option<u32>,
     pub shift_enter: Option<bool>,
+    /// Deliver the text literally, without resolving tokens.
+    #[serde(default)]
+    pub raw: Option<bool>,
     // Video snippet playback data
     pub project_path: Option<String>,
     pub video_file: Option<String>,
@@ -98,6 +101,9 @@ pub fn enter_demo_mode(
     }
     crate::keyboard_hook::clear_all_hooks();
 
+    if !demo.active {
+        crate::tokens::start_demo_session();
+    }
     demo.active = true;
     demo.registered_hotkeys = hotkeys.clone();
 
@@ -164,7 +170,8 @@ fn hotkey_identity(hotkey: &str) -> String {
 fn partition_duplicate_hotkeys(
     hotkeys: &[SnippetHotkey],
 ) -> (Vec<&SnippetHotkey>, Vec<(&SnippetHotkey, &SnippetHotkey)>) {
-    let mut owners: std::collections::HashMap<String, &SnippetHotkey> = std::collections::HashMap::new();
+    let mut owners: std::collections::HashMap<String, &SnippetHotkey> =
+        std::collections::HashMap::new();
     let mut unique = Vec::new();
     let mut duplicates = Vec::new();
     for hk in hotkeys.iter().filter(|hk| !hk.hotkey.trim().is_empty()) {
@@ -187,10 +194,18 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
     match hk.snippet_type.as_str() {
         "text" => {
             let text = hk.text.clone().unwrap_or_default();
-            let delivery = hk.delivery.clone().unwrap_or_else(|| "fast-type".to_string());
+            let delivery = hk
+                .delivery
+                .clone()
+                .unwrap_or_else(|| "fast-type".to_string());
             let project_path = hk.project_path.clone();
-            let (type_delay, typo_chance, type_variation, shift_enter) =
-                (hk.type_delay, hk.typo_chance, hk.type_variation, hk.shift_enter);
+            let (type_delay, typo_chance, type_variation, shift_enter, raw) = (
+                hk.type_delay,
+                hk.typo_chance,
+                hk.type_variation,
+                hk.shift_enter,
+                hk.raw,
+            );
             Some(std::sync::Arc::new(move || {
                 // The shared delivery gate rejects presses while another
                 // delivery runs, so keystrokes never interleave.
@@ -202,6 +217,7 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
                     type_variation,
                     shift_enter,
                     project_path.clone(),
+                    raw,
                     None,
                 ) {
                     tracing::error!(error = %e, "Text hotkey delivery failed");
@@ -246,7 +262,9 @@ fn hotkey_action(app: &tauri::AppHandle, hk: &SnippetHotkey) -> Option<HotkeyAct
                 let project_path = project_path.clone();
                 let script_id = script_id.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = crate::scripting::run_automation(project_path, script_id, None).await {
+                    if let Err(e) =
+                        crate::scripting::run_automation(project_path, script_id, None).await
+                    {
                         tracing::error!(error = %e, "Automation hotkey action failed");
                     }
                 });
@@ -272,15 +290,17 @@ fn register_hotkey(
         .map_err(|e| format!("Invalid hotkey '{}': {e}", hk.hotkey))?;
     let plugin_action = action.clone();
     let hotkey = hk.hotkey.clone();
-    let result = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
-        if event.state == ShortcutState::Pressed {
-            tracing::info!(hotkey = %hotkey, "Hotkey fired");
-            // The plugin calls us on the main thread while holding its own lock;
-            // never block it with delivery work.
-            let action = plugin_action.clone();
-            std::thread::spawn(move || action());
-        }
-    });
+    let result = app
+        .global_shortcut()
+        .on_shortcut(shortcut, move |_app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                tracing::info!(hotkey = %hotkey, "Hotkey fired");
+                // The plugin calls us on the main thread while holding its own lock;
+                // never block it with delivery work.
+                let action = plugin_action.clone();
+                std::thread::spawn(move || action());
+            }
+        });
 
     match result {
         Ok(()) => {
@@ -308,6 +328,7 @@ pub fn exit_demo_mode(
 ) -> Result<(), String> {
     let mut demo = state.demo.lock().map_err(|e| format!("Lock error: {e}"))?;
     demo.active = false;
+    crate::tokens::end_demo_session();
 
     let gs = app.global_shortcut();
     for hk in &demo.registered_hotkeys {
@@ -353,6 +374,7 @@ mod tests {
             typo_chance: None,
             type_variation: None,
             shift_enter: None,
+            raw: None,
             project_path: None,
             video_file: None,
             start_time: None,
@@ -396,7 +418,10 @@ mod tests {
         let ids: Vec<_> = unique.iter().map(|hk| hk.id.as_str()).collect();
         assert_eq!(ids, ["a", "b"]);
         assert_eq!(duplicates.len(), 1);
-        assert_eq!((duplicates[0].0.id.as_str(), duplicates[0].1.id.as_str()), ("c", "a"));
+        assert_eq!(
+            (duplicates[0].0.id.as_str(), duplicates[0].1.id.as_str()),
+            ("c", "a")
+        );
     }
 
     #[test]
@@ -406,7 +431,10 @@ mod tests {
             hotkey_identity("Ctrl+Shift+1"),
             hotkey_identity("CmdOrControl+Shift+1")
         );
-        assert_ne!(hotkey_identity("Ctrl+Shift+1"), hotkey_identity("Ctrl+Shift+2"));
+        assert_ne!(
+            hotkey_identity("Ctrl+Shift+1"),
+            hotkey_identity("Ctrl+Shift+2")
+        );
     }
 
     #[test]
@@ -421,6 +449,7 @@ mod tests {
             typo_chance: Some(3),
             type_variation: Some(40),
             shift_enter: None,
+            raw: None,
             project_path: None,
             video_file: None,
             start_time: None,
@@ -485,6 +514,7 @@ mod tests {
             typo_chance: None,
             type_variation: None,
             shift_enter: None,
+            raw: None,
             project_path: Some("/path/to/project".into()),
             video_file: Some("videos/demo.mp4".into()),
             start_time: Some(5.0),

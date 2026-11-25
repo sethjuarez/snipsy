@@ -1,11 +1,7 @@
 import { useId, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { matchesShortcut } from "../../commands/catalog";
 import IconButton from "./IconButton";
-
-/** App-level shortcuts that must still reach the window while a dialog is open. */
-const PASSTHROUGH_SHORTCUTS = ["CmdOrControl+K", "CmdOrControl+/", "CmdOrControl+,"];
 
 interface DialogProps {
   title: string;
@@ -14,7 +10,7 @@ interface DialogProps {
   onClose: () => void;
   children: ReactNode;
   width?: number;
-  /** Align near the top (palette style) instead of centered. */
+  /** Align near the top instead of centered. */
   placement?: "center" | "top";
   showClose?: boolean;
   "data-testid"?: string;
@@ -64,7 +60,7 @@ function Dialog({
             return;
           }
           // Keep keystrokes (e.g. Ctrl+S) from reaching editors behind the modal.
-          if (!PASSTHROUGH_SHORTCUTS.some((shortcut) => matchesShortcut(event, shortcut))) event.stopPropagation();
+          event.stopPropagation();
         }}
         data-testid={testId}
       >

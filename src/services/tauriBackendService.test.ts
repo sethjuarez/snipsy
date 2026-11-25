@@ -33,11 +33,11 @@ describe("TauriBackendService images", () => {
     ]);
   });
 
-  it("passes the project path so text delivery can load images", async () => {
+  it("passes the project path and raw flag to text delivery", async () => {
     const backend = new TauriBackendService();
     invoke.mockResolvedValue(undefined);
 
-    await backend.deliverText("a {{image:logo.png}}", "fast-type", 10, 2, 30, true, "C:/demo");
+    await backend.deliverText("a {{image:logo.png}}", "fast-type", 10, 2, 30, true, "C:/demo", true);
 
     expect(invoke).toHaveBeenCalledWith("deliver_text", {
       text: "a {{image:logo.png}}",
@@ -47,6 +47,7 @@ describe("TauriBackendService images", () => {
       typeVariation: 30,
       shiftEnter: true,
       projectPath: "C:/demo",
+      raw: true,
     });
   });
 

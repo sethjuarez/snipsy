@@ -27,9 +27,21 @@ describe("Sidebar", () => {
     render(<Sidebar activeView="home" onViewChange={vi.fn()} />);
     const content = screen.getByRole("group", { name: "Content" });
     expect(content.textContent).toBe("ContentSnippetsClips");
-    expect(screen.getByRole("group", { name: "Setup" }).textContent).toBe("SetupAutomations");
+    expect(screen.getByRole("group", { name: "Setup" }).textContent).toBe("SetupVariablesAutomations");
     expect(screen.getByRole("group", { name: "Controls" }).textContent).toBe("ControlsHotkeysStream Deck");
     expect(screen.queryByTestId("nav-videos")).toBeNull();
+  });
+
+  it("shows a warning marker but no counts, also when collapsed", () => {
+    const warnings = { variables: "2 used but not defined" };
+    const { rerender, container } = render(<Sidebar activeView="home" onViewChange={vi.fn()} warnings={warnings} />);
+    expect(screen.getByRole("button", { name: "Variables (2 used but not defined)" })).toBeTruthy();
+    expect(screen.getByTestId("nav-variables-warning")).toBeTruthy();
+    expect(container.querySelector("[data-testid$='-count']")).toBeNull();
+    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} warnings={warnings} collapsed />);
+    expect(screen.getByTestId("nav-variables-warning")).toBeTruthy();
+    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} />);
+    expect(screen.queryByTestId("nav-variables-warning")).toBeNull();
   });
 
   it("offers export and close project in the footer", () => {
@@ -137,13 +149,6 @@ describe("StreamDeckPreview", () => {
 });
 
 describe("TitleBar", () => {
-  it("opens the command palette from the search button", () => {
-    const onOpenPalette = vi.fn();
-    render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} onOpenPalette={onOpenPalette} />);
-    fireEvent.click(screen.getByTestId("command-palette-button"));
-    expect(onOpenPalette).toHaveBeenCalled();
-  });
-
   it("shows Keep awake beside Start, but not while live", () => {
     const { rerender } = render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} />);
     expect(screen.getByTestId("titlebar-keep-awake")).toBeTruthy();
@@ -164,8 +169,8 @@ describe("TitleBar", () => {
     expect(screen.getByTestId("demo-mode-toggle").getAttribute("aria-label")).toBe("Stop demo");
   });
 
-  it("hides the search button without a handler", () => {
-    render(<TitleBar projectName={null} demoMode={false} onToggleDemo={vi.fn()} />);
+  it("has no command palette launcher", () => {
+    render(<TitleBar projectName="Demo" demoMode={false} onToggleDemo={vi.fn()} />);
     expect(screen.queryByTestId("command-palette-button")).toBeNull();
   });
 

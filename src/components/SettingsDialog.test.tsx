@@ -6,6 +6,12 @@ import { filterSettingsSections } from "../utils/settings";
 const updater = vi.hoisted(() => ({ check: vi.fn() }));
 vi.mock("@tauri-apps/plugin-updater", () => updater);
 
+const backend = vi.hoisted(() => ({
+  getAppSettings: vi.fn(),
+  setAppSettings: vi.fn(),
+}));
+vi.mock("../services", () => ({ getBackend: () => backend }));
+
 const systemDark = vi.hoisted(() => ({ value: false }));
 Object.defineProperty(window, "matchMedia", {
   configurable: true,
@@ -17,12 +23,14 @@ const { useThemeStore, THEME_STORAGE_KEY } = await import("../stores/themeStore"
 const { useUpdateStore } = await import("../stores/updateStore");
 
 function renderDialog(props: Partial<Parameters<typeof SettingsDialog>[0]> = {}) {
-  const handlers = { onClose: vi.fn(), onRelaunchAsAdmin: vi.fn(), onShowShortcuts: vi.fn(), onNavigate: vi.fn() };
+  const handlers = { onClose: vi.fn(), onRelaunchAsAdmin: vi.fn(), onNavigate: vi.fn() };
   render(<SettingsDialog elevated {...handlers} {...props} />);
   return handlers;
 }
 
 beforeEach(() => {
+  backend.getAppSettings.mockReset().mockResolvedValue({ restoreClipboard: true, clipboardRestoreDelayMs: 500 });
+  backend.setAppSettings.mockReset().mockImplementation(async (settings) => settings);
   localStorage.clear();
   systemDark.value = false;
   useThemeStore.getState().setPreference("system");
@@ -182,10 +190,9 @@ describe("SettingsDialog", () => {
     expect((screen.getByTestId("settings-update-install") as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("links to shortcuts, hotkeys, and the Stream Deck preview", () => {
-    const { onShowShortcuts, onNavigate } = renderDialog({ initialSection: "shortcuts" });
-    fireEvent.click(screen.getByTestId("settings-show-shortcuts"));
-    expect(onShowShortcuts).toHaveBeenCalled();
+  it("links to hotkeys and the Stream Deck preview, without in-app shortcut hints", () => {
+    const { onNavigate } = renderDialog({ initialSection: "shortcuts" });
+    expect(screen.queryByTestId("settings-show-shortcuts")).toBeNull();
     fireEvent.click(screen.getByTestId("settings-open-hotkeys"));
     expect(onNavigate).toHaveBeenCalledWith("hotkeys");
     fireEvent.click(screen.getByTestId("settings-nav-stream-deck"));
@@ -236,5 +243,33 @@ describe("Project settings", () => {
     await waitFor(() => expect(onSaveProject).toHaveBeenCalled());
     await waitFor(() => expect((screen.getByTestId("settings-project-save") as HTMLButtonElement).disabled).toBe(false));
     expect((screen.getByTestId("settings-project-name") as HTMLInputElement).value).toBe("Renamed");
+  });
+});
+
+describe("Clipboard settings", () => {
+  it("saves the restore toggle and clamps the delay", async () => {
+    renderDialog({ initialSection: "demo" });
+    const toggle = (await screen.findByTestId("settings-restore-clipboard")) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+
+    const delay = screen.getByTestId("settings-restore-delay") as HTMLInputElement;
+    fireEvent.change(delay, { target: { value: "99999" } });
+    fireEvent.blur(delay);
+    await waitFor(() => expect(backend.setAppSettings).toHaveBeenLastCalledWith({ restoreClipboard: true, clipboardRestoreDelayMs: 5000 }));
+    expect(delay.value).toBe("5000");
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(backend.setAppSettings).toHaveBeenLastCalledWith({ restoreClipboard: false, clipboardRestoreDelayMs: 5000 }));
+    expect(screen.queryByTestId("settings-restore-delay")).toBeNull();
+  });
+
+  it("rolls back and reports a failed save", async () => {
+    const onError = vi.fn();
+    backend.setAppSettings.mockRejectedValue(new Error("read-only"));
+    renderDialog({ initialSection: "demo", onError });
+    const toggle = (await screen.findByTestId("settings-restore-clipboard")) as HTMLInputElement;
+    fireEvent.click(toggle);
+    await waitFor(() => expect(onError).toHaveBeenCalledWith("Couldn't save settings", "Error: read-only"));
+    expect(toggle.checked).toBe(true);
   });
 });

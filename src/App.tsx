@@ -26,13 +26,12 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import SectionToolbar, { type ToolbarAction } from "./components/SectionToolbar";
 import ToastViewport, { type ToastMessage, type ToastTone } from "./components/ToastViewport";
 import ErrorBoundary from "./components/ErrorBoundary";
-import CommandPalette from "./components/CommandPalette";
-import ShortcutsDialog from "./components/ShortcutsDialog";
 import SettingsDialog from "./components/SettingsDialog";
+import VariablesView from "./components/VariablesView";
+import { variableUsage } from "./utils/variableUsage";
 import type { SettingsSectionId } from "./utils/settings";
 import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
 import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
-import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
 import { describeArchive, exportOpenProject } from "./utils/projectArchive";
 import { auditaurListen } from "./services/auditaur";
@@ -68,6 +67,8 @@ function App() {
   const projectPath = useProjectStore((s) => s.projectPath);
   const projectDescription = useProjectStore((s) => s.projectDescription);
   const updateProject = useProjectStore((s) => s.updateProject);
+  const projectVariables = useProjectStore((s) => s.projectVariables);
+  const setProjectVariables = useProjectStore((s) => s.setProjectVariables);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
@@ -100,6 +101,7 @@ function App() {
   const [textSnippetSaveState, setTextSnippetSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const [videoSnippetSaveState, setVideoSnippetSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
   const [scriptSaveState, setScriptSaveState] = useState<ClipEditorSaveState>(DEFAULT_SAVE_STATE);
+  const [variablesDirty, setVariablesDirty] = useState(false);
   const videoListRef = useRef<VideoListHandle>(null);
   const [videoListToolbarState, setVideoListToolbarState] = useState<VideoListToolbarState>({ importing: false });
   const imageListRef = useRef<ImageListHandle>(null);
@@ -119,6 +121,10 @@ function App() {
     setToasts((current) => upsertToast(current, { id, title, detail, tone, shownAt: Date.now() }));
     toastTimersRef.current.set(id, window.setTimeout(() => dismissToast(id), toastDuration(tone, detail)));
   }, [dismissToast]);
+  const settingsError = useCallback(
+    (title: string, detail: string) => showToast(title, detail, "error", "app-settings"),
+    [showToast],
+  );
 
   // Demo mode hides the window, so hotkey problems stay until dismissed and
   // update in place as snippets are edited.
@@ -367,6 +373,7 @@ function App() {
     setTextSnippetSaveState(DEFAULT_SAVE_STATE);
     setVideoSnippetSaveState(DEFAULT_SAVE_STATE);
     setScriptSaveState(DEFAULT_SAVE_STATE);
+    setVariablesDirty(false);
   }, []);
 
   const activeSaveState = clipEditingVideo
@@ -377,7 +384,9 @@ function App() {
         ? videoSnippetSaveState
         : showScriptForm
           ? scriptSaveState
-          : null;
+          : activeView === "variables" && variablesDirty
+            ? { ...DEFAULT_SAVE_STATE, saveStatus: "unsaved" as const, hasUnsavedChanges: true }
+            : null;
 
   const guardEditorExit = useCallback((next: () => void) => {
     if (!activeSaveState?.hasUnsavedChanges) {
@@ -426,71 +435,45 @@ function App() {
     else setActiveView(view);
   };
 
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId | null>(null);
   const [demoStartOpen, setDemoStartOpen] = useState(false);
   const [elevated, setElevated] = useState<boolean | null>(null);
   useEffect(() => {
     backend.isElevated().then(setElevated).catch(() => setElevated(null));
   }, []);
+  const projectTokenGrammar = useProjectStore((s) => s.projectTokenGrammar);
+  const variableNames = useMemo(() => new Set(projectVariables.map((variable) => variable.name)), [projectVariables]);
+  const usage = useMemo(() => variableUsage(textSnippets, automations), [textSnippets, automations]);
+  const missingVariableCount = [...usage.keys()].filter((name) => !variableNames.has(name)).length;
+  const saveVariables = (variables: typeof projectVariables) => setProjectVariables(variables).then(
+    () => showToast("Saved variables", undefined, "success", "project-variables-save"),
+    (error: unknown) => {
+      showToast("Couldn't save variables", String(error), "error", "project-variables-save");
+      throw error;
+    },
+  );
   const preflight = useMemo(
-    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, elevated }),
-    [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, elevated],
+    () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, tokenGrammar: projectTokenGrammar, elevated }),
+    [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, projectTokenGrammar, elevated],
   );
   const blockingOverlay = confirmDialog !== null || demoStartOpen;
-  const overlayOpen = paletteOpen || shortcutsOpen || settingsSection !== null || blockingOverlay;
   const openSettings = (section: SettingsSectionId = "appearance") => {
     if (blockingOverlay) return;
-    setPaletteOpen(false);
-    setShortcutsOpen(false);
     setSettingsSection(section);
   };
 
-  const commandContext: CommandContext = {
-    demoMode,
-    textSnippets,
-    videoSnippets,
-    automations,
-    runningAutomationId: runningScriptId,
-    navigate: changeView,
-    newTextSnippet: () => guardEditorExit(() => {
-      setActiveView("text-snippets");
-      setEditingSnippet(undefined);
-      setShowForm(true);
-    }),
-    newClip: () => guardEditorExit(() => {
-      setActiveView("video-snippets");
-      setEditingVideoSnippet(undefined);
-      setShowVideoForm(true);
-    }),
-    newAutomation: () => guardEditorExit(() => {
-      setActiveView("automations");
-      setEditingScript(undefined);
-      setShowScriptForm(true);
-    }),
-    toggleDemo: () => handleToggleDemo(),
-    closeProject: () => guardEditorExit(() => void closeProject()),
-    exportProject: () => void handleExportProject(),
-    renameProject: () => openSettings("project"),
-    showShortcuts: () => setShortcutsOpen(true),
-    openSettings: () => openSettings(),
-    toggleSidebar: () => setSidebarCollapsed((collapsed) => !collapsed),
-    editText: (snippet) => guardEditorExit(() => {
-      setActiveView("text-snippets");
-      handleEdit(snippet);
-    }),
-    editClip: (snippet) => guardEditorExit(() => {
-      setActiveView("video-snippets");
-      void handleVideoEdit(snippet);
-    }),
-    playClip: (snippet) => void playVideo(snippet),
-    editAutomation: (script) => guardEditorExit(() => {
-      setActiveView("automations");
-      handleScriptEdit(script);
-    }),
-    runAutomation: (script) => void handleRunScript(script.id),
-  };
+  const editText = (snippet: TextSnippet) => guardEditorExit(() => {
+    setActiveView("text-snippets");
+    handleEdit(snippet);
+  });
+  const editClip = (snippet: VideoSnippet) => guardEditorExit(() => {
+    setActiveView("video-snippets");
+    void handleVideoEdit(snippet);
+  });
+  const editAutomation = (script: Script) => guardEditorExit(() => {
+    setActiveView("automations");
+    handleScriptEdit(script);
+  });
 
   const changeOwnerHotkey = async (owner: HotkeyOwner, hotkey: string) => {
     if (owner.kind === "text") {
@@ -505,54 +488,15 @@ function App() {
   const openHotkeyOwner = (owner: HotkeyOwner) => {
     if (owner.kind === "text") {
       const snippet = textSnippets.find((candidate) => candidate.id === owner.id);
-      if (snippet) commandContext.editText(snippet);
+      if (snippet) editText(snippet);
     } else if (owner.kind === "video") {
       const snippet = videoSnippets.find((candidate) => candidate.id === owner.id);
-      if (snippet) commandContext.editClip(snippet);
+      if (snippet) editClip(snippet);
     } else {
       const script = automations.find((candidate) => candidate.id === owner.id);
-      if (script) commandContext.editAutomation(script);
+      if (script) editAutomation(script);
     }
   };
-
-  const shortcutHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
-  shortcutHandlerRef.current = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.repeat) return;
-    if (matchesShortcut(event, "CmdOrControl+,")) {
-      event.preventDefault();
-      if (settingsSection !== null) setSettingsSection(null);
-      else openSettings();
-      return;
-    }
-    if (!projectName) return;
-    if (matchesShortcut(event, "CmdOrControl+K")) {
-      event.preventDefault();
-      if (blockingOverlay) return;
-      setShortcutsOpen(false);
-      setSettingsSection(null);
-      setPaletteOpen((open) => !open);
-      return;
-    }
-    if (matchesShortcut(event, "CmdOrControl+/")) {
-      event.preventDefault();
-      if (blockingOverlay) return;
-      setPaletteOpen(false);
-      setSettingsSection(null);
-      setShortcutsOpen((open) => !open);
-      return;
-    }
-    if (overlayOpen) return;
-    const view = (Object.keys(NAV_SHORTCUTS) as AppView[]).find((candidate) => matchesShortcut(event, NAV_SHORTCUTS[candidate] ?? ""));
-    if (view) {
-      event.preventDefault();
-      changeView(view);
-    }
-  };
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => shortcutHandlerRef.current(event);
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   const handleRunScript = useCallback(async (scriptId: string) => {
     if (!projectPath) return;
@@ -597,8 +541,6 @@ function App() {
   const handleToggleDemo = () => {
     if (demoMode) void exitDemoMode();
     else if (shouldConfirmDemoStart(preflight)) {
-      setPaletteOpen(false);
-      setShortcutsOpen(false);
       setSettingsSection(null);
       setDemoStartOpen(true);
     } else startDemo();
@@ -610,10 +552,6 @@ function App() {
       elevated={elevated}
       onClose={() => setSettingsSection(null)}
       onRelaunchAsAdmin={() => void backend.relaunchAsAdmin().catch((e) => showToast("Couldn't restart as administrator", String(e), "error"))}
-      onShowShortcuts={projectName ? () => {
-        setSettingsSection(null);
-        setShortcutsOpen(true);
-      } : undefined}
       onNavigate={projectName ? (view) => {
         setSettingsSection(null);
         changeView(view);
@@ -626,6 +564,7 @@ function App() {
           throw error;
         },
       ) : undefined}
+      onError={settingsError}
     />
   );
 
@@ -647,10 +586,10 @@ function App() {
   // ── Main app layout ──
   return (
     <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setSettingsSection(null); setPaletteOpen(true); } }} onOpenSettings={openSettings} />
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenSettings={openSettings} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
+        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} warnings={{ variables: missingVariableCount > 0 ? `${missingVariableCount} used but not defined` : undefined }} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -739,7 +678,7 @@ function App() {
             <>
             {activeView === "home" && (
               <div className="space-y-4">
-                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} />
+                <DemoPreflightPanel preflight={preflight} demoMode={demoMode} projectName={projectName} liveArmedCount={liveArmedCount(preflight, demoHotkeyIssues)} onNavigate={changeView} />
                 <HotkeyOverview
                   textSnippets={textSnippets}
                   videoSnippets={videoSnippets}
@@ -866,6 +805,7 @@ function App() {
                       script={editingScript}
                       onSave={handleScriptSave}
                       hotkeyOwners={hotkeyOwners}
+                      projectVariables={projectVariables}
                       onSaveStateChange={setScriptSaveState}
                     />
                   </div>
@@ -900,6 +840,15 @@ function App() {
               />
             )}
             {activeView === "stream-deck" && <StreamDeckPreview />}
+            {activeView === "variables" && (
+              <VariablesView
+                key={projectPath ?? "variables"}
+                variables={projectVariables}
+                usage={usage}
+                onSave={saveVariables}
+                onDirtyChange={setVariablesDirty}
+              />
+            )}
 
 
             </>
@@ -929,8 +878,6 @@ function App() {
         />
       )}
 
-      {paletteOpen && <CommandPalette commands={buildCommands(commandContext)} onClose={() => setPaletteOpen(false)} />}
-      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {settingsDialog}
       {demoStartOpen && <DemoStartDialog preflight={preflight} onStart={startDemo} onClose={() => setDemoStartOpen(false)} />}
 
@@ -948,6 +895,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   automations: "Automations",
   hotkeys: "Hotkeys",
   "stream-deck": "Stream Deck",
+  variables: "Variables",
 };
 
 function ContentHeader({

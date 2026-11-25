@@ -1,0 +1,601 @@
+[
+  {
+    "text": "",
+    "segments": []
+  },
+  {
+    "text": "plain text",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "plain text"
+      }
+    ]
+  },
+  {
+    "text": "{{image:logo.png}}",
+    "segments": [
+      {
+        "kind": "image",
+        "value": "logo.png"
+      }
+    ]
+  },
+  {
+    "text": "Before {{image:logo.png}} after",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "Before "
+      },
+      {
+        "kind": "image",
+        "value": "logo.png"
+      },
+      {
+        "kind": "text",
+        "value": " after"
+      }
+    ]
+  },
+  {
+    "text": "{{image:a.png}}{{image:b-2.jpg}}",
+    "segments": [
+      {
+        "kind": "image",
+        "value": "a.png"
+      },
+      {
+        "kind": "image",
+        "value": "b-2.jpg"
+      }
+    ]
+  },
+  {
+    "text": "line\n{{image:shot.jpeg}}\n",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "line\n"
+      },
+      {
+        "kind": "image",
+        "value": "shot.jpeg"
+      },
+      {
+        "kind": "text",
+        "value": "\n"
+      }
+    ]
+  },
+  {
+    "text": "{{name}} and {{ image:x.png }}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{name}} and {{ image:x.png }}"
+      }
+    ]
+  },
+  {
+    "text": "{image:x.png}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{image:x.png}"
+      }
+    ]
+  },
+  {
+    "text": "{{{image:x.png}}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{"
+      },
+      {
+        "kind": "image",
+        "value": "x.png"
+      },
+      {
+        "kind": "text",
+        "value": "}"
+      }
+    ]
+  },
+  {
+    "text": "café ☕ {{image:x.png}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "café ☕ "
+      },
+      {
+        "kind": "image",
+        "value": "x.png"
+      }
+    ]
+  },
+  {
+    "text": "{{image:logo.png",
+    "error": "Unclosed image reference: add }} after {{image:"
+  },
+  {
+    "text": "ok {{image:a.png}} then {{image:",
+    "error": "Unclosed image reference: add }} after {{image:"
+  },
+  {
+    "text": "{{image:}}",
+    "error": "Invalid image reference: {{image:}}"
+  },
+  {
+    "text": "{{image:Logo.png}}",
+    "error": "Invalid image reference: {{image:Logo.png}}"
+  },
+  {
+    "text": "{{image: logo.png}}",
+    "error": "Invalid image reference: {{image: logo.png}}"
+  },
+  {
+    "text": "{{image:logo.gif}}",
+    "error": "Invalid image reference: {{image:logo.gif}}"
+  },
+  {
+    "text": "{{image:../project.json}}",
+    "error": "Invalid image reference: {{image:../project.json}}"
+  },
+  {
+    "text": "{{image:con.png}}",
+    "error": "Invalid image reference: {{image:con.png}}"
+  },
+  {
+    "text": "{{image:logo}}",
+    "error": "Invalid image reference: {{image:logo}}"
+  },
+  {
+    "text": "{{cursor}}",
+    "segments": [
+      {
+        "kind": "cursor"
+      }
+    ]
+  },
+  {
+    "text": "Hello {{cursor}}!",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "Hello "
+      },
+      {
+        "kind": "cursor"
+      },
+      {
+        "kind": "text",
+        "value": "!"
+      }
+    ]
+  },
+  {
+    "text": "{{clipboard}}",
+    "segments": [
+      {
+        "kind": "clipboard"
+      }
+    ]
+  },
+  {
+    "text": "{{time}}",
+    "segments": [
+      {
+        "kind": "time"
+      }
+    ]
+  },
+  {
+    "text": "{{date}}",
+    "segments": [
+      {
+        "kind": "date",
+        "value": "short"
+      }
+    ]
+  },
+  {
+    "text": "{{date:iso}} {{date:long}}",
+    "segments": [
+      {
+        "kind": "date",
+        "value": "iso"
+      },
+      {
+        "kind": "text",
+        "value": " "
+      },
+      {
+        "kind": "date",
+        "value": "long"
+      }
+    ]
+  },
+  {
+    "text": "{{date:us}}{{date:eu}}{{date:year}}{{date:month}}{{date:weekday}}{{date:short}}",
+    "segments": [
+      {
+        "kind": "date",
+        "value": "us"
+      },
+      {
+        "kind": "date",
+        "value": "eu"
+      },
+      {
+        "kind": "date",
+        "value": "year"
+      },
+      {
+        "kind": "date",
+        "value": "month"
+      },
+      {
+        "kind": "date",
+        "value": "weekday"
+      },
+      {
+        "kind": "date",
+        "value": "short"
+      }
+    ]
+  },
+  {
+    "text": "{{var:api-url}}/{{var:user_2}}",
+    "segments": [
+      {
+        "kind": "var",
+        "value": "api-url"
+      },
+      {
+        "kind": "text",
+        "value": "/"
+      },
+      {
+        "kind": "var",
+        "value": "user_2"
+      }
+    ]
+  },
+  {
+    "text": "id-{{random:8}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "id-"
+      },
+      {
+        "kind": "random",
+        "value": 8
+      }
+    ]
+  },
+  {
+    "text": "{{random:1}}{{random:64}}",
+    "segments": [
+      {
+        "kind": "random",
+        "value": 1
+      },
+      {
+        "kind": "random",
+        "value": 64
+      }
+    ]
+  },
+  {
+    "text": "{{{cursor}}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{"
+      },
+      {
+        "kind": "cursor"
+      },
+      {
+        "kind": "text",
+        "value": "}"
+      }
+    ]
+  },
+  {
+    "text": "{{image:a.png}}{{cursor}}",
+    "segments": [
+      {
+        "kind": "image",
+        "value": "a.png"
+      },
+      {
+        "kind": "cursor"
+      }
+    ]
+  },
+  {
+    "text": "{{ cursor }}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{ cursor }}"
+      }
+    ]
+  },
+  {
+    "text": "{{Cursor}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{Cursor}}"
+      }
+    ]
+  },
+  {
+    "text": "{{CURSOR}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{CURSOR}}"
+      }
+    ]
+  },
+  {
+    "text": "{{name}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{name}}"
+      }
+    ]
+  },
+  {
+    "text": "{{count}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{count}}"
+      }
+    ]
+  },
+  {
+    "text": "{{cursor:}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{cursor:}}"
+      }
+    ]
+  },
+  {
+    "text": "{{cursor",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{cursor"
+      }
+    ]
+  },
+  {
+    "text": "{{clipboard:x}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{clipboard:x}}"
+      }
+    ]
+  },
+  {
+    "text": "{{time:short}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{time:short}}"
+      }
+    ]
+  },
+  {
+    "text": "<div style={{cursor:'pointer'}}>",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "<div style={{cursor:'pointer'}}>"
+      }
+    ]
+  },
+  {
+    "text": "style={{display:'flex', width: 10}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "style={{display:'flex', width: 10}}"
+      }
+    ]
+  },
+  {
+    "text": "{{ user.name }}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{ user.name }}"
+      }
+    ]
+  },
+  {
+    "text": "{% if x %}{{ x }}{% endif %}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{% if x %}{{ x }}{% endif %}"
+      }
+    ]
+  },
+  {
+    "text": "{{#each items}}{{this}}{{/each}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{#each items}}{{this}}{{/each}}"
+      }
+    ]
+  },
+  {
+    "text": "run: echo ${{ secrets.TOKEN }}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "run: echo ${{ secrets.TOKEN }}"
+      }
+    ]
+  },
+  {
+    "text": "${{github.sha}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "${{github.sha}}"
+      }
+    ]
+  },
+  {
+    "text": "You have {{count}} items",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "You have {{count}} items"
+      }
+    ]
+  },
+  {
+    "text": "{{ var:x }}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{ var:x }}"
+      }
+    ]
+  },
+  {
+    "text": "{{Var:x}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{Var:x}}"
+      }
+    ]
+  },
+  {
+    "text": "{{variable:x}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{variable:x}}"
+      }
+    ]
+  },
+  {
+    "text": "{{dates:iso}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{dates:iso}}"
+      }
+    ]
+  },
+  {
+    "text": "{{randomize:8}}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{randomize:8}}"
+      }
+    ]
+  },
+  {
+    "text": "{{cursor}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{{cursor}"
+      }
+    ]
+  },
+  {
+    "text": "{cursor}",
+    "segments": [
+      {
+        "kind": "text",
+        "value": "{cursor}"
+      }
+    ]
+  },
+  {
+    "text": "{{var:x",
+    "error": "Unclosed var reference: add }} after {{var:"
+  },
+  {
+    "text": "{{date:",
+    "error": "Unclosed date reference: add }} after {{date:"
+  },
+  {
+    "text": "{{random:8",
+    "error": "Unclosed random reference: add }} after {{random:"
+  },
+  {
+    "text": "{{var:}}",
+    "error": "Invalid variable reference: {{var:}} (names use a-z, 0-9, - and _)"
+  },
+  {
+    "text": "{{var:Name}}",
+    "error": "Invalid variable reference: {{var:Name}} (names use a-z, 0-9, - and _)"
+  },
+  {
+    "text": "{{var: name}}",
+    "error": "Invalid variable reference: {{var: name}} (names use a-z, 0-9, - and _)"
+  },
+  {
+    "text": "{{var:-x}}",
+    "error": "Invalid variable reference: {{var:-x}} (names use a-z, 0-9, - and _)"
+  },
+  {
+    "text": "{{date:%Y-%m-%d}}",
+    "error": "Unknown date format: {{date:%Y-%m-%d}} (use iso, short, long, us, eu, year, month, weekday)"
+  },
+  {
+    "text": "{{date:ISO}}",
+    "error": "Unknown date format: {{date:ISO}} (use iso, short, long, us, eu, year, month, weekday)"
+  },
+  {
+    "text": "{{date:iso+1d}}",
+    "error": "Unknown date format: {{date:iso+1d}} (use iso, short, long, us, eu, year, month, weekday)"
+  },
+  {
+    "text": "{{random:0}}",
+    "error": "Invalid random length: {{random:0}} (use 1-64)"
+  },
+  {
+    "text": "{{random:65}}",
+    "error": "Invalid random length: {{random:65}} (use 1-64)"
+  },
+  {
+    "text": "{{random:08}}",
+    "error": "Invalid random length: {{random:08}} (use 1-64)"
+  },
+  {
+    "text": "{{random:}}",
+    "error": "Invalid random length: {{random:}} (use 1-64)"
+  },
+  {
+    "text": "{{random:x}}",
+    "error": "Invalid random length: {{random:x}} (use 1-64)"
+  },
+  {
+    "text": "{{cursor}} and {{cursor}}",
+    "error": "Only one {{cursor}} is allowed per snippet."
+  }
+]

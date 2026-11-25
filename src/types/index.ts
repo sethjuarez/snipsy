@@ -1,6 +1,24 @@
 export interface Project {
   name: string;
   description: string;
+  /** Values for `{{var:name}}` tokens. */
+  variables?: ProjectVariable[];
+  /** Token grammar version the project was written for. */
+  tokenGrammar?: number;
+}
+
+export interface ProjectVariable {
+  name: string;
+  value: string;
+  description?: string;
+}
+
+/** App-wide settings stored by the backend in the app data folder. */
+export interface AppSettings {
+  /** Put back what was on the clipboard after Snipsy pastes through it. */
+  restoreClipboard: boolean;
+  /** Wait after the last paste before restoring, for slow targets. */
+  clipboardRestoreDelayMs: number;
 }
 
 export type DeliveryMethod = "fast-type" | "paste";
@@ -43,6 +61,8 @@ export interface TextSnippet {
   typeVariation?: number;
   /** Fast-type only: type line breaks as Shift+Enter so chat apps add a line instead of sending. */
   shiftEnter?: boolean;
+  /** Type the text exactly as written; `{{...}}` tokens are not resolved. */
+  raw?: boolean;
   streamDeckIcon?: StreamDeckIcon;
 }
 

@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import cases from "../../tests/fixtures/image-tokens.json";
+import cases from "../../tests/fixtures/snippet-tokens.json";
+import fieldCases from "../../tests/fixtures/field-tokens.json";
 import slugCases from "../../tests/fixtures/image-slugs.json";
-import { imageRefProblems, imageToken, isImageKey, parseSnippetText, referencedImages } from "./snippetText";
+import {
+  fieldTokenProblems,
+  fieldVariables,
+  imageRefProblems,
+  imageToken,
+  isImageKey,
+  parseFieldText,
+  parseSnippetText,
+  recognizedTokens,
+  referencedImages,
+  referencedVariables,
+  snippetTextProblems,
+} from "./snippetText";
 
 describe("parseSnippetText", () => {
   it.each(cases)("matches the shared fixture for %j", (testCase) => {
@@ -38,5 +51,53 @@ describe("image reference checks", () => {
     expect(imageRefProblems("{{image:a.png}}", "paste", available)).toBe("Images only work with Fast-type delivery.");
     expect(imageRefProblems("{{image:b.png}}", "fast-type", available)).toBe("Missing image: b.png");
     expect(imageRefProblems("{{image:b.png}}", "fast-type", null)).toBeNull();
+  });
+});
+
+describe("snippet token checks", () => {
+  const images = new Set(["a.png"]);
+  const variables = new Set(["host"]);
+  const check = (text: string, extra: Partial<Parameters<typeof snippetTextProblems>[1]> = {}) =>
+    snippetTextProblems(text, { delivery: "fast-type", images, variables, ...extra });
+
+  it("lists variables and recognized tokens once", () => {
+    expect(referencedVariables("{{var:b}} {{var:a}} {{var:b}}")).toEqual(["b", "a"]);
+    expect(recognizedTokens("{{date}} {{cursor}} {{date:short}} {{random:4}} {{name}}")).toEqual([
+      "{{date}}",
+      "{{cursor}}",
+      "{{random:4}}",
+    ]);
+  });
+
+  it("reports undefined variables and cursor before an image", () => {
+    expect(check("{{var:host}}/x")).toBeNull();
+    expect(check("{{var:port}}")).toBe("Undefined variable: port. Add it in Setup → Variables.");
+    expect(check("{{var:port}}", { variables: null })).toBeNull();
+    expect(check("{{cursor}}{{image:a.png}}")).toBe("{{cursor}} must come after every image.");
+    expect(check("{{image:a.png}}{{cursor}}")).toBeNull();
+  });
+
+  it("skips every check when typed literally", () => {
+    expect(check("{{var:port}} {{cursor}}{{cursor}} {{image:", { raw: true })).toBeNull();
+    expect(recognizedTokens("{{cursor}}", true)).toEqual([]);
+    expect(parseSnippetText("{{cursor}}", true)).toEqual({ ok: true, segments: [{ kind: "text", value: "{{cursor}}" }] });
+  });
+});
+describe("automation field tokens", () => {
+  it.each(fieldCases)("matches the shared field fixture for %j", (testCase) => {
+    const result = parseFieldText(testCase.text);
+    if ("segments" in testCase && testCase.segments) {
+      expect(result).toEqual({ ok: true, segments: testCase.segments });
+    } else {
+      expect(result).toEqual({ ok: false, error: (testCase as { error: string }).error });
+    }
+  });
+
+  it("reports undefined variables only when names are known", () => {
+    const url = "https://{{var:host}}/{{var:path}}";
+    expect(fieldVariables(url)).toEqual(["host", "path"]);
+    expect(fieldTokenProblems(url, new Set(["host"]))).toBe("Undefined variable: path. Add it in Setup → Variables.");
+    expect(fieldTokenProblems(url, null)).toBeNull();
+    expect(fieldTokenProblems("{{cursor}}", null)).toBe("{{cursor}} only works in snippet text.");
   });
 });

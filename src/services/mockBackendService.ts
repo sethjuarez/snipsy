@@ -1,6 +1,8 @@
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
 import { normalizeHotkey } from "../utils/hotkeys";
-import type { ArchiveSummary, Project, ProjectData, ProjectImage, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import { clampRestoreDelay } from "../utils/settings";
+import { projectVariableProblems } from "../utils/snippetText";
+import type { AppSettings, ArchiveSummary, Project, ProjectData, ProjectVariable, ProjectImage, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const UNSUPPORTED_IMAGE = "Only PNG and JPEG images are supported.";
@@ -154,8 +156,35 @@ export class MockBackendService implements BackendService {
   async saveProject(_path: string, name: string, description: string): Promise<Project> {
     const project = { name: name.trim(), description: description.trim() };
     if (!project.name) throw new Error("Project name cannot be empty.");
+    this.data = { ...this.data, project: { ...this.data.project, ...project } };
+    return { ...this.data.project };
+  }
+
+  async saveProjectVariables(_path: string, variables: ProjectVariable[]): Promise<Project> {
+    const cleaned = variables.map((variable) => ({
+      ...variable,
+      name: variable.name.trim(),
+      description: variable.description?.trim() || undefined,
+    }));
+    const problem = projectVariableProblems(cleaned)[0];
+    if (problem) throw new Error(problem);
+    const project = { ...this.data.project, variables: cleaned.length ? cleaned : undefined };
     this.data = { ...this.data, project };
-    return { ...project };
+    return structuredClone(project);
+  }
+
+  private _appSettings: AppSettings = { restoreClipboard: true, clipboardRestoreDelayMs: 500 };
+
+  async getAppSettings(): Promise<AppSettings> {
+    return { ...this._appSettings };
+  }
+
+  async setAppSettings(settings: AppSettings): Promise<AppSettings> {
+    this._appSettings = {
+      restoreClipboard: settings.restoreClipboard,
+      clipboardRestoreDelayMs: clampRestoreDelay(settings.clipboardRestoreDelayMs),
+    };
+    return { ...this._appSettings };
   }
 
   async exportProject(_projectPath: string, archivePath: string): Promise<ArchiveSummary> {
@@ -235,6 +264,7 @@ export class MockBackendService implements BackendService {
     _typeVariation?: number,
     _shiftEnter?: boolean,
     _projectPath?: string,
+    _raw?: boolean,
   ): Promise<void> {
     // Mock: no-op in test mode
   }

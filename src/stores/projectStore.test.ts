@@ -5,6 +5,7 @@ const backend = vi.hoisted(() => ({
   createProject: vi.fn(),
   openProject: vi.fn(),
   saveProject: vi.fn(),
+  saveProjectVariables: vi.fn(),
   saveTextSnippets: vi.fn(),
   saveVideoSnippets: vi.fn(),
   loadAutomations: vi.fn(),
@@ -81,6 +82,27 @@ describe("updateProject", () => {
   });
 });
 
+describe("project variables", () => {
+  it("loads variables on open and keeps what the backend saved", async () => {
+    backend.openProject.mockResolvedValue({
+      project: { name: "P", description: "", variables: [{ name: "host", value: "a" }], tokenGrammar: 1 },
+      textSnippets: [],
+      videoSnippets: [],
+    });
+    await useProjectStore.getState().openProject("C:/project");
+    expect(useProjectStore.getState().projectVariables).toEqual([{ name: "host", value: "a" }]);
+    expect(useProjectStore.getState().projectTokenGrammar).toBe(1);
+
+    backend.saveProjectVariables.mockResolvedValue({ name: "P", description: "", variables: [{ name: "host", value: "b" }] });
+    await useProjectStore.getState().setProjectVariables([{ name: " host ", value: "b" }]);
+    expect(backend.saveProjectVariables).toHaveBeenCalledWith("C:/project", [{ name: " host ", value: "b" }]);
+    expect(useProjectStore.getState().projectVariables).toEqual([{ name: "host", value: "b" }]);
+
+    useProjectStore.getState().closeProject();
+    expect(useProjectStore.getState().projectVariables).toEqual([]);
+  });
+});
+
 describe("buildDemoHotkeys", () => {
   it("lists text, video, then automations with hotkeys, carrying delivery data", () => {
     const hotkeys = buildDemoHotkeys({
@@ -105,6 +127,7 @@ describe("buildDemoHotkeys", () => {
         typoChance: 4,
         typeVariation: 50,
         shiftEnter: true,
+        raw: true,
       }],
       videoSnippets: [],
       automations: [],
@@ -115,6 +138,7 @@ describe("buildDemoHotkeys", () => {
       typoChance: 4,
       typeVariation: 50,
       shiftEnter: true,
+      raw: true,
     });
   });
 });

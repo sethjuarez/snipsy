@@ -136,6 +136,7 @@ pub async fn trigger_stream_deck_button(
                     &snippet.text,
                     delivery_method_name(&snippet.delivery),
                     Some(project_path.as_str()),
+                    snippet.raw.unwrap_or(false),
                     options,
                     None,
                 )?;
@@ -153,6 +154,7 @@ pub async fn trigger_stream_deck_button(
                 &snippet.text,
                 "fast-type",
                 Some(project_path.as_str()),
+                snippet.raw.unwrap_or(false),
             )?;
             let cancel_token = Arc::new(AtomicBool::new(false));
             let run_id = begin_run(
@@ -166,12 +168,9 @@ pub async fn trigger_stream_deck_button(
             let snippet_id = snippet.id.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let _guard = RunClearGuard(run_id);
-                if let Err(error) = crate::delivery::deliver_prepared(
-                    permit,
-                    &prepared,
-                    options,
-                    Some(cancel_token),
-                ) {
+                if let Err(error) =
+                    crate::delivery::deliver_prepared(permit, prepared, options, Some(cancel_token))
+                {
                     tracing::error!(error = %error, snippet = %snippet_id, title = %title, "Stream Deck fast-type delivery failed");
                 }
             });
@@ -857,6 +856,7 @@ mod tests {
             typo_chance: None,
             type_variation: None,
             shift_enter: None,
+            raw: None,
             stream_deck_icon: None,
         };
         let video = VideoSnippet {
@@ -942,12 +942,14 @@ mod tests {
             typo_chance: None,
             type_variation: None,
             shift_enter: None,
+            raw: None,
             stream_deck_icon: None,
         };
         let data = ProjectData {
             project: crate::models::Project {
                 name: "Demo".into(),
                 description: "".into(),
+                ..Default::default()
             },
             text_snippets: vec![text],
             video_snippets: vec![],
@@ -964,6 +966,7 @@ mod tests {
             project: crate::models::Project {
                 name: "Demo".into(),
                 description: "".into(),
+                ..Default::default()
             },
             text_snippets: vec![],
             video_snippets: vec![],
@@ -1000,6 +1003,7 @@ mod tests {
             project: crate::models::Project {
                 name: "Demo".into(),
                 description: "".into(),
+                ..Default::default()
             },
             text_snippets: vec![],
             video_snippets: vec![video],
@@ -1018,6 +1022,7 @@ mod tests {
             project: crate::models::Project {
                 name: "Demo".into(),
                 description: "".into(),
+                ..Default::default()
             },
             text_snippets: vec![],
             video_snippets: vec![],
@@ -1043,6 +1048,7 @@ mod tests {
             project: crate::models::Project {
                 name: "Demo".into(),
                 description: "".into(),
+                ..Default::default()
             },
             text_snippets: vec![],
             video_snippets: vec![],

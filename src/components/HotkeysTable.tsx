@@ -44,7 +44,7 @@ function statusBadge(item: HotkeyAssignment, demoMode: boolean): { tone: StatusT
       return { tone: "danger", label: "Invalid", detail: item.detail };
     case "unassigned":
       return item.owner.kind === "automation"
-        ? { tone: "muted", label: "Optional", detail: "Automations can run from Stream Deck or the palette without a hotkey." }
+        ? { tone: "muted", label: "Optional", detail: "Automations can run from their Run button or Stream Deck without a hotkey." }
         : { tone: "warning", label: "No hotkey", detail: "Assign a hotkey so this works in demo mode." };
   }
 }
@@ -113,7 +113,6 @@ function HotkeysTable({ textSnippets, videoSnippets, automations, demoMode, issu
         icon={Keyboard}
         title="No hotkeys yet"
         description="Create a text snippet, clip, or automation to assign a hotkey."
-        tip="Tip: press Ctrl+K to create anything."
         data-testid="hotkeys-empty-state"
       />
     );
