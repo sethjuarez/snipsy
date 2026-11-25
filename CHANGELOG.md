@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/sethjuarez/snipsy/compare/v0.26.0...v0.27.0) (2026-11-25)
+
+
+### Features
+
+* **tokens:** snippet tokens, project variables and clipboard protection ([#45](https://github.com/sethjuarez/snipsy/issues/45)) ([d2b4ee8](https://github.com/sethjuarez/snipsy/commit/d2b4ee807168f5607c257c9be0dfae7c75fcd916))
+
 ## [0.26.0](https://github.com/sethjuarez/snipsy/compare/v0.25.0...v0.26.0) (2026-11-14)
 
 
