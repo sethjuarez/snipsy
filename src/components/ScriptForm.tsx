@@ -17,7 +17,8 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { AutomationContribution, AutomationContributionGroup, Script, StreamDeckIcon } from "../types";
+import type { AutomationContribution, AutomationContributionGroup, ProjectVariable, Script, StreamDeckIcon } from "../types";
+import { fieldTokenProblems, parseFieldText, segmentToken } from "../utils/snippetText";
 import { findContribution, insertContributionAfter, moveContributionToGroup, moveContributionWithinGroup, moveGroup } from "../utils/contributionOrder";
 import { formatKeyCombo, validateHotkey, type HotkeyOwner } from "../utils/hotkeys";
 import { defaultStreamDeckIcon } from "../utils/streamDeckIcons";
@@ -28,7 +29,30 @@ interface ScriptFormProps {
   script?: Script;
   onSave: (script: Script) => Promise<void> | void;
   hotkeyOwners?: HotkeyOwner[];
+  /** Offered by each action's Insert token menu; also used to flag undefined names. */
+  projectVariables?: ProjectVariable[];
   onSaveStateChange?: (state: EditorSaveState) => void;
+}
+
+/** Tokens allowed in automation fields; cursor, clipboard and images only work in snippet text. */
+const FIELD_TOKENS: { token: string; label: string }[] = [
+  { token: "{{date}}", label: "Date (short)" },
+  { token: "{{date:long}}", label: "Date (long)" },
+  { token: "{{date:iso}}", label: "Date (ISO 2025-01-31)" },
+  { token: "{{time}}", label: "Time" },
+  { token: "{{random:6}}", label: "Random (6 characters)" },
+];
+
+/** Recognized tokens across both fields, or the first problem that would stop the run. */
+function fieldTokenStatus(contribution: AutomationContribution, variableNames: ReadonlySet<string>): { problem: string | null; tokens: string[] } {
+  const tokens = new Set<string>();
+  for (const [label, text] of [["Title", contribution.title ?? ""], ["URL", contribution.url]] as const) {
+    const problem = fieldTokenProblems(text, variableNames);
+    if (problem) return { problem: `${label}: ${problem}`, tokens: [] };
+    const parsed = parseFieldText(text);
+    if (parsed.ok) for (const segment of parsed.segments) if (segment.kind !== "text") tokens.add(segmentToken(segment));
+  }
+  return { problem: null, tokens: [...tokens] };
 }
 
 function defaultContributionGroups(script?: Script): AutomationContributionGroup[] {
@@ -75,6 +99,7 @@ interface ContributionRowProps {
   dragKind: DragKind | null;
   controlRef: (contributionId: string, control: ContributionControl) => (element: HTMLElement | null) => void;
   onChange: (field: "title" | "url", value: string) => void;
+  projectVariables: ProjectVariable[];
   onMove: (direction: -1 | 1) => void;
   onInsertBelow: () => void;
   onRemove: () => void;
@@ -82,7 +107,24 @@ interface ContributionRowProps {
 
 const inputStyle = { backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)" };
 
-function SortableContributionRow({ contribution, groupIndex, contributionIndex, isLast, dragKind, controlRef, onChange, onMove, onInsertBelow, onRemove }: ContributionRowProps) {
+function SortableContributionRow({ contribution, groupIndex, contributionIndex, isLast, dragKind, controlRef, onChange, projectVariables, onMove, onInsertBelow, onRemove }: ContributionRowProps) {
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const urlRef = useRef<HTMLInputElement | null>(null);
+  const lastField = useRef<"title" | "url">("url");
+  const variableNames = new Set(projectVariables.map((variable) => variable.name));
+  const tokenStatus = fieldTokenStatus(contribution, variableNames);
+  const insertToken = (token: string) => {
+    const field = lastField.current;
+    const input = field === "title" ? titleRef.current : urlRef.current;
+    const value = field === "title" ? contribution.title ?? "" : contribution.url;
+    const start = input?.selectionStart ?? value.length;
+    const end = input?.selectionEnd ?? value.length;
+    onChange(field, value.slice(0, start) + token + value.slice(end));
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: contribution.id,
     data: { kind: "contribution" },
@@ -120,8 +162,10 @@ function SortableContributionRow({ contribution, groupIndex, contributionIndex, 
       </span>
       <input
         type="text"
+        ref={titleRef}
         value={contribution.title ?? ""}
         onChange={(e) => onChange("title", e.target.value)}
+        onFocus={() => { lastField.current = "title"; }}
         placeholder="Title"
         className="px-2 py-1 rounded text-base"
         style={inputStyle}
@@ -129,10 +173,17 @@ function SortableContributionRow({ contribution, groupIndex, contributionIndex, 
         data-testid={`contribution-title-${testSuffix}`}
       />
       <input
-        ref={controlRef(contribution.id, "url")}
-        type="url"
+        ref={(element) => {
+          urlRef.current = element;
+          controlRef(contribution.id, "url")(element);
+        }}
+        // Text, not url: the native url type rejects {{var:name}} templates.
+        type="text"
+        inputMode="url"
         value={contribution.url}
         onChange={(e) => onChange("url", e.target.value)}
+        onFocus={() => { lastField.current = "url"; }}
+        aria-invalid={tokenStatus.problem ? true : undefined}
         placeholder="https://example.com"
         className="px-2 py-1 rounded text-base"
         style={inputStyle}
@@ -188,6 +239,42 @@ function SortableContributionRow({ contribution, groupIndex, contributionIndex, 
         >
           <Trash2 size={14} />
         </button>
+      </div>
+      <div className="col-start-3 col-span-3 flex flex-wrap items-center gap-2 text-sm">
+        <select
+          aria-label={`Insert token into action ${stepLabel}`}
+          value=""
+          onMouseDown={() => {
+            // Remember the field that had focus before the menu took it.
+            if (document.activeElement === titleRef.current) lastField.current = "title";
+            else if (document.activeElement === urlRef.current) lastField.current = "url";
+          }}
+          onChange={(e) => {
+            if (e.target.value) insertToken(e.target.value);
+          }}
+          className="px-2 py-0.5 rounded text-sm"
+          style={inputStyle}
+          data-testid={`contribution-insert-token-${testSuffix}`}
+        >
+          <option value="">Insert token…</option>
+          {FIELD_TOKENS.map(({ token, label }) => (
+            <option key={token} value={token}>{label}</option>
+          ))}
+          {projectVariables.length > 0 && (
+            <optgroup label="Project variables">
+              {projectVariables.map((variable) => (
+                <option key={variable.name} value={`{{var:${variable.name}}}`}>{variable.name}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        {tokenStatus.problem ? (
+          <span role="alert" style={{ color: "var(--color-danger)" }} data-testid={`contribution-token-problem-${testSuffix}`}>{tokenStatus.problem}</span>
+        ) : tokenStatus.tokens.length > 0 && (
+          <span style={{ color: "var(--color-text-secondary)" }} data-testid={`contribution-tokens-${testSuffix}`}>
+            Snipsy fills in {tokenStatus.tokens.join(", ")} when it runs.
+          </span>
+        )}
       </div>
     </div>
   );
@@ -314,7 +401,7 @@ function SortableGroup({ group, groupIndex, groupCount, dragKind, controlRef, on
   );
 }
 
-function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: ScriptFormProps) {
+function ScriptForm({ script, onSave, hotkeyOwners = [], projectVariables = [], onSaveStateChange }: ScriptFormProps) {
   const [title, setTitle] = useState(script?.title ?? "");
   const [description, setDescription] = useState(script?.description ?? "");
   const [hotkey, setHotkey] = useState(script?.hotkey ?? "");
@@ -689,6 +776,7 @@ function ScriptForm({ script, onSave, hotkeyOwners = [], onSaveStateChange }: Sc
                   dragKind={dragKind}
                   controlRef={controlRef}
                   onChange={(field, value) => updateOpenSiteContribution(group.id, contribution.id, field, value)}
+                  projectVariables={projectVariables}
                   onMove={(direction) => moveContribution(group.id, contribution.id, contributionIndex, direction, group.contributions.length)}
                   onInsertBelow={() => insertOpenSiteContributionBelow(group.id, contribution.id)}
                   onRemove={() => removeContribution(group.id, contribution.id)}

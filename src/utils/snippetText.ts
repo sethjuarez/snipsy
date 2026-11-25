@@ -187,8 +187,10 @@ function undefinedVariables(names: string[], defined: ReadonlySet<string> | null
 export function parseFieldText(text: string): ParseResult {
   const parsed = parseSnippetText(text);
   if (!parsed.ok) return parsed;
-  const blocked = parsed.segments.find((s) => s.kind === "cursor" || s.kind === "clipboard" || s.kind === "image");
-  if (blocked && blocked.kind !== "text") return { ok: false, error: `${segmentToken(blocked)} only works in snippet text.` };
+  const blocked = parsed.segments.find(
+    (s): s is Exclude<Segment, { kind: "text" }> => s.kind === "cursor" || s.kind === "clipboard" || s.kind === "image",
+  );
+  if (blocked) return { ok: false, error: `${segmentToken(blocked)} only works in snippet text.` };
   return parsed;
 }
 
