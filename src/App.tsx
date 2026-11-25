@@ -667,7 +667,7 @@ function App() {
       <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenPalette={() => { if (!blockingOverlay) { setShortcutsOpen(false); setSettingsSection(null); setPaletteOpen(true); } }} onOpenSettings={openSettings} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} badges={{ variables: { count: projectVariables.length, warning: missingVariableCount > 0 ? `${missingVariableCount} used but not defined` : undefined } }} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
+        <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} warnings={{ variables: missingVariableCount > 0 ? `${missingVariableCount} used but not defined` : undefined }} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
 
         {/* Content area */}
         <main className="flex-1 flex flex-col overflow-hidden">

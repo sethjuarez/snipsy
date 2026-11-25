@@ -65,19 +65,13 @@ interface SidebarProps {
   onExportProject?: () => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
-  /** Optional count and warning shown next to a nav item. */
-  badges?: Partial<Record<AppView, NavBadge>>;
-}
-
-export interface NavBadge {
-  count?: number;
-  /** Shown as a warning marker and appended to the item's accessible name. */
-  warning?: string;
+  /** Status shown as a warning marker next to a nav item and appended to its accessible name. */
+  warnings?: Partial<Record<AppView, string>>;
 }
 
 const rowClass = "flex items-center gap-2 px-3 py-1.5 rounded text-base font-medium w-full text-left";
 
-function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, collapsed = false, onCollapsedChange, badges }: SidebarProps) {
+function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, collapsed = false, onCollapsedChange, warnings }: SidebarProps) {
   return (
     <nav
       className="no-select flex flex-col shrink-0 overflow-hidden"
@@ -119,8 +113,8 @@ function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, co
             )}
             {section.items.map((item) => {
               const isActive = isNavItemActive(item, activeView);
-              const badge = badges?.[item.id];
-              const name = badge?.warning ? `${item.label} (${badge.warning})` : item.label;
+              const warning = warnings?.[item.id];
+              const name = warning ? `${item.label} (${warning})` : item.label;
               return (
                 <button
                   key={item.id}
@@ -138,7 +132,7 @@ function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, co
                 >
                   <span className="relative inline-flex">
                     <item.Icon size={15} />
-                    {collapsed && badge?.warning && (
+                    {collapsed && warning && (
                       <span
                         className="absolute -right-1 -top-1 h-2 w-2 rounded-full"
                         style={{ backgroundColor: "var(--color-warning, #f59e0b)" }}
@@ -147,11 +141,8 @@ function Sidebar({ activeView, onViewChange, onCloseProject, onExportProject, co
                     )}
                   </span>
                   {!collapsed && <span className="flex-1">{item.label}</span>}
-                  {!collapsed && badge?.warning && (
+                  {!collapsed && warning && (
                     <AlertTriangle size={12} style={{ color: "var(--color-warning, #f59e0b)" }} aria-hidden="true" data-testid={`nav-${item.id}-warning`} />
-                  )}
-                  {!collapsed && badge?.count !== undefined && badge.count > 0 && (
-                    <span className="text-xs tabular-nums opacity-80" data-testid={`nav-${item.id}-count`}>{badge.count}</span>
                   )}
                 </button>
               );

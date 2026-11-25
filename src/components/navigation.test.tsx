@@ -32,16 +32,15 @@ describe("Sidebar", () => {
     expect(screen.queryByTestId("nav-videos")).toBeNull();
   });
 
-  it("shows the variable count and a warning marker, also when collapsed", () => {
-    const badges = { variables: { count: 3, warning: "2 used but not defined" } };
-    const { rerender } = render(<Sidebar activeView="home" onViewChange={vi.fn()} badges={badges} />);
-    expect(screen.getByTestId("nav-variables-count").textContent).toBe("3");
+  it("shows a warning marker but no counts, also when collapsed", () => {
+    const warnings = { variables: "2 used but not defined" };
+    const { rerender, container } = render(<Sidebar activeView="home" onViewChange={vi.fn()} warnings={warnings} />);
     expect(screen.getByRole("button", { name: "Variables (2 used but not defined)" })).toBeTruthy();
-    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} badges={badges} collapsed />);
-    expect(screen.queryByTestId("nav-variables-count")).toBeNull();
     expect(screen.getByTestId("nav-variables-warning")).toBeTruthy();
-    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} badges={{ variables: { count: 0 } }} />);
-    expect(screen.queryByTestId("nav-variables-count")).toBeNull();
+    expect(container.querySelector("[data-testid$='-count']")).toBeNull();
+    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} warnings={warnings} collapsed />);
+    expect(screen.getByTestId("nav-variables-warning")).toBeTruthy();
+    rerender(<Sidebar activeView="home" onViewChange={vi.fn()} />);
     expect(screen.queryByTestId("nav-variables-warning")).toBeNull();
   });
 
