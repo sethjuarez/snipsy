@@ -29,10 +29,6 @@ const NAV_ITEMS = NAV_SECTIONS.flatMap((navSection) => navSection.items);
 /** Every view the palette can jump to, including tabs nested under a sidebar item. */
 const NAV_DESTINATIONS = NAV_ITEMS.flatMap((item) => [item, ...(item.subviews ?? [])]);
 
-export const NAV_SHORTCUTS = Object.fromEntries(
-  NAV_ITEMS.map((item, index) => [item.id, `CmdOrControl+${index + 1}`]),
-) as Partial<Record<AppView, string>>;
-
 /** App-wide shortcuts that are handled outside the command list. */
 export const STATIC_SHORTCUTS: ShortcutInfo[] = [
   { id: "palette", title: "Open command palette", shortcut: "CmdOrControl+K" },
@@ -43,10 +39,7 @@ export const STATIC_SHORTCUTS: ShortcutInfo[] = [
 ];
 
 /** Every in-app shortcut, used by the help dialog and conflict checks. */
-export const ALL_SHORTCUTS: ShortcutInfo[] = [
-  ...STATIC_SHORTCUTS,
-  ...NAV_ITEMS.map((item) => ({ id: `nav.${item.id}`, title: `Go to ${item.label}`, shortcut: NAV_SHORTCUTS[item.id]! })),
-];
+export const ALL_SHORTCUTS: ShortcutInfo[] = [...STATIC_SHORTCUTS];
 
 export interface CommandContext {
   demoMode: boolean;
@@ -77,7 +70,6 @@ export function buildCommands(ctx: CommandContext): AppCommand[] {
     id: `nav.${item.id}`,
     title: `Go to ${item.label}`,
     group: "Navigation",
-    shortcut: NAV_SHORTCUTS[item.id],
     keywords: sectionKeywords(item.id),
     run: () => ctx.navigate(item.id),
   }));

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ALL_SHORTCUTS, buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./catalog";
+import { ALL_SHORTCUTS, buildCommands, matchesShortcut, type CommandContext } from "./catalog";
 import { NAV_SECTIONS } from "../components/Sidebar";
 import type { Script, TextSnippet, VideoSnippet } from "../types";
 
@@ -40,10 +40,11 @@ const find = (ctx: CommandContext, id: string) => {
   return command;
 };
 
-describe("NAV_SHORTCUTS", () => {
-  it("numbers every nav item in sidebar order", () => {
+describe("ALL_SHORTCUTS", () => {
+  it("has no Ctrl+number page shortcuts, which clash with global tools like ZoomIt", () => {
+    expect(ALL_SHORTCUTS.some((item) => /\+\d$/.test(item.shortcut))).toBe(false);
     const ids = NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.id));
-    expect(ids.map((id) => NAV_SHORTCUTS[id])).toEqual(ids.map((_, index) => `CmdOrControl+${index + 1}`));
+    for (const id of ids) expect(find(makeContext(), `nav.${id}`).shortcut).toBeUndefined();
   });
 
   it("lists unique shortcuts in ALL_SHORTCUTS", () => {
@@ -75,7 +76,7 @@ describe("buildCommands", () => {
     expect(ctx.newClip).toHaveBeenCalled();
   });
 
-  it("reaches the Source videos tab from the palette without a number shortcut", () => {
+  it("reaches the Source videos tab from the palette", () => {
     const ctx = makeContext();
     const command = find(ctx, "nav.videos");
     expect(command.title).toBe("Go to Source videos");

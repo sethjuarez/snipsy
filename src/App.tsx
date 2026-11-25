@@ -34,7 +34,7 @@ import { variableUsage } from "./utils/variableUsage";
 import type { SettingsSectionId } from "./utils/settings";
 import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
 import { computePreflight, liveArmedCount, shouldConfirmDemoStart } from "./utils/preflight";
-import { buildCommands, matchesShortcut, NAV_SHORTCUTS, type CommandContext } from "./commands/catalog";
+import { buildCommands, matchesShortcut, type CommandContext } from "./commands/catalog";
 import { getBackend } from "./services";
 import { describeArchive, exportOpenProject } from "./utils/projectArchive";
 import { auditaurListen } from "./services/auditaur";
@@ -462,7 +462,6 @@ function App() {
     [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, projectTokenGrammar, elevated],
   );
   const blockingOverlay = confirmDialog !== null || demoStartOpen;
-  const overlayOpen = paletteOpen || shortcutsOpen || settingsSection !== null || blockingOverlay;
   const openSettings = (section: SettingsSectionId = "appearance") => {
     if (blockingOverlay) return;
     setPaletteOpen(false);
@@ -563,12 +562,6 @@ function App() {
       setSettingsSection(null);
       setShortcutsOpen((open) => !open);
       return;
-    }
-    if (overlayOpen) return;
-    const view = (Object.keys(NAV_SHORTCUTS) as AppView[]).find((candidate) => matchesShortcut(event, NAV_SHORTCUTS[candidate] ?? ""));
-    if (view) {
-      event.preventDefault();
-      changeView(view);
     }
   };
   useEffect(() => {
