@@ -34,7 +34,7 @@ describe("ImageList", () => {
     await waitFor(() => expect(screen.getByTestId("image-key-0").textContent).toBe("{{image:logo.png}}"));
     expect(screen.getByTestId("image-item-0").textContent).toMatch(/640×480 · 2 KB · +1 snippet\b/);
     expect(screen.getByAltText("logo.png").getAttribute("src")).toBe("asset://C:/p/images/logo.png");
-    expect(onImagesChange).toHaveBeenLastCalledWith(["logo.png"]);
+    await waitFor(() => expect(onImagesChange).toHaveBeenLastCalledWith(["logo.png"]));
   });
 
   it("shows an empty state", async () => {
