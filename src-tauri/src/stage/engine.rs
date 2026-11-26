@@ -133,6 +133,12 @@ pub trait PowerLease: Send {
     fn acquire(&mut self) -> Result<(), String>;
     fn release(&mut self);
     fn is_held(&self) -> bool;
+    /// Replace the held request with a fresh one. Windows drops power
+    /// requests on sleep without closing the handle, so the holder renews.
+    fn renew(&mut self) -> Result<(), String> {
+        self.release();
+        self.acquire()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,6 +187,10 @@ pub struct StageStatus {
     /// A journal from an earlier run was found at launch.
     pub recovered: bool,
     pub error: Option<String>,
+    /// Increases with every snapshot in this process. Consumers drop
+    /// snapshots older than the one they have.
+    #[serde(default)]
+    pub revision: u64,
 }
 
 impl StageStatus {
@@ -200,6 +210,7 @@ impl StageStatus {
             settings: Vec::new(),
             recovered: false,
             error: None,
+            revision: 0,
         }
     }
 }
@@ -310,6 +321,32 @@ impl StageEngine {
             }
             Ok(None) => {}
             Err(error) => tracing::warn!(%error, "Couldn't read the Stage journal at launch"),
+        }
+    }
+
+    /// Match the lease to the journal: release it when nothing wants it
+    /// (for example another Snipsy process unstaged), take it when it's
+    /// missing, and renew it when asked. Leaves it alone if the journal
+    /// can't be read.
+    pub fn reconcile_lease(&mut self, renew: bool) {
+        let wanted = match self.load() {
+            Ok(Some(journal)) => journal.phase != Phase::Restoring && journal.config.shared.keep_awake,
+            Ok(None) => false,
+            Err(_) => return,
+        };
+        if !wanted {
+            self.lease.release();
+            return;
+        }
+        let result = if !self.lease.is_held() {
+            self.lease.acquire()
+        } else if renew {
+            self.lease.renew()
+        } else {
+            Ok(())
+        };
+        if let Err(error) = result {
+            tracing::warn!(%error, "Couldn't keep the machine awake for Stage");
         }
     }
 

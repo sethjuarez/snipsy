@@ -15,16 +15,21 @@ interface StageStoreState {
 }
 
 /** Machine-wide Stage status. Not tied to the open project. */
-export const useStageStore = create<StageStoreState>((set) => {
+export const useStageStore = create<StageStoreState>((set, get) => {
+  // Responses and events can arrive out of order; keep the newest snapshot.
+  const accept = (status: StageStatus) => {
+    const current = get().status;
+    if (!current || status.revision >= current.revision) set({ status });
+  };
   const run = async (op: () => Promise<StageReport>) => {
     set({ busy: true });
     try {
       const report = await op();
-      set({ status: report.status });
+      accept(report.status);
       return report;
     } catch (error) {
       // The backend may have changed state before failing.
-      getBackend().getStageStatus().then((status) => set({ status })).catch(() => {});
+      getBackend().getStageStatus().then(accept).catch(() => {});
       throw error;
     } finally {
       set({ busy: false });
@@ -34,11 +39,11 @@ export const useStageStore = create<StageStoreState>((set) => {
     status: null,
     busy: false,
     refresh: async () => {
-      set({ status: await getBackend().getStageStatus() });
+      accept(await getBackend().getStageStatus());
     },
     stage: (projectPath) => run(() => getBackend().stageProject(projectPath)),
     unstage: () => run(() => getBackend().unstage()),
-    receive: (status) => set({ status }),
+    receive: accept,
   };
 });
 

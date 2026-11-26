@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import StageView from "./StageView";
 import { MockBackendService } from "../services/mockBackendService";
 import type { StageStatus } from "../types";
+import { useStageStore } from "../stores/stageStore";
+
+vi.mock("../services", () => ({ getBackend: () => ({}) }));
+vi.mock("../services/auditaur", () => ({ auditaurListen: vi.fn(), isTauriRuntime: () => false }));
 
 afterEach(cleanup);
 
@@ -18,6 +22,7 @@ const status = (patch: Partial<StageStatus> = {}): StageStatus => ({
   settings: [],
   recovered: false,
   error: null,
+  revision: 1,
   ...patch,
 });
 
@@ -60,5 +65,14 @@ describe("MockBackendService Stage", () => {
     expect((await backend.stageProject("/p")).outcome).toBe("alreadyStaged");
     await expect(backend.stageProject("/other")).rejects.toThrow(/Unstage it first/);
     expect((await backend.unstage()).status.state).toBe("notStaged");
+  });
+});
+
+describe("useStageStore", () => {
+  it("keeps the newest snapshot when updates arrive out of order", () => {
+    useStageStore.setState({ status: null });
+    useStageStore.getState().receive(status({ state: "notStaged", revision: 5 }));
+    useStageStore.getState().receive(status({ state: "staged", revision: 4 }));
+    expect(useStageStore.getState().status?.state).toBe("notStaged");
   });
 });

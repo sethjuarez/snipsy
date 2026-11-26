@@ -494,3 +494,59 @@ fn unsupported_service_reports_windows_only() {
     assert!(!service.status().supported);
     assert_eq!(service.unstage().unwrap_err(), WINDOWS_ONLY);
 }
+
+#[test]
+fn reconcile_renews_a_wanted_lease_and_drops_an_unwanted_one() {
+    let rig = Rig::new(OFF);
+    let mut engine = rig.engine();
+    engine.stage("/a", "A", &config(true, true)).unwrap();
+    // Sleep dropped the request (simulated): renewing takes a fresh one.
+    engine.reconcile_lease(true);
+    assert_eq!(*rig.lease.renewals.lock().unwrap(), 1);
+    assert!(rig.lease.is_held());
+
+    // Another process unstaged: the journal is gone, so this lease goes too.
+    let mut other = StageEngine::new(
+        "fake",
+        Box::new(rig.settings.clone()),
+        Box::new(rig.store.clone()),
+        Box::new(FakeLease::default()),
+        me(),
+    );
+    other.unstage().unwrap();
+    assert!(rig.lease.is_held());
+    engine.reconcile_lease(true);
+    assert!(!rig.lease.is_held());
+    assert_eq!(*rig.lease.renewals.lock().unwrap(), 1);
+}
+
+#[test]
+fn reconcile_takes_a_missing_lease_only_when_keep_awake_is_staged() {
+    let rig = Rig::new(OFF);
+    let mut engine = rig.engine();
+    engine.stage("/a", "A", &config(true, false)).unwrap();
+    engine.reconcile_lease(false);
+    assert!(!rig.lease.is_held());
+
+    let rig = Rig::new(OFF);
+    let mut engine = rig.engine();
+    engine.stage("/a", "A", &config(true, true)).unwrap();
+    rig.lease.clone().release();
+    engine.reconcile_lease(false);
+    assert!(rig.lease.is_held());
+    assert_eq!(*rig.lease.renewals.lock().unwrap(), 0);
+}
+
+#[test]
+fn service_snapshots_have_increasing_revisions() {
+    let rig = Rig::new(OFF);
+    let service = StageService::new(Some(rig.engine()), None);
+    let first = service.status();
+    let report = service.stage("/a", "A", &config(true, false)).unwrap();
+    let after = service.status();
+    assert!(first.revision < report.status.revision);
+    assert!(report.status.revision < after.revision);
+    assert!(service.claim_publish(&after));
+    // An older snapshot arriving late must not overwrite the newer one.
+    assert!(!service.claim_publish(&report.status));
+}

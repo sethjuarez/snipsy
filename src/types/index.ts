@@ -50,6 +50,8 @@ export interface StageStatus {
   settings: StageSettingStatus[];
   recovered: boolean;
   error: string | null;
+  /** Increases with every snapshot; older snapshots are ignored. */
+  revision: number;
 }
 
 export interface StageReport {

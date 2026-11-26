@@ -14,7 +14,9 @@ mod tests;
 
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_auditaur::IpcTraceContext;
@@ -27,12 +29,20 @@ use store::{FakeLease, FakeSettings, FileJournalStore};
 pub const STAGE_CHANGED_EVENT: &str = "stage-changed";
 /// Use simulated settings instead of the real desktop (tests and drills).
 pub const FAKE_ENV: &str = "SNIPSY_STAGE_FAKE";
+/// How often the keep-awake request is renewed and the journal re-checked.
+/// Covers sleep/resume (Windows drops power requests on sleep) and
+/// Unstage from another Snipsy process.
+const RECONCILE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Serializes Stage operations within this process (mutex) and across
 /// processes (an exclusive lock on `stage.lock`).
 pub struct StageService {
     engine: Mutex<Option<StageEngine>>,
     lock_path: Option<PathBuf>,
+    /// Stamped on every snapshot while the operation lock is held.
+    revision: AtomicU64,
+    /// Newest revision sent to the tray and frontend.
+    published: AtomicU64,
 }
 
 impl StageService {
@@ -40,6 +50,8 @@ impl StageService {
         Self {
             engine: Mutex::new(engine),
             lock_path,
+            revision: AtomicU64::new(0),
+            published: AtomicU64::new(0),
         }
     }
 
@@ -60,15 +72,37 @@ impl StageService {
         op(engine)
     }
 
+    fn next_revision(&self) -> u64 {
+        self.revision.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
     pub fn status(&self) -> StageStatus {
-        self.with_engine(|engine| Ok(engine.status()))
-            .unwrap_or_else(|error| {
-                let mut status = StageStatus::unsupported();
-                if error != WINDOWS_ONLY {
-                    status.error = Some(error);
-                }
-                status
-            })
+        self.with_engine(|engine| {
+            let mut status = engine.status();
+            status.revision = self.next_revision();
+            Ok(status)
+        })
+        .unwrap_or_else(|error| {
+            let mut status = StageStatus::unsupported();
+            if error != WINDOWS_ONLY {
+                status.error = Some(error);
+            }
+            status.revision = self.next_revision();
+            status
+        })
+    }
+
+    /// True when `status` is newer than anything published so far.
+    fn claim_publish(&self, status: &StageStatus) -> bool {
+        self.published.fetch_max(status.revision, Ordering::SeqCst) < status.revision
+    }
+
+    /// Renew or release the keep-awake lease to match the journal.
+    pub fn reconcile(&self, renew: bool) {
+        let _ = self.with_engine(|engine| {
+            engine.reconcile_lease(renew);
+            Ok(())
+        });
     }
 
     pub fn stage(
@@ -77,11 +111,19 @@ impl StageService {
         project_name: &str,
         config: &StageConfig,
     ) -> Result<StageReport, String> {
-        self.with_engine(|engine| engine.stage(project_path, project_name, config))
+        self.with_engine(|engine| {
+            let mut report = engine.stage(project_path, project_name, config)?;
+            report.status.revision = self.next_revision();
+            Ok(report)
+        })
     }
 
     pub fn unstage(&self) -> Result<StageReport, String> {
-        self.with_engine(|engine| engine.unstage())
+        self.with_engine(|engine| {
+            let mut report = engine.unstage()?;
+            report.status.revision = self.next_revision();
+            Ok(report)
+        })
     }
 
     pub fn recover_on_launch(&self) {
@@ -167,11 +209,44 @@ pub fn init(app: &tauri::AppHandle) {
     };
     service.recover_on_launch();
     let status = service.status();
+    service.claim_publish(&status);
+    let supported = status.supported;
     app.manage(service);
     crate::tray::set_stage_indicator(&status);
+    if supported {
+        spawn_reconciler(app.clone());
+    }
+}
+
+fn spawn_reconciler(app: tauri::AppHandle) {
+    let spawned = std::thread::Builder::new()
+        .name("stage-reconcile".into())
+        .spawn(move || {
+            let mut last = None;
+            loop {
+                std::thread::sleep(RECONCILE_INTERVAL);
+                let Ok(service) = service(&app) else { return };
+                service.reconcile(true);
+                let status = service.status();
+                let mut comparable = status.clone();
+                comparable.revision = 0;
+                if last.as_ref() != Some(&comparable) {
+                    last = Some(comparable);
+                    publish(&app, &status);
+                }
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "Couldn't start Stage keep-awake renewal");
+    }
 }
 
 fn publish(app: &tauri::AppHandle, status: &StageStatus) {
+    if let Ok(service) = service(app) {
+        if !service.claim_publish(status) {
+            return;
+        }
+    }
     crate::tray::set_stage_indicator(status);
     if let Err(error) = crate::tray::refresh_tray(app) {
         tracing::warn!(%error, "Couldn't update the tray for Stage");
@@ -217,13 +292,18 @@ fn read_project(project_path: &str) -> Result<Project, String> {
 
 #[tauri::command]
 #[tauri_plugin_auditaur::instrument_ipc(err, skip(app))]
-pub fn get_stage_status(
+pub async fn get_stage_status(
     app: tauri::AppHandle,
     auditaur_trace_context: Option<IpcTraceContext>,
 ) -> Result<StageStatus, String> {
-    Ok(service(&app)
-        .map(|service| service.status())
-        .unwrap_or_else(|_| StageStatus::unsupported()))
+    // Off the main thread: it can wait on a running Stage/Unstage.
+    tauri::async_runtime::spawn_blocking(move || {
+        service(&app)
+            .map(|service| service.status())
+            .unwrap_or_else(|_| StageStatus::unsupported())
+    })
+    .await
+    .map_err(|e| format!("Stage status stopped unexpectedly: {e}"))
 }
 
 /// Stage the project saved at `project_path`, using its saved Stage settings.

@@ -628,6 +628,8 @@ function App() {
         <TrayHint />
         <StatusBar projectPath={null} demoMode={false} />
         {settingsDialog}
+        {/* Unstage works without a project, so its results need toasts here too. */}
+        <ToastViewport toasts={toasts} onDismiss={dismissToast} />
       </div>
     );
   }

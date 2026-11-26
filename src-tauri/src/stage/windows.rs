@@ -76,11 +76,8 @@ impl WindowsLease {
     }
 }
 
-impl PowerLease for WindowsLease {
-    fn acquire(&mut self) -> Result<(), String> {
-        if self.handle.is_some() {
-            return Ok(());
-        }
+impl WindowsLease {
+    fn create_request(&mut self) -> Result<HANDLE, String> {
         let context = REASON_CONTEXT {
             Version: 0,
             Flags: POWER_REQUEST_CONTEXT_SIMPLE_STRING,
@@ -100,7 +97,23 @@ impl PowerLease for WindowsLease {
             }
             return Err(error.to_string());
         }
-        self.handle = Some(handle);
+        Ok(handle)
+    }
+}
+
+impl PowerLease for WindowsLease {
+    fn acquire(&mut self) -> Result<(), String> {
+        if self.handle.is_none() {
+            self.handle = Some(self.create_request()?);
+        }
+        Ok(())
+    }
+
+    fn renew(&mut self) -> Result<(), String> {
+        // Take the new request before dropping the old one so there's no gap.
+        let fresh = self.create_request()?;
+        self.release();
+        self.handle = Some(fresh);
         Ok(())
     }
 

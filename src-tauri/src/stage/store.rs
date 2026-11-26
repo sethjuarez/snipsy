@@ -222,6 +222,7 @@ impl SettingsBackend for FakeSettings {
 pub struct FakeLease {
     pub held: Arc<Mutex<bool>>,
     pub fail: Arc<Mutex<bool>>,
+    pub renewals: Arc<Mutex<u32>>,
 }
 
 impl PowerLease for FakeLease {
@@ -239,5 +240,11 @@ impl PowerLease for FakeLease {
 
     fn is_held(&self) -> bool {
         *self.held.lock().unwrap()
+    }
+
+    fn renew(&mut self) -> Result<(), String> {
+        *self.renewals.lock().unwrap() += 1;
+        self.release();
+        self.acquire()
     }
 }

@@ -111,8 +111,11 @@ interface MockArchive {
   imageSources: [string, string][];
 }
 
+let mockStageRevision = 0;
+
 function mockStageStatus(staged: { path: string; name: string; config: StageConfig } | null): StageStatus {
   return {
+    revision: ++mockStageRevision,
     supported: true,
     backend: "fake",
     state: staged ? "staged" : "notStaged",
