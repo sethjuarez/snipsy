@@ -1,0 +1,51 @@
+---
+title: Stage (Windows)
+description: Put your PC in presenting shape, and put it back afterward.
+sidebar:
+  order: 11
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Stage gets your PC ready to present. Unstage puts back what Stage changed.
+
+<Aside type="note">
+Stage is Windows-only for now. On macOS and Linux the Stage page says so and does nothing.
+</Aside>
+
+## Settings
+
+Open a project and go to **Setup → Stage**. Turn on what you want and click **Save**. The settings live in the project, so they travel with it.
+
+| Setting | What it does |
+|---------|--------------|
+| **Keep awake while Snipsy is running** | Keeps the screen and PC on while you're staged and Snipsy is open. Quit Snipsy and the PC can sleep again. This is separate from the **Keep awake** toggle next to **Start**, which only lasts for a demo. |
+| **Find my pointer** | Turns on Windows mouse sonar, so pressing **Ctrl** shows where the pointer is. |
+
+## Stage and Unstage
+
+Click **Stage** on the Stage page. A **Staged** badge shows up in the title bar, and the tray tooltip says **Staged**.
+
+To put things back, use any of these:
+
+- **Unstage** on the Stage page
+- The **Staged** badge in the title bar
+- **Unstage** in the tray menu
+
+You don't need a project open to Unstage.
+
+## What Unstage puts back
+
+Before Stage changes a setting, Snipsy writes down what it was. Unstage only puts a setting back if it still has the value Stage set. If you or another app changed it since, Snipsy keeps the new value and tells you which settings it left alone. If a setting was already on before you staged, Stage leaves it alone and Unstage won't turn it off.
+
+## One project at a time
+
+The PC is staged for one project. To stage a different project, Unstage first.
+
+If you change a project's Stage settings while it's staged, the change applies the next time you Stage. Clicking **Stage again** on a staged project re-applies anything that drifted, using the settings from when you staged.
+
+## Restarts and crashes
+
+Snipsy keeps a small journal of what Stage changed in its local app data folder. If Snipsy quits, crashes, or the PC restarts, you're still staged. The next time Snipsy opens, it picks up keep-awake again and leaves everything else as it was. It never Unstages on its own. Unstage when you're done.
+
+If the title bar badge turns amber (**Staged!**), something needs a look. A setting changed since you staged, keep-awake isn't active, or a Stage or Unstage didn't finish. The Stage page says which. **Stage again** fixes drift, and **Unstage** finishes an interrupted Unstage.
