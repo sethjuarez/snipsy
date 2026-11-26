@@ -2,7 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::models::{
-    Project, ProjectData, ProjectVariable, Script, TextSnippet, VideoSnippet, TOKEN_GRAMMAR,
+    Project, ProjectData, ProjectVariable, Script, StageConfig, TextSnippet, VideoSnippet,
+    TOKEN_GRAMMAR,
 };
 use tauri_plugin_auditaur::IpcTraceContext;
 
@@ -146,6 +147,50 @@ pub fn save_project_variables(
             fields.insert("variables".into(), value);
         }
     })
+}
+
+/// Saves the project's Stage settings. Blocks this build doesn't know (for
+/// example `stage.macos`) and unknown keys inside known blocks are kept.
+#[tauri::command]
+#[tauri_plugin_auditaur::instrument_ipc(err)]
+pub fn save_project_stage(
+    path: String,
+    stage: StageConfig,
+    auditaur_trace_context: Option<IpcTraceContext>,
+) -> Result<Project, String> {
+    let project_dir = PathBuf::from(&path);
+    if !project_dir.join("project.json").is_file() {
+        return Err("No Snipsy project found in this folder.".into());
+    }
+    let value =
+        serde_json::to_value(&stage).map_err(|e| format!("Failed to serialize Stage: {e}"))?;
+    update_project_file(&project_dir, |fields| {
+        let existing = fields
+            .entry("stage")
+            .or_insert_with(|| serde_json::Value::Object(Default::default()));
+        if !existing.is_object() {
+            *existing = serde_json::Value::Object(Default::default());
+        }
+        merge_json_objects(existing, value);
+    })
+}
+
+fn merge_json_objects(target: &mut serde_json::Value, patch: serde_json::Value) {
+    match (target, patch) {
+        (serde_json::Value::Object(target), serde_json::Value::Object(patch)) => {
+            for (key, value) in patch {
+                match target.get_mut(&key) {
+                    Some(existing) if existing.is_object() && value.is_object() => {
+                        merge_json_objects(existing, value)
+                    }
+                    _ => {
+                        target.insert(key, value);
+                    }
+                }
+            }
+        }
+        (target, patch) => *target = patch,
+    }
 }
 
 pub fn validate_variables(variables: &[ProjectVariable]) -> Result<(), String> {
@@ -731,6 +776,31 @@ mod tests {
             load_project_variables(tmp.path()).unwrap(),
             [variable("host", "contoso.com")]
         );
+    }
+
+    #[test]
+    fn stage_config_saves_and_survives_other_project_edits() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().into_owned();
+        create_project(path.clone(), "P".into(), String::new(), None).unwrap();
+        fs::write(
+            tmp.path().join("project.json"),
+            r#"{"name":"P","description":"","tokenGrammar":1,"stage":{"macos":{"dock":true},"windows":{"futureKey":1}}}"#,
+        )
+        .unwrap();
+        let mut stage = StageConfig::default();
+        stage.shared.keep_awake = true;
+        stage.windows.mouse_sonar = true;
+        let saved = save_project_stage(path.clone(), stage.clone(), None).unwrap();
+        assert_eq!(saved.stage.as_ref(), Some(&stage));
+
+        save_project(path.clone(), "Renamed".into(), "d".into(), None).unwrap();
+        save_project_variables(path.clone(), vec![variable("a", "1")], None).unwrap();
+        let opened = open_project(path, None).unwrap();
+        assert_eq!(opened.project.stage, Some(stage));
+        let raw = fs::read_to_string(tmp.path().join("project.json")).unwrap();
+        assert!(raw.contains("\"macos\""), "{raw}");
+        assert!(raw.contains("futureKey"), "{raw}");
     }
 
     #[test]

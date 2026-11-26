@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Settings } from "lucide-react";
+import { Minus, Square, Copy, X, Moon, Sun, Play, CircleStop, ShieldAlert, Settings, Clapperboard } from "lucide-react";
 import KeepAwakeToggle from "./KeepAwakeToggle";
 import { getBackend } from "../services";
 import { isMacPlatform, traySurfaceName } from "../utils/platform";
@@ -13,6 +13,8 @@ interface TitleBarProps {
   onToggleDemo: () => void;
   /** Opens Settings, optionally at a section; the gear is hidden when omitted. */
   onOpenSettings?: (section?: "permissions") => void;
+  /** Shown whenever this PC is staged, with or without a project open. */
+  stage?: { attention: boolean; projectName: string | null; onClick: () => void } | null;
 }
 
 function isInteractiveTitlebarTarget(target: EventTarget | null) {
@@ -20,7 +22,7 @@ function isInteractiveTitlebarTarget(target: EventTarget | null) {
   return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [data-titlebar-interactive='true']"));
 }
 
-function TitleBar({ projectName, demoMode, onToggleDemo, onOpenSettings }: TitleBarProps) {
+function TitleBar({ projectName, demoMode, onToggleDemo, onOpenSettings, stage }: TitleBarProps) {
   const { theme, toggleTheme } = useTheme();
   const isMac = isMacPlatform();
   const [maximized, setMaximized] = useState(false);
@@ -136,6 +138,19 @@ function TitleBar({ projectName, demoMode, onToggleDemo, onOpenSettings }: Title
       {/* Right: controls (no-drag so buttons are clickable) */}
       <div className="flex items-center shrink-0" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <div className="flex items-center gap-1 px-1">
+          {stage && (
+            <button
+              onClick={stage.onClick}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md px-2 font-medium transition-colors hover:bg-[var(--color-surface-inset)]"
+              data-testid="stage-badge"
+              title={`${stage.attention ? "Staged, needs attention" : "Staged"}${stage.projectName ? ` for ${stage.projectName}` : ""}. Click to Unstage.`}
+              aria-label={stage.attention ? "Staged, needs attention. Unstage" : "Staged. Unstage"}
+              style={{ ...titlebarButtonStyle, color: stage.attention ? "var(--color-warning, #f59e0b)" : "var(--color-success)", fontSize: "var(--font-size-sm)" }}
+            >
+              <Clapperboard size={13} aria-hidden="true" />
+              <span>{stage.attention ? "Staged!" : "Staged"}</span>
+            </button>
+          )}
           {projectName && !demoMode && <KeepAwakeToggle testId="titlebar-keep-awake" />}
           {/* Demo mode toggle — labeled so the main action is obvious */}
           {projectName && (

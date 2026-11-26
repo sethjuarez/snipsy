@@ -28,6 +28,8 @@ import ToastViewport, { type ToastMessage, type ToastTone } from "./components/T
 import ErrorBoundary from "./components/ErrorBoundary";
 import SettingsDialog from "./components/SettingsDialog";
 import VariablesView from "./components/VariablesView";
+import StageView from "./components/StageView";
+import { describeStageReport, listenForStageChanges, useStageStore } from "./stores/stageStore";
 import { variableUsage } from "./utils/variableUsage";
 import type { SettingsSectionId } from "./utils/settings";
 import { DemoPreflightPanel, DemoStartDialog } from "./components/DemoPreflight";
@@ -38,7 +40,7 @@ import { auditaurListen } from "./services/auditaur";
 import { collectHotkeyOwners, describeHotkeyIssues, type HotkeyOwner } from "./utils/hotkeys";
 import { duplicateAutomation, duplicateTextSnippet, duplicateVideoSnippet } from "./utils/duplicate";
 import { toastDuration, upsertToast } from "./utils/toasts";
-import type { TextSnippet, VideoSnippet, Script, ImportedVideo } from "./types";
+import type { TextSnippet, VideoSnippet, Script, ImportedVideo, StageReport } from "./types";
 import type { AppView } from "./components/Sidebar";
 
 const DEMO_HOTKEY_TOAST_ID = "demo-hotkey-issues";
@@ -69,6 +71,10 @@ function App() {
   const updateProject = useProjectStore((s) => s.updateProject);
   const projectVariables = useProjectStore((s) => s.projectVariables);
   const setProjectVariables = useProjectStore((s) => s.setProjectVariables);
+  const projectStage = useProjectStore((s) => s.projectStage);
+  const setProjectStage = useProjectStore((s) => s.setProjectStage);
+  const stageStatus = useStageStore((s) => s.status);
+  const stageBusy = useStageStore((s) => s.busy);
   const textSnippets = useProjectStore((s) => s.textSnippets);
   const setTextSnippets = useProjectStore((s) => s.setTextSnippets);
   const videoSnippets = useProjectStore((s) => s.videoSnippets);
@@ -235,6 +241,26 @@ function App() {
     return () => unlisten?.();
   }, [exitDemoMode]);
 
+  // Stage is machine-wide: load it once and follow backend/tray changes.
+  useEffect(() => {
+    useStageStore.getState().refresh().catch((error: unknown) => console.warn("Failed to load Stage status", error));
+    const stopStatus = listenForStageChanges();
+    const unlisteners: (() => void)[] = [];
+    let cancelled = false;
+    const track = (promise: Promise<() => void>) =>
+      promise.then((fn) => (cancelled ? fn() : unlisteners.push(fn))).catch(() => {});
+    track(auditaurListen<StageReport>("stage-report", (event) => {
+      const { title, detail, tone } = describeStageReport(event.payload);
+      showToast(title, detail, tone, "stage");
+    }));
+    track(auditaurListen<string>("stage-error", (event) => showToast("Unstage", event.payload, "error", "stage")));
+    return () => {
+      cancelled = true;
+      stopStatus();
+      unlisteners.forEach((fn) => fn());
+    };
+  }, [showToast]);
+
   const reportDuplicate = (saving: Promise<void>, title: string, noun: string) => {
     saving
       .then(() => showToast(`Duplicated "${title}"`, "The copy has no hotkey yet. Assign one before your demo.", "success"))
@@ -384,7 +410,7 @@ function App() {
         ? videoSnippetSaveState
         : showScriptForm
           ? scriptSaveState
-          : activeView === "variables" && variablesDirty
+          : (activeView === "variables" || activeView === "stage") && variablesDirty
             ? { ...DEFAULT_SAVE_STATE, saveStatus: "unsaved" as const, hasUnsavedChanges: true }
             : null;
 
@@ -452,6 +478,29 @@ function App() {
       throw error;
     },
   );
+  const saveStage = (stage: NonNullable<typeof projectStage>) => setProjectStage(stage).then(
+    () => showToast("Saved Stage settings", undefined, "success", "project-stage-save"),
+    (error: unknown) => {
+      showToast("Couldn't save Stage settings", String(error), "error", "project-stage-save");
+      throw error;
+    },
+  );
+  const runStage = (op: () => Promise<StageReport>) => {
+    op().then(
+      (report) => {
+        const { title, detail, tone } = describeStageReport(report);
+        showToast(title, detail, tone, "stage");
+      },
+      (error: unknown) => showToast("Stage", String(error), "error", "stage"),
+    );
+  };
+  const stageCurrentProject = () => {
+    if (projectPath) runStage(() => useStageStore.getState().stage(projectPath));
+  };
+  const unstageMachine = () => runStage(() => useStageStore.getState().unstage());
+  const stageBadge = stageStatus && stageStatus.state !== "notStaged"
+    ? { attention: stageStatus.state !== "staged", projectName: stageStatus.projectName, onClick: unstageMachine }
+    : null;
   const preflight = useMemo(
     () => computePreflight({ textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, tokenGrammar: projectTokenGrammar, elevated }),
     [textSnippets, videoSnippets, automations, availableVideoFiles, availableImageKeys, variableNames, projectTokenGrammar, elevated],
@@ -572,7 +621,7 @@ function App() {
   if (!projectName) {
     return (
       <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-        <TitleBar projectName={null} demoMode={false} onToggleDemo={() => {}} onOpenSettings={openSettings} />
+        <TitleBar projectName={null} demoMode={false} onToggleDemo={() => {}} onOpenSettings={openSettings} stage={stageBadge} />
         <div className="flex-1 flex items-center justify-center">
           <Welcome />
         </div>
@@ -586,7 +635,7 @@ function App() {
   // ── Main app layout ──
   return (
     <div className="flex flex-col h-screen" style={{ backgroundColor: "var(--color-surface)" }}>
-      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenSettings={openSettings} />
+      <TitleBar projectName={projectName} demoMode={demoMode} onToggleDemo={handleToggleDemo} onOpenSettings={openSettings} stage={stageBadge} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeView={activeView} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} onViewChange={changeView} warnings={{ variables: missingVariableCount > 0 ? `${missingVariableCount} used but not defined` : undefined }} onCloseProject={() => guardEditorExit(() => void closeProject())} onExportProject={() => void handleExportProject()} />
@@ -849,6 +898,19 @@ function App() {
                 onDirtyChange={setVariablesDirty}
               />
             )}
+            {activeView === "stage" && projectPath && (
+              <StageView
+                key={projectPath}
+                projectPath={projectPath}
+                config={projectStage}
+                status={stageStatus}
+                busy={stageBusy}
+                onSave={saveStage}
+                onStage={stageCurrentProject}
+                onUnstage={unstageMachine}
+                onDirtyChange={setVariablesDirty}
+              />
+            )}
 
 
             </>
@@ -896,6 +958,7 @@ const VIEW_LABELS: Record<AppView, string> = {
   hotkeys: "Hotkeys",
   "stream-deck": "Stream Deck",
   variables: "Variables",
+  stage: "Stage",
 };
 
 function ContentHeader({

@@ -1,6 +1,6 @@
 import { auditaurInvoke as invoke, untracedInvoke } from "./auditaur";
 import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from "./backendService";
-import type { AppSettings, ArchiveSummary, Project, ProjectData, ProjectVariable, MonitorInfo, ProjectImage, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { AppSettings, ArchiveSummary, Project, ProjectData, ProjectVariable, MonitorInfo, StageConfig, StageReport, StageStatus, ProjectImage, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 
 export class TauriBackendService implements BackendService {
   async createProject(
@@ -21,6 +21,22 @@ export class TauriBackendService implements BackendService {
 
   async saveProjectVariables(path: string, variables: ProjectVariable[]): Promise<Project> {
     return invoke<Project>("save_project_variables", { path, variables });
+  }
+
+  async saveProjectStage(path: string, stage: StageConfig): Promise<Project> {
+    return invoke<Project>("save_project_stage", { path, stage });
+  }
+
+  async getStageStatus(): Promise<StageStatus> {
+    return invoke<StageStatus>("get_stage_status");
+  }
+
+  async stageProject(projectPath: string): Promise<StageReport> {
+    return invoke<StageReport>("stage_project", { projectPath });
+  }
+
+  async unstage(): Promise<StageReport> {
+    return invoke<StageReport>("unstage");
   }
 
   async getAppSettings(): Promise<AppSettings> {

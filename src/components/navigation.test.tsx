@@ -27,7 +27,7 @@ describe("Sidebar", () => {
     render(<Sidebar activeView="home" onViewChange={vi.fn()} />);
     const content = screen.getByRole("group", { name: "Content" });
     expect(content.textContent).toBe("ContentSnippetsClips");
-    expect(screen.getByRole("group", { name: "Setup" }).textContent).toBe("SetupVariablesAutomations");
+    expect(screen.getByRole("group", { name: "Setup" }).textContent).toBe("SetupVariablesStageAutomations");
     expect(screen.getByRole("group", { name: "Controls" }).textContent).toBe("ControlsHotkeysStream Deck");
     expect(screen.queryByTestId("nav-videos")).toBeNull();
   });

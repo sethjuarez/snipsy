@@ -2,7 +2,7 @@ import type { BackendService, DemoModeOptions, HotkeyIssue, SnippetHotkey } from
 import { normalizeHotkey } from "../utils/hotkeys";
 import { clampRestoreDelay } from "../utils/settings";
 import { projectVariableProblems } from "../utils/snippetText";
-import type { AppSettings, ArchiveSummary, Project, ProjectData, ProjectVariable, ProjectImage, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
+import type { AppSettings, ArchiveSummary, Project, ProjectData, ProjectVariable, ProjectImage, StageConfig, StageReport, StageStatus, Script, StreamDeckButton, TextSnippet, VideoSnippet } from "../types";
 import { streamDeckIconToDataUrl } from "../utils/streamDeckIcons";
 
 const UNSUPPORTED_IMAGE = "Only PNG and JPEG images are supported.";
@@ -111,10 +111,29 @@ interface MockArchive {
   imageSources: [string, string][];
 }
 
+function mockStageStatus(staged: { path: string; name: string; config: StageConfig } | null): StageStatus {
+  return {
+    supported: true,
+    backend: "fake",
+    state: staged ? "staged" : "notStaged",
+    projectPath: staged?.path ?? null,
+    projectName: staged?.name ?? null,
+    stagedAt: staged ? new Date(0).toISOString() : null,
+    config: staged ? structuredClone(staged.config) : null,
+    keepAwake: { requested: Boolean(staged?.config.shared.keepAwake), active: Boolean(staged?.config.shared.keepAwake) },
+    settings: staged?.config.windows.mouseSonar
+      ? [{ id: "mouseSonar", label: "Find my pointer", status: { state: "applied" }, owned: true, drifted: false }]
+      : [],
+    recovered: false,
+    error: null,
+  };
+}
+
 export class MockBackendService implements BackendService {
   private data: ProjectData = structuredClone(FIXTURE_PROJECT);
   private _demoMode = false;
   private _keepAwake = false;
+  private _staged: { path: string; name: string; config: StageConfig } | null = null;
   private archives = new Map<string, MockArchive>();
   private _automations: Script[] = [
     {
@@ -158,6 +177,37 @@ export class MockBackendService implements BackendService {
     if (!project.name) throw new Error("Project name cannot be empty.");
     this.data = { ...this.data, project: { ...this.data.project, ...project } };
     return { ...this.data.project };
+  }
+
+  async saveProjectStage(_path: string, stage: StageConfig): Promise<Project> {
+    const project = { ...this.data.project, stage: structuredClone(stage) };
+    this.data = { ...this.data, project };
+    return structuredClone(project);
+  }
+
+  async getStageStatus(): Promise<StageStatus> {
+    return mockStageStatus(this._staged);
+  }
+
+  async stageProject(projectPath: string): Promise<StageReport> {
+    if (this._staged && this._staged.path !== projectPath) {
+      throw new Error(`This machine is staged for "${this._staged.name}". Unstage it first, then Stage this project.`);
+    }
+    const config = this.data.project.stage;
+    if (!this._staged && !(config?.shared.keepAwake || config?.windows.mouseSonar)) {
+      throw new Error("Turn on at least one Stage setting first.");
+    }
+    const already = this._staged !== null;
+    const configChanged = already && JSON.stringify(this._staged?.config) !== JSON.stringify(config);
+    this._staged ??= { path: projectPath, name: this.data.project.name, config: structuredClone(config!) };
+    const status = mockStageStatus(this._staged);
+    return { outcome: already ? "alreadyStaged" : "staged", fixed: [], conflicts: [], failures: [], configChanged, status };
+  }
+
+  async unstage(): Promise<StageReport> {
+    const was = this._staged;
+    this._staged = null;
+    return { outcome: was ? "unstaged" : "notStaged", fixed: [], conflicts: [], failures: [], configChanged: false, status: mockStageStatus(null) };
   }
 
   async saveProjectVariables(_path: string, variables: ProjectVariable[]): Promise<Project> {
