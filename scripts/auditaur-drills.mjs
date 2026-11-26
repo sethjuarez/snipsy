@@ -6,6 +6,11 @@ import { spawn, spawnSync } from "node:child_process";
 const appName = process.env.SNIPSY_AUDITAUR_APP ?? "snipsy";
 const shouldStartApp = process.env.SNIPSY_AUDITAUR_DRILL_START_APP === "1";
 const timeoutSeconds = process.env.SNIPSY_AUDITAUR_TIMEOUT_SECONDS ?? "120";
+// Comma-separated drill groups to run after the seeded project opens (for example "stage"). Empty runs all.
+const onlyDrills = new Set((process.env.SNIPSY_AUDITAUR_DRILL_ONLY ?? "").split(",").map((name) => name.trim()).filter(Boolean));
+const shouldRun = (name) => onlyDrills.size === 0 || onlyDrills.has(name);
+// A started app uses the fake Stage backend so the drill never changes this PC's settings.
+if (shouldStartApp) process.env.SNIPSY_STAGE_FAKE = "1";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const reportDir = resolve(process.env.SNIPSY_AUDITAUR_DRILL_REPORT_DIR ?? "target/auditaur-drills");
 const fixtureVideoPath = resolve("tests/fixtures/videos/smoke-1080p.mp4");
@@ -1324,6 +1329,62 @@ function runPlaybackZoomDrill() {
   spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 750)"]);
 }
 
+function stageInvoke(command, label) {
+  return evaluate(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(command)}).then(
+    (value) => ({ ok: true, value }),
+    (error) => ({ ok: false, error: String(error) }),
+  )`, { label });
+}
+
+function waitForStageBadge(present) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (selectorExists('[data-testid="stage-badge"]') === present) return true;
+    sleep(250);
+  }
+  return false;
+}
+
+// Wiring only: UI -> Tauri command -> journal -> stage-changed -> badge, and Demo tray doesn't clobber Stage.
+// Runs only against the fake Stage backend; the engine itself is covered by Rust unit tests.
+function runStageWiringDrill() {
+  const initial = stageInvoke("get_stage_status", "stage status before drill");
+  if (!initial?.ok || initial.value?.backend !== "fake") {
+    recordSkip("stage wiring drill", `Needs the fake Stage backend (start the app with SNIPSY_STAGE_FAKE=1); got ${JSON.stringify(initial)}.`);
+    return;
+  }
+  if (initial.value.state !== "notStaged") stageInvoke("unstage", "clear leftover fake stage");
+
+  click('[data-testid="nav-stage"]');
+  waitForSelector('[data-testid="stage-view"]');
+  click('[data-testid="stage-keep-awake"]');
+  click('[data-testid="stage-mouse-sonar"]');
+  click('[data-testid="stage-save"]');
+  waitForSelector('[data-testid="stage-button"]:not([disabled])');
+  click('[data-testid="stage-button"]');
+  assertCondition(waitForStageBadge(true), "Stage shows the Staged badge");
+
+  const staged = stageInvoke("get_stage_status", "stage status after Stage");
+  const sonar = staged?.value?.settings?.find((setting) => setting.id === "mouseSonar");
+  assertCondition(
+    staged?.value?.state === "staged" && sonar?.status?.state === "applied" && staged?.value?.keepAwake?.active === true,
+    "Stage applies mouse sonar and holds keep-awake",
+    staged,
+  );
+
+  stageInvoke("activate_demo_tray", "demo tray on while staged");
+  stageInvoke("deactivate_demo_tray", "demo tray off while staged");
+  const afterDemo = stageInvoke("get_stage_status", "stage status after demo tray");
+  assertCondition(afterDemo?.value?.state === "staged", "Demo tray changes keep Stage staged", afterDemo);
+
+  click('[data-testid="unstage-button"]');
+  assertCondition(waitForStageBadge(false), "Unstage removes the Staged badge");
+  const unstaged = stageInvoke("get_stage_status", "stage status after Unstage");
+  assertCondition(unstaged?.value?.state === "notStaged" && unstaged?.value?.keepAwake?.active === false, "Unstage releases everything", unstaged);
+
+  const again = stageInvoke("unstage", "Unstage when not staged");
+  assertCondition(again?.ok === true && again.value?.outcome === "notStaged", "Unstage is a no-op when not staged", again);
+}
+
 function waitForAnySelector(selectors, timeoutMs = 10_000) {
   const attempts = Math.max(1, Math.ceil(timeoutMs / 500));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -1391,24 +1452,27 @@ drive("text", ["--selector", "body"], { label: "initial body text" });
 createSeededDrillProject();
 
 waitForSelector('[data-testid="sidebar"]');
-waitForSelector('[data-testid="nav-text-snippets"]');
-click('[data-testid="nav-text-snippets"]');
-waitForAnySelector(['[data-testid="empty-state"]', '[data-testid="text-snippet-list"]']);
-runTextSnippetSaveTrackingDrill();
+if (shouldRun("core")) {
+  waitForSelector('[data-testid="nav-text-snippets"]');
+  click('[data-testid="nav-text-snippets"]');
+  waitForAnySelector(['[data-testid="empty-state"]', '[data-testid="text-snippet-list"]']);
+  runTextSnippetSaveTrackingDrill();
 
-click('[data-testid="nav-video-snippets"]');
-click('[data-testid="clips-tab-videos"]');
-waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);
-runVideoThumbnailDrill();
+  click('[data-testid="nav-video-snippets"]');
+  click('[data-testid="clips-tab-videos"]');
+  waitForAnySelector(['[data-testid="no-videos"]', '[data-testid="video-list"]']);
+  runVideoThumbnailDrill();
 
-click('[data-testid="nav-automations"]');
-waitForAnySelector(['[data-testid="automation-empty-state"]', '[data-testid="automation-list"]']);
+  click('[data-testid="nav-automations"]');
+  waitForAnySelector(['[data-testid="automation-empty-state"]', '[data-testid="automation-list"]']);
 
-runClipEditorDrills();
-runMomentImportDrill();
-runPlaybackWindowDrill();
-runPlaybackZoomDrill();
-runMacCompatibilityDrills();
+  runClipEditorDrills();
+  runMomentImportDrill();
+  runPlaybackWindowDrill();
+  runPlaybackZoomDrill();
+  runMacCompatibilityDrills();
+}
+if (shouldRun("stage")) runStageWiringDrill();
 
 run("auditaur", ["ipc", ...telemetryArgs()], { label: "IPC telemetry" });
 run("auditaur", ["traces", ...telemetryArgs()], { label: "trace telemetry" });
