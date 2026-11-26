@@ -14,6 +14,31 @@ pub struct Project {
     pub variables: Vec<ProjectVariable>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_grammar: Option<u32>,
+    /// How Stage should prepare this machine. Shared intents plus per-OS blocks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<StageConfig>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct StageConfig {
+    pub shared: SharedStageConfig,
+    pub windows: WindowsStageConfig,
+}
+
+/// Stage intents every OS can honor in its own way.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SharedStageConfig {
+    /// Keep the machine and display awake while Snipsy is running.
+    pub keep_awake: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WindowsStageConfig {
+    /// Turn on "Find my pointer" (press Ctrl to show the pointer).
+    pub mouse_sonar: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -247,11 +272,23 @@ mod tests {
                 description: None,
             }],
             token_grammar: Some(TOKEN_GRAMMAR),
+            stage: None,
         };
         let json = serde_json::to_string(&project).unwrap();
         assert!(json.contains("\"tokenGrammar\":1"), "{json}");
         let deserialized: Project = serde_json::from_str(&json).unwrap();
         assert_eq!(project, deserialized);
+    }
+
+    #[test]
+    fn stage_config_is_optional_and_partial_blocks_default() {
+        let project: Project = serde_json::from_str(
+            r#"{"name":"P","description":"","stage":{"windows":{"mouseSonar":true},"macos":{"x":1}}}"#,
+        )
+        .unwrap();
+        let stage = project.stage.unwrap();
+        assert!(stage.windows.mouse_sonar);
+        assert!(!stage.shared.keep_awake);
     }
 
     #[test]

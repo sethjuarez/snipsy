@@ -3,6 +3,7 @@ import type {
   ProjectData,
   ProjectVariable,
   Script,
+  StageConfig,
   TextSnippet,
   VideoSnippet,
 } from "../types";
@@ -51,6 +52,8 @@ interface ProjectState {
   projectDescription: string | null;
   projectVariables: ProjectVariable[];
   projectTokenGrammar: number | null;
+  /** Saved Stage settings; `null` when the project has none yet. */
+  projectStage: StageConfig | null;
   textSnippets: TextSnippet[];
   videoSnippets: VideoSnippet[];
   automations: Script[];
@@ -67,6 +70,7 @@ interface ProjectState {
   updateProject: (name: string, description: string) => Promise<void>;
   /** Replace the project's `{{var:name}}` values. */
   setProjectVariables: (variables: ProjectVariable[]) => Promise<void>;
+  setProjectStage: (stage: StageConfig) => Promise<void>;
   closeProject: () => void;
   autoOpenLastProject: () => Promise<boolean>;
   loadRecentProjects: () => void;
@@ -104,6 +108,7 @@ function applyProjectData(
     projectDescription: data.project.description,
     projectVariables: data.project.variables ?? [],
     projectTokenGrammar: data.project.tokenGrammar ?? null,
+    projectStage: data.project.stage ?? null,
     textSnippets: data.textSnippets,
     videoSnippets: data.videoSnippets,
   });
@@ -178,6 +183,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectDescription: null,
   projectVariables: [],
   projectTokenGrammar: null,
+  projectStage: null,
   textSnippets: [],
   videoSnippets: [],
   automations: [],
@@ -227,6 +233,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ projectVariables: project.variables ?? [] });
   },
 
+  setProjectStage: async (stage) => {
+    const path = get().projectPath;
+    if (!path) throw new Error("No project is open.");
+    const project = await backend.saveProjectStage(path, stage);
+    set({ projectStage: project.stage ?? null });
+  },
+
   closeProject: () => {
     void publishStreamDeckActiveProject(null);
     if (get().demoMode) {
@@ -238,6 +251,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectDescription: null,
       projectVariables: [],
       projectTokenGrammar: null,
+      projectStage: null,
       textSnippets: [],
       videoSnippets: [],
       automations: [],

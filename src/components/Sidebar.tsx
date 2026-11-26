@@ -1,6 +1,6 @@
-import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Archive, Keyboard, Braces, AlertTriangle, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, FileText, Film, ScrollText, PanelLeftClose, PanelLeftOpen, LogOut, LayoutGrid, Archive, Keyboard, Braces, Clapperboard, AlertTriangle, type LucideIcon } from "lucide-react";
 
-export type AppView = "home" | "text-snippets" | "images" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck" | "variables";
+export type AppView = "home" | "text-snippets" | "images" | "videos" | "video-snippets" | "automations" | "hotkeys" | "stream-deck" | "variables" | "stage";
 
 interface NavSubview {
   id: AppView;
@@ -41,6 +41,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Setup",
     items: [
       { id: "variables", label: "Variables", Icon: Braces },
+      { id: "stage", label: "Stage", Icon: Clapperboard },
       { id: "automations", label: "Automations", Icon: ScrollText },
     ],
   },

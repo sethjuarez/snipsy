@@ -9,6 +9,9 @@ import type {
   PauseStop,
   ProjectImage,
   Script,
+  StageConfig,
+  StageReport,
+  StageStatus,
   StreamDeckButton,
   TextSnippet,
   TransitionAction,
@@ -68,6 +71,13 @@ export interface BackendService {
   saveProject(path: string, name: string, description: string): Promise<Project>;
   /** Replace the project's `{{var:name}}` values; returns the saved project. */
   saveProjectVariables(path: string, variables: ProjectVariable[]): Promise<Project>;
+  /** Save the project's Stage settings; returns the saved project. */
+  saveProjectStage(path: string, stage: StageConfig): Promise<Project>;
+  getStageStatus(): Promise<StageStatus>;
+  /** Stage the saved project at `projectPath`. Rejects when another project is staged. */
+  stageProject(projectPath: string): Promise<StageReport>;
+  /** Put back what Stage changed. A no-op when nothing is staged. */
+  unstage(): Promise<StageReport>;
   getAppSettings(): Promise<AppSettings>;
   /** Save app-wide settings; returns them as stored (delays are clamped). */
   setAppSettings(settings: AppSettings): Promise<AppSettings>;

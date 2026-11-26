@@ -5,6 +5,62 @@ export interface Project {
   variables?: ProjectVariable[];
   /** Token grammar version the project was written for. */
   tokenGrammar?: number;
+  /** Stage settings (Setup → Stage). Unknown blocks such as `macos` are kept on save. */
+  stage?: StageConfig;
+}
+
+export interface StageConfig {
+  shared: { keepAwake: boolean };
+  windows: { mouseSonar: boolean };
+}
+
+export const DEFAULT_STAGE_CONFIG: StageConfig = {
+  shared: { keepAwake: false },
+  windows: { mouseSonar: false },
+};
+
+export type StageState = "notStaged" | "staging" | "staged" | "degraded" | "unstaging";
+
+export type StageEntryState =
+  | { state: "pending" }
+  | { state: "applied" }
+  | { state: "alreadySet" }
+  | { state: "failed"; error: string }
+  | { state: "restored" }
+  | { state: "conflict"; current: unknown }
+  | { state: "restoreFailed"; error: string };
+
+export interface StageSettingStatus {
+  id: string;
+  label: string;
+  status: StageEntryState;
+  owned: boolean;
+  drifted: boolean;
+}
+
+export interface StageStatus {
+  supported: boolean;
+  backend: "windows" | "fake" | "unsupported";
+  state: StageState;
+  projectPath: string | null;
+  projectName: string | null;
+  stagedAt: string | null;
+  config: StageConfig | null;
+  keepAwake: { requested: boolean; active: boolean };
+  settings: StageSettingStatus[];
+  recovered: boolean;
+  error: string | null;
+  /** Increases with every snapshot; older snapshots are ignored. */
+  revision: number;
+}
+
+export interface StageReport {
+  outcome: "staged" | "alreadyStaged" | "degraded" | "unstaged" | "notStaged" | "unstageIncomplete";
+  fixed: string[];
+  conflicts: string[];
+  failures: string[];
+  configChanged: boolean;
+  status: StageStatus;
 }
 
 export interface ProjectVariable {

@@ -13,6 +13,7 @@ mod playback;
 mod project_archive;
 mod scripting;
 mod snippet_text;
+mod stage;
 mod stream_deck;
 mod stream_deck_control;
 mod tokens;
@@ -52,6 +53,7 @@ pub fn run() {
 
             // Always-on tray/menu bar icon
             app_settings::init(app.handle());
+            stage::init(app.handle());
             tray::init_tray(app.handle())?;
             match stream_deck_control::start_control_server(app.handle()) {
                 Ok(state) => {
@@ -87,6 +89,10 @@ pub fn run() {
             commands::open_project,
             commands::save_project,
             commands::save_project_variables,
+            commands::save_project_stage,
+            stage::get_stage_status,
+            stage::stage_project,
+            stage::unstage,
             app_settings::get_app_settings,
             app_settings::set_app_settings,
             project_archive::export_project,
@@ -154,6 +160,8 @@ fn cleanup_on_exit(app: &tauri::AppHandle) {
         state.stop();
     }
     stream_deck_control::remove_discovery_descriptor(app);
+    // Keep-awake ends with Snipsy; staged settings stay until Unstage.
+    stage::release_on_exit(app);
 
     // Close the playback window if it's still open
     if let Some(window) = app.get_webview_window("playback") {
